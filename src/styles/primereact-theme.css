@@ -1,0 +1,226 @@
+/* PrimeReact Theme Customization for Login Dark Theme */
+
+/* Dark login theme variables */
+:root {
+  --login-bg: #0f172a;
+  --login-surface: #1e293b;
+  --login-border: #334155;
+  --login-text: #f8fafc;
+  --login-text-muted: #94a3b8;
+  --login-focus: #2563eb;
+}
+
+/* Input Field Customization - Login Style */
+.p-inputtext {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc !important;
+  border-radius: 0.5rem !important;
+  transition: all 0.2s ease !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.p-inputtext:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+  outline: none !important;
+}
+
+.p-inputtext::placeholder {
+  color: #64748b !important;
+}
+
+/* Password Field Customization */
+.p-password {
+  width: 100%;
+}
+
+.p-password .p-inputtext {
+  width: 100%;
+  padding-right: 3rem;
+}
+
+.p-password-panel {
+  background: var(--color-surface-primary) !important;
+  border: 1px solid var(--color-border-primary) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.p-password-meter {
+  border-radius: 0.25rem !important;
+}
+
+.p-password-strength.weak {
+  background: var(--color-status-error) !important;
+}
+
+.p-password-strength.medium {
+  background: var(--color-status-warning) !important;
+}
+
+.p-password-strength.strong {
+  background: var(--color-status-success) !important;
+}
+
+/* Dropdown Customization - Login Style */
+.p-dropdown {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.5rem !important;
+  transition: all 0.2s ease !important;
+  padding: 0.75rem 1rem !important;
+  min-height: auto !important;
+}
+
+.p-dropdown:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+  outline: none !important;
+}
+
+.p-dropdown .p-dropdown-label {
+  color: #f8fafc !important;
+  padding: 0 !important;
+}
+
+.p-dropdown .p-dropdown-label.p-placeholder {
+  color: #64748b !important;
+}
+
+.p-dropdown-panel {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2) !important;
+  margin-top: 4px !important;
+}
+
+.p-dropdown-items-wrapper {
+  border-radius: 0.5rem !important;
+}
+
+.p-dropdown-item {
+  color: #f8fafc !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 0.25rem !important;
+  margin: 0.125rem !important;
+}
+
+.p-dropdown-item:hover {
+  background: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.p-dropdown-item.p-highlight {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.p-dropdown .p-dropdown-trigger {
+  color: #94a3b8 !important;
+}
+
+/* Filter Input in Dropdown */
+.p-dropdown-filter {
+  background: var(--color-surface-secondary) !important;
+  border: 1px solid var(--color-border-primary) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 0.5rem !important;
+  margin: 0.5rem !important;
+  width: calc(100% - 1rem) !important;
+}
+
+.p-dropdown-filter:focus {
+  border-color: var(--color-brand-primary) !important;
+  box-shadow: 0 0 0 2px var(--color-brand-primary) !important;
+}
+
+/* Button Customization */
+.p-button {
+  border-radius: 0.5rem !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+  border: none !important;
+}
+
+.p-button:focus {
+  box-shadow: 0 0 0 2px var(--color-brand-primary) !important;
+}
+
+.p-button:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+/* Loading Spinner */
+.p-button .pi-spin {
+  animation: pi-spin 1s linear infinite;
+}
+
+@keyframes pi-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Tooltip Customization */
+.p-tooltip .p-tooltip-text {
+  background: var(--color-surface-primary) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border-primary) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.p-tooltip .p-tooltip-arrow {
+  border-top-color: var(--color-surface-primary) !important;
+  border-bottom-color: var(--color-surface-primary) !important;
+  border-left-color: var(--color-surface-primary) !important;
+  border-right-color: var(--color-surface-primary) !important;
+}
+
+/* Dark theme specific adjustments */
+.dark .p-inputtext,
+.dark .p-dropdown,
+.dark .p-dropdown-panel,
+.dark .p-password-panel {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Light theme specific adjustments */
+.light .p-inputtext,
+.light .p-dropdown,
+.light .p-dropdown-panel,
+.light .p-password-panel {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Icon colors */
+.pi {
+  color: var(--color-text-tertiary);
+}
+
+.p-dropdown .pi,
+.p-password .pi {
+  color: var(--color-text-tertiary) !important;
+}
+
+/* Focus states */
+.p-focus {
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+}
+
+/* Invalid state */
+.p-invalid {
+  border-color: var(--color-status-error) !important;
+}
+
+.p-invalid:focus {
+  border-color: var(--color-status-error) !important;
+  box-shadow: 0 0 0 2px var(--color-status-error) !important;
+}

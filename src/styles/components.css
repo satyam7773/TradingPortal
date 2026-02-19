@@ -1,0 +1,172 @@
+/* Advanced Tailwind organization for 100+ pages */
+/* src/styles/components.css - Component-specific styles */
+
+@layer components {
+  /* Trading specific components */
+  .trading-card {
+    @apply bg-surface-primary border border-border-primary rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-200;
+  }
+
+  .trading-button-primary {
+    background: linear-gradient(135deg, #8b2d8b 0%, #d91e63 50%, #ef1c25 100%);
+    @apply hover:shadow-lg text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 focus:ring-2 focus:ring-offset-2;
+    box-shadow: 0 4px 6px rgba(139, 45, 139, 0.3);
+  }
+
+  .trading-button-primary:hover {
+    background: linear-gradient(135deg, #6b1e6b 0%, #b81a55 50%, #d41920 100%);
+    box-shadow: 0 6px 12px rgba(139, 45, 139, 0.4);
+  }
+
+  .trading-button-primary:disabled {
+    background: linear-gradient(135deg, #8b2d8b 0%, #d91e63 50%, #ef1c25 100%);
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .trading-button-buy {
+    @apply bg-trading-buy hover:bg-trading-buy/90 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .trading-button-sell {
+    @apply bg-trading-sell hover:bg-trading-sell/90 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .trading-input {
+    @apply bg-surface-secondary border border-border-primary text-text-primary placeholder-text-muted px-4 py-3 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-200;
+  }
+
+  .trading-table {
+    @apply w-full bg-surface-primary border border-border-primary rounded-xl overflow-hidden;
+  }
+
+  .trading-table-header {
+    @apply bg-surface-secondary text-text-secondary text-sm font-medium text-left py-3 px-4 border-b border-border-secondary;
+  }
+
+  .trading-table-row {
+    @apply border-b border-border-secondary/50 hover:bg-surface-hover transition-colors;
+  }
+
+  .trading-table-cell {
+    @apply py-4 px-4 text-text-primary;
+  }
+
+  /* Status indicators */
+  .status-profit {
+    @apply text-trading-profit font-semibold;
+  }
+
+  .status-loss {
+    @apply text-trading-loss font-semibold;
+  }
+
+  .status-neutral {
+    @apply text-trading-neutral;
+  }
+
+  /* Portfolio cards */
+  .portfolio-card {
+    @apply bg-gradient-to-br from-surface-primary to-surface-secondary border border-border-primary rounded-2xl p-6 shadow-lg;
+  }
+
+  .portfolio-value {
+    @apply text-2xl font-bold text-text-primary;
+  }
+
+  .portfolio-change {
+    @apply text-lg font-semibold flex items-center gap-1;
+  }
+
+  /* Navigation styles */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-all duration-200;
+  }
+
+  .nav-item-active {
+    @apply bg-brand-primary/10 text-brand-primary border-r-2 border-brand-primary;
+  }
+
+  /* Form styles */
+  .form-group {
+    @apply space-y-2;
+  }
+
+  .form-label {
+    @apply text-sm font-medium text-text-secondary;
+  }
+
+  .form-error {
+    @apply text-status-error text-sm mt-1;
+  }
+
+  .form-help {
+    @apply text-text-muted text-sm mt-1;
+  }
+
+  /* Chart container */
+  .chart-container {
+    @apply bg-surface-primary border border-border-primary rounded-xl p-4;
+  }
+
+  /* Loading states */
+  .loading-skeleton {
+    @apply bg-surface-secondary animate-pulse rounded;
+  }
+
+  .loading-spinner {
+    @apply animate-spin text-brand-primary;
+  }
+}
+
+@layer utilities {
+  /* Custom utilities for trading app */
+  .text-profit {
+    color: var(--color-trading-profit);
+  }
+  
+  .text-loss {
+    color: var(--color-trading-loss);
+  }
+  
+  .bg-profit {
+    background-color: var(--color-trading-profit);
+  }
+  
+  .bg-loss {
+    background-color: var(--color-trading-loss);
+  }
+
+  /* Glassmorphism effect */
+  .glass {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10;
+  }
+
+  .glass-dark {
+    @apply bg-black/20 backdrop-blur-sm border border-white/10;
+  }
+
+  /* Animations */
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slideUp {
+    animation: slideUp 0.3s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}

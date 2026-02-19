@@ -1,0 +1,269 @@
+/* PrimeReact Core Styles */
+@import 'primereact/resources/primereact.min.css';
+@import 'primeicons/primeicons.css';
+
+/* Custom PrimeReact Theme */
+@import './primereact-theme.css';
+
+/* Custom Component Styles */
+@import './components.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease-out;
+}
+
+.animate-slideDown {
+  animation: slideDown 0.4s ease-out;
+}
+
+.animation-delay-150 {
+  animation-delay: 150ms;
+}
+
+/* Root variables - will be dynamically set by ThemeProvider */
+:root {
+  /* Default color scheme */
+  color-scheme: dark;
+  
+  /* Reduced base font size */
+  font-size: 14px; /* Default is usually 16px */
+  
+  /* Design system colors - Trading Green Theme */
+  /* Brand colors updated to R+ logo palette (purple primary, red secondary) */
+  --brand-primary: #8b2d8b;
+  --brand-primary-hover: #6b1e6b;
+  --brand-secondary: #ef1c25;
+  --brand-accent: #d91e63;
+  --surface-primary: #ffffff;
+  --surface-hover: #f0fdf4;
+  --surface-secondary: #ecfdf5;
+  --surface-elevated: #d1fae5;
+  --text-primary: #0f172a;
+  --text-secondary: #6b7280;
+  --border-primary: #d1d5db;
+}
+
+/* Dark theme overrides */
+.dark {
+  --surface-primary: #0f172a;
+  --surface-hover: #1e293b;
+  --surface-secondary: #111827;
+  --surface-elevated: #1f2937;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --border-primary: #374151;
+}
+
+/* Custom scrollbar styles for tabs */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-brand-primary\/30::-webkit-scrollbar {
+  height: 4px;
+}
+
+.scrollbar-thumb-brand-primary\/30::-webkit-scrollbar-track {
+  background: var(--surface-secondary);
+}
+
+.scrollbar-thumb-brand-primary\/30::-webkit-scrollbar-thumb {
+  background: var(--brand-primary);
+  opacity: 0.3;
+  border-radius: 2px;
+}
+
+.scrollbar-thumb-brand-primary\/30::-webkit-scrollbar-thumb:hover {
+  opacity: 0.5;
+}
+
+/* Slim horizontal scrollbar for tabs */
+.tabs-scrollbar {
+  scrollbar-width: thin; /* Firefox */
+}
+
+.tabs-scrollbar::-webkit-scrollbar {
+  height: 6px; /* horizontal scrollbar height */
+}
+
+.tabs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabs-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(139,45,139,0.28); /* semi-transparent brand color */
+  border-radius: 6px;
+}
+
+.tabs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(139,45,139,0.5);
+}
+
+/* Theme-specific body backgrounds */
+.light {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+.light body {
+  background-color: var(--color-background-primary, #ffffff);
+  color: var(--color-text-primary, #0f172a);
+}
+
+.dark body {
+  background-color: var(--color-background-primary, #0b1220);
+  color: var(--color-text-primary, #f8fafc);
+}
+
+/* Base font size adjustments */
+body {
+  font-size: 0.875rem; /* 14px instead of default 16px */
+  line-height: 1.4;
+}
+
+/* Compact mode utilities */
+.compact-text {
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.3;
+}
+
+.compact-spacing {
+  padding: 0.75rem; /* Reduced from default 1rem */
+}
+
+.compact-spacing-sm {
+  padding: 0.5rem; /* Reduced from default 0.75rem */
+}
+
+/* App container */
+.app-container { 
+  min-height: 100vh; 
+  display: flex;
+  background-color: var(--color-background-primary);
+  color: var(--color-text-primary);
+}
+
+/* Custom scrollbar for dark theme */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--color-surface-primary);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--color-surface-tertiary);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-tertiary);
+}
+
+/* Light theme scrollbar */
+.light ::-webkit-scrollbar {
+  width: 8px;
+}
+
+.light ::-webkit-scrollbar-track {
+  background: var(--color-surface-secondary);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: var(--color-border-secondary);
+  border-radius: 4px;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-tertiary);
+}
+
+/* Custom Small Scrollbar for MarketWatch */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+.light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.6);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.2);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.4);
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Override transition for specific elements that shouldn't animate */
+.no-theme-transition,
+.no-theme-transition * {
+  transition: none !important;
+}
