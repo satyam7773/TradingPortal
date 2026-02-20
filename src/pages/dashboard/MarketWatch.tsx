@@ -699,10 +699,12 @@ const MarketWatch: React.FC = () => {
 
       console.log('🔌 Setting up new feed subscription...')
       let lastUpdate = 0
-      const UPDATE_THROTTLE = 50 // Update at most every 50ms (~20 times per second)
+      const UPDATE_THROTTLE = 75 // Update at most every 50ms (~20 times per second)
       let dataReceivedCount = 0
       
       feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
+
+        console.log('data received',data)
         dataReceivedCount++
         if (dataReceivedCount === 1 || dataReceivedCount % 50 === 0) {
           console.log('📊 Market Watch Response [' + dataReceivedCount + ']:', data?.length || 0, 'instruments')

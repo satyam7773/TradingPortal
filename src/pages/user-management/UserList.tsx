@@ -6,6 +6,7 @@ import { useAppSelector } from '../../hooks/reduxHooks';
 import { useTabs } from '../../hooks/useTabs';
 import { userManagementService } from '../../services';
 import toast from 'react-hot-toast';
+import FilterLayout from '../../components/FilterLayout';
 import UserDetailsModal from './UserDetailsModal';
 import ChangePassword from './user-details-tabs/ChangePassword';
 import SharingDetails from './user-details-tabs/SharingDetails';
@@ -74,6 +75,8 @@ const UserList: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterUserType, setFilterUserType] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserData[]>([]);
@@ -302,21 +305,37 @@ const UserList: React.FC = () => {
   }, [showSharingModal, showPasswordModal, showAddCreditsModal]);
 
   const filteredUsers = users.filter(user => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      user.username.toLowerCase().includes(searchLower) ||
-      user.name.toLowerCase().includes(searchLower) ||
-      user.type.toLowerCase().includes(searchLower) ||
-      user.parent.toLowerCase().includes(searchLower) ||
-      user.ipAddress.toLowerCase().includes(searchLower) ||
-      user.deviceId.toLowerCase().includes(searchLower) ||
-      user.createdDate.toLowerCase().includes(searchLower) ||
-      user.lastLogin.toLowerCase().includes(searchLower) ||
-      user.credit.toString().includes(searchLower) ||
-      user.balance.toString().includes(searchLower) ||
-      (user.sharing !== null && user.sharing.toString().includes(searchLower))
-    );
+    // Apply search term filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = (
+        user.username.toLowerCase().includes(searchLower) ||
+        user.name.toLowerCase().includes(searchLower) ||
+        user.type.toLowerCase().includes(searchLower) ||
+        user.parent.toLowerCase().includes(searchLower) ||
+        user.ipAddress.toLowerCase().includes(searchLower) ||
+        user.deviceId.toLowerCase().includes(searchLower) ||
+        user.createdDate.toLowerCase().includes(searchLower) ||
+        user.lastLogin.toLowerCase().includes(searchLower) ||
+        user.credit.toString().includes(searchLower) ||
+        user.balance.toString().includes(searchLower) ||
+        (user.sharing !== null && user.sharing.toString().includes(searchLower))
+      );
+      if (!matchesSearch) return false;
+    }
+
+    // Apply user type filter
+    if (filterUserType !== 'All' && user.type !== filterUserType) {
+      return false;
+    }
+
+    // Apply status filter
+    if (filterStatus !== 'All') {
+      if (filterStatus === 'Active' && !user.status) return false;
+      if (filterStatus === 'Inactive' && user.status) return false;
+    }
+
+    return true;
   });
 
   const displayUsers = filteredUsers;
@@ -420,71 +439,62 @@ const UserList: React.FC = () => {
   };
 
   const renderUserListContent = () => (
-    <>
-      <div className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-700/50 px-6 py-5 shadow-lg flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-                <User className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-                  {loggedInUser?.username || 'User Management'}
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {searchTerm ? (
-                    <>
-                      {displayUsers.length} of {users.length} users 
-                      {displayUsers.length === 0 && (
-                        <span className="text-red-500 ml-1">(no matches found)</span>
-                      )}
-                    </>
-                  ) : (
-                    <>{users.length} total users</>
-                  )}
-                </p>
-              </div>
-            </div>
-            
-            <div className="hidden md:flex items-center gap-4">
-              <div className="bg-emerald-100 dark:bg-emerald-900/30 px-3 py-1.5 rounded-full">
-                <span className="text-emerald-700 dark:text-emerald-400 text-sm font-semibold">
-                  {users.filter(u => u.status === true).length} Active
-                </span>
-              </div>
-              <div className="bg-orange-100 dark:bg-orange-900/30 px-3 py-1.5 rounded-full">
-                <span className="text-orange-700 dark:text-orange-400 text-sm font-semibold">
-                  {users.filter(u => u.type === 'Master').length} Masters
-                </span>
-              </div>
-              <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1.5 rounded-full">
-                <span className="text-blue-700 dark:text-blue-400 text-sm font-semibold">
-                  {users.filter(u => u.type === 'Client').length} Clients
-                </span>
-              </div>
-            </div>
-          </div>
+    <FilterLayout
+      storageKey="userList:showFilters"
+      filterWidthClass="lg:w-[22%]"
+      filters={
+        <div className="space-y-4 p-4">
+          <div className="text-sm font-semibold mb-4 text-slate-700 dark:text-slate-200">Filters</div>
           
-          <div className="flex items-center gap-3">
+          <div className="space-y-2">
+            <label className="text-xs text-slate-600 dark:text-slate-300 block font-medium">Search :</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search by username, name, type, IP, device..."
+                placeholder="Username, name, IP..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-10 py-2.5 w-80 bg-white/70 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 backdrop-blur-sm transition-all duration-200"
+                className="pl-9 pr-8 py-2.5 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               />
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
                   ✕
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-600 dark:text-slate-300 block font-medium">User Type :</label>
+            <select
+              value={filterUserType}
+              onChange={(e) => setFilterUserType(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            >
+              <option value="All">All Types</option>
+              <option value="Master">Master</option>
+              <option value="Client">Client</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs text-slate-600 dark:text-slate-300 block font-medium">Status :</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div className="pt-3 space-y-2">
             <button 
               onClick={() => {
                 addTab({
@@ -493,312 +503,250 @@ const UserList: React.FC = () => {
                   icon: Plus
                 })
               }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 text-sm font-medium shadow-lg hover:shadow-xl transform hover:scale-105">
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 text-sm font-semibold shadow-md hover:shadow-lg"
+            >
               <Plus className="w-4 h-4" />
               Add User
             </button>
-            {/* <button className="p-2.5 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-white transition-all duration-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl">
-              <Settings className="w-5 h-5" />
-            </button> */}
           </div>
         </div>
-      </div>
-
-      <div className="flex-1 p-6 pb-8 overflow-auto">
-        <div className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 overflow-hidden h-full flex flex-col">
-          <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="min-w-[1500px] w-full table-fixed">
-              <colgroup>
-                <col style={{width: '100px'}} />
-                <col style={{width: '140px'}} />
-                <col style={{width: '140px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '60px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '140px'}} />
-                <col style={{width: '160px'}} />
-                <col style={{width: '150px'}} />
-              </colgroup>
-              <thead>
-                <tr className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 border-b border-gray-200/50 dark:border-slate-600/50">
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Action</th>
-                  <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Username</th>
-                  <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Name</th>
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Type</th>
-                  <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Parent</th>
-                  <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Credit</th>
-                  <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Balance</th>
-                  <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Share%</th>
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Bet</th>
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Close</th>
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Margin</th>
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Status</th>
-                  <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">C.Margin</th>
-                  <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Created</th>
-                  <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">IP Address</th>
-                  <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Device ID</th>
-                  <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Last Login</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
-                {loading ? (
-                  <tr>
-                    <td colSpan={17} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Loading users...</p>
-                      </div>
-                    </td>
+      }
+    >
+      {/* Right side - Table */}
+      <div className="p-4 flex flex-col gap-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-3 text-slate-600 dark:text-slate-400">Loading users...</p>
+            </div>
+          </div>
+        ) : displayUsers.length === 0 ? (
+          <div className="flex items-center justify-center py-12 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-gray-200/50 dark:border-slate-700/50">
+            <div className="text-center">
+              <User className="w-12 h-12 mx-auto text-gray-300 dark:text-slate-600 mb-2" />
+              <p className="text-slate-600 dark:text-slate-400">No users found</p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
+            <div className="overflow-x-auto tabs-scrollbar">
+              <table className="min-w-[1500px] w-full">
+                <colgroup>
+                  <col style={{width: '100px'}} />
+                  <col style={{width: '140px'}} />
+                  <col style={{width: '140px'}} />
+                  <col style={{width: '90px'}} />
+                  <col style={{width: '100px'}} />
+                  <col style={{width: '90px'}} />
+                  <col style={{width: '100px'}} />
+                  <col style={{width: '90px'}} />
+                  <col style={{width: '60px'}} />
+                  <col style={{width: '70px'}} />
+                  <col style={{width: '70px'}} />
+                  <col style={{width: '70px'}} />
+                  <col style={{width: '70px'}} />
+                  <col style={{width: '150px'}} />
+                  <col style={{width: '140px'}} />
+                  <col style={{width: '160px'}} />
+                  <col style={{width: '150px'}} />
+                </colgroup>
+                <thead>
+                  <tr className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 border-b border-gray-200/50 dark:border-slate-600/50 sticky top-0 z-10">
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Username</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Type</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Parent</th>
+                    <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Credits</th>
+                    <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Balance</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Sharing%</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Bet</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Close</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Margin</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Status</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">CBM</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Created</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">IP Address</th>
+                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Device ID</th>
+                    <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Last Login</th>
                   </tr>
-                ) : displayUsers.length === 0 && searchTerm ? (
-                  <tr>
-                    <td colSpan={17} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                          <Search className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <div>
-                          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300">No users found</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Try adjusting your search term "{searchTerm}"
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => setSearchTerm('')}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
-                        >
-                          Clear Search
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : displayUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={16} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                          <User className="w-8 h-8 text-gray-400" />
-                        </div>
-                        <div>
-                          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300">No users available</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Start by creating a new user
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  displayUsers.map((user) => (
-                  <tr 
-                    key={user.id} 
-                    className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
-                  >
-                    <td className="px-2 py-2 text-center">
-                      <div className="flex items-center justify-center gap-1">
-
-                        <button
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            try {
-                              const editPath = `/dashboard/create-user?mode=edit&userId=${user.id}`;
-                              console.log('🔍 Edit clicked for user:', user.id, 'Path:', editPath);
-                              
-                              // Close all existing edit tabs first
-                              const editTabsToClose = tabs.filter(tab => tab.path.includes('/dashboard/create-user?mode=edit'));
-                              console.log('📋 Closing existing edit tabs:', editTabsToClose.length);
-                              editTabsToClose.forEach(tab => removeTab(tab.id));
-                              
-                              // Fetch user details and cache them
-                              console.log('📥 Fetching user details for userId:', user.id);
-                              const apiResponse = await userManagementService.fetchUserDetails(Number(user.id));
-                              const apiData = apiResponse?.data || {};
-                              console.log('✅ User details fetched:', apiData);
-                              
-                              // Patch/flatten the API response for the edit form
-                              const editingUserData = {
-                                userId: apiData.userProfile?.userId,
-                                username: apiData.userProfile?.username || apiData.userInfo?.username,
-                                roleId: apiData.userProfile?.roleId,
-                                balance: apiData.userProfile?.balance,
-                                credit: apiData.userProfile?.credits,
-                                name: apiData.userInfo?.name,
-                                remark: apiData.userInfo?.remarks,
-                                createdAt: apiData.userInfo?.createdAt,
-                                lastLoginDate: apiData.userInfo?.lastLoginDate,
-                                ipAddress: apiData.userInfo?.ipAddress,
-                                exchanges: apiData.userInfo?.exchanges,
-                                allowedExchanges: apiData.userInfo?.allowedExchanges,
-                                highLowTradeLimit: apiData.userInfo?.highLowTradeLimit,
-                                pnlSharing: apiData.userInfo?.pnlSharing,
-                                brkSharing: apiData.userInfo?.brkSharing,
-                                addMaster: apiData.userInfo?.addMaster,
-                                settings: apiData.userSettings?.settings,
-                                menus: apiData.userSettings?.menus,
-                              };
-                              
-                              console.log('📝 Adding tab for edit user:', user.username);
-                              addTab({
-                                title: `Edit ${user.username}`,
-                                path: editPath,
-                                icon: Edit,
-                                cacheData: {
-                                  formData: {
-                                    isEditing: true,
-                                    editingUserId: user.id,
-                                    editingUsername: user.username,
-                                    editingUserData
-                                  }
-                                }
-                              });
-                              
-                              navigateWithScrollToTop(navigate, editPath);
-                              navigateWithScrollToTop(navigate, editPath);
-                            } catch (err) {
-                              console.error('❌ Error in edit handler:', err);
-                              toast.error('Error fetching user details.');
-                            }
-                          }}
-                          className="inline-flex items-center justify-center p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-200">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        
-                        <div className="relative">
-                          <button 
-                            onClick={(e) => {
+                </thead>
+                <tbody className="divide-y divide-gray-100/50 dark:divide-slate-700/30">
+                  {displayUsers.map((user, idx) => (
+                    <tr 
+                      key={user.id} 
+                      className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
+                    >
+                      <td className="px-2 py-2 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={async (e) => {
+                              e.preventDefault();
                               e.stopPropagation();
-                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                              if (openActionMenu === user.id) {
-                                setOpenActionMenu(null);
-                                setActionMenuPosition(null);
-                                setActionMenuUserId(null);
-                              } else {
-                                setActionMenuUserId(user.id);
-                                setActionMenuPosition({ x: rect.right, y: rect.bottom });
-                                setOpenActionMenu(user.id);
+                              
+                              try {
+                                const editPath = `/dashboard/create-user?mode=edit&userId=${user.id}`;
+                                
+                                // Close all existing edit tabs first
+                                const editTabsToClose = tabs.filter(tab => tab.path.includes('/dashboard/create-user?mode=edit'));
+                                editTabsToClose.forEach(tab => removeTab(tab.id));
+                                
+                                // Fetch user details
+                                const apiResponse = await userManagementService.fetchUserDetails(Number(user.id));
+                                const apiData = apiResponse?.data || {};
+                                
+                                // Flatten API response for edit form
+                                const editingUserData = {
+                                  userId: apiData.userProfile?.userId,
+                                  username: apiData.userProfile?.username || apiData.userInfo?.username,
+                                  roleId: apiData.userProfile?.roleId,
+                                  balance: apiData.userProfile?.balance,
+                                  credit: apiData.userProfile?.credits,
+                                  name: apiData.userInfo?.name,
+                                  remark: apiData.userInfo?.remarks,
+                                  createdAt: apiData.userInfo?.createdAt,
+                                  lastLoginDate: apiData.userInfo?.lastLoginDate,
+                                  ipAddress: apiData.userInfo?.ipAddress,
+                                  exchanges: apiData.userInfo?.exchanges,
+                                  allowedExchanges: apiData.userInfo?.allowedExchanges,
+                                  highLowTradeLimit: apiData.userInfo?.highLowTradeLimit,
+                                  pnlSharing: apiData.userInfo?.pnlSharing,
+                                  brkSharing: apiData.userInfo?.brkSharing,
+                                  addMaster: apiData.userInfo?.addMaster,
+                                  settings: apiData.userSettings?.settings,
+                                  menus: apiData.userSettings?.menus,
+                                };
+                                
+                                addTab({
+                                  title: `Edit ${user.username}`,
+                                  path: editPath,
+                                  icon: Edit,
+                                  cacheData: {
+                                    formData: {
+                                      isEditing: true,
+                                      editingUserId: user.id,
+                                      editingUsername: user.username,
+                                      editingUserData
+                                    }
+                                  }
+                                });
+                                
+                                navigateWithScrollToTop(navigate, editPath);
+                              } catch (err) {
+                                console.error('Error in edit handler:', err);
+                                toast.error('Error fetching user details.');
                               }
                             }}
-                            className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200">
-                            <MoreHorizontal className="w-4 h-4" />
+                            className="inline-flex items-center justify-center p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-200">
+                            <Edit className="w-4 h-4" />
                           </button>
+                          
+                          <div className="relative">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                if (openActionMenu === user.id) {
+                                  setOpenActionMenu(null);
+                                  setActionMenuPosition(null);
+                                  setActionMenuUserId(null);
+                                } else {
+                                  setActionMenuUserId(user.id);
+                                  setActionMenuPosition({ x: rect.right, y: rect.bottom });
+                                  setOpenActionMenu(user.id);
+                                }
+                              }}
+                              className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedUser(user)}>
-                        <span className="font-semibold text-slate-800 dark:text-white text-sm truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{user.username}</span>
-                        <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="text-slate-700 dark:text-slate-300 text-sm truncate">{user.name}</span>
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <span className={`${getTypeColor(user.type)} text-xs px-2 py-1 inline-block`}>{user.type}</span>
-                    </td>
-                    <td className="px-2 py-2">
-                      <span className="text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-center block truncate">{user.parent}</span>
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <span 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedUserForAddCredits(user);
-                          setShowAddCreditsModal(true);
-                          // Clear all form values when opening modal
-                          setCreditTransType('Credit');
-                          setCreditAmount('');
-                          setCreditNote('');
-                          setCreditError('');
-                        }}
-                        className="font-semibold text-slate-800 dark:text-white text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
-                      >
-                        {user.credit != null ? user.credit.toLocaleString() : '-'}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <span className={`${getBalanceColor(user.balance)} text-sm font-semibold`}>{user.balance != null ? user.balance.toFixed(2) : '-'}</span>
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <span className="text-slate-700 dark:text-slate-300 font-semibold text-sm">{user.sharing !== null && user.sharing !== undefined ? user.sharing.toFixed(1) : '0.0'}%</span>
-                        <div className="w-8 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full" style={{ width: `${user.sharing || 0}%` }}></div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedUser(user)}>
+                          <span className="font-semibold text-slate-800 dark:text-white text-sm truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{user.username}</span>
+                          <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch enabled={user.bet} onClick={() => handleToggle(user.id, 'bet')} size="xs" disabled={!user.betEnabled} />
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch enabled={user.closeOut} onClick={() => handleToggle(user.id, 'closeOut')} size="xs" disabled={!user.closeOutEnabled} />
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch enabled={user.margin} onClick={() => handleToggle(user.id, 'margin')} size="xs" disabled={!user.marginEnabled} />
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch enabled={user.status} onClick={() => handleToggle(user.id, 'status')} size="xs" disabled={!user.statusEnabled} />
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch enabled={user.creditBasedMargin} onClick={() => handleToggle(user.id, 'creditBasedMargin')} size="xs" disabled={!user.creditBasedMarginEnabled} />
-                    </td>
-                    <td className="px-2 py-2">
-                      <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{user.createdDate}</span>
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-center">
-                        <span className="text-blue-700 dark:text-blue-300 text-xs font-mono block truncate">{user.ipAddress}</span>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded text-center">
-                        <span className="text-purple-700 dark:text-purple-300 text-xs font-mono block truncate" title={user.deviceId}>
-                          {user.deviceId.length > 15 ? `${user.deviceId.substring(0, 15)}...` : user.deviceId}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="text-slate-700 dark:text-slate-300 text-sm truncate">{user.name}</span>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <span className={`${getTypeColor(user.type)} text-xs px-2 py-1 inline-block`}>{user.type}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-center block truncate">{user.parent}</span>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedUserForAddCredits(user);
+                            setShowAddCreditsModal(true);
+                            setCreditTransType('Credit');
+                            setCreditAmount('');
+                            setCreditNote('');
+                            setCreditError('');
+                          }}
+                          className="font-semibold text-slate-800 dark:text-white text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                        >
+                          {user.credit != null ? user.credit.toLocaleString() : '-'}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <span className="text-emerald-700 dark:text-emerald-300 text-xs whitespace-nowrap">{user.lastLogin}</span>
-                    </td>
-                    {/* <td className="px-2 py-2 text-center">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                          if (openActionMenu === user.id) {
-                            setOpenActionMenu(null);
-                            setActionMenuPosition(null);
-                            setActionMenuUserId(null);
-                          } else {
-                            setActionMenuUserId(user.id);
-                            setActionMenuPosition({ x: rect.left, y: rect.bottom });
-                            setOpenActionMenu(user.id);
-                          }
-                        }}
-                        className="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                    </td> */}
-                  </tr>
-                ))
-                )}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <span className={`${getBalanceColor(user.balance)} text-sm font-semibold`}>{user.balance != null ? user.balance.toFixed(2) : '-'}</span>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-slate-700 dark:text-slate-300 font-semibold text-sm">{user.sharing !== null && user.sharing !== undefined ? user.sharing.toFixed(1) : '0.0'}%</span>
+                          <div className="w-8 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full" style={{ width: `${user.sharing || 0}%` }}></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <ToggleSwitch enabled={user.bet} onClick={() => handleToggle(user.id, 'bet')} size="xs" disabled={!user.betEnabled} />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <ToggleSwitch enabled={user.closeOut} onClick={() => handleToggle(user.id, 'closeOut')} size="xs" disabled={!user.closeOutEnabled} />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <ToggleSwitch enabled={user.margin} onClick={() => handleToggle(user.id, 'margin')} size="xs" disabled={!user.marginEnabled} />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <ToggleSwitch enabled={user.status} onClick={() => handleToggle(user.id, 'status')} size="xs" disabled={!user.statusEnabled} />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <ToggleSwitch enabled={user.creditBasedMargin} onClick={() => handleToggle(user.id, 'creditBasedMargin')} size="xs" disabled={!user.creditBasedMarginEnabled} />
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{user.createdDate}</span>
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-center">
+                          <span className="text-blue-700 dark:text-blue-300 text-xs font-mono block truncate">{user.ipAddress}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <div className="bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded text-center">
+                          <span className="text-purple-700 dark:text-purple-300 text-xs font-mono block truncate" title={user.deviceId}>
+                            {user.deviceId.length > 15 ? `${user.deviceId.substring(0, 15)}...` : user.deviceId}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <span className="text-emerald-700 dark:text-emerald-300 text-xs whitespace-nowrap">{user.lastLogin}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
-    </>
+    </FilterLayout>
   );
 
   return (

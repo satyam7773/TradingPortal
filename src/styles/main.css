@@ -257,6 +257,55 @@ body {
   background: rgba(156, 163, 175, 0.4);
 }
 
+/* Enhanced scrollbar for both horizontal and vertical scrolling - Always Visible */
+.custom-scrollbar {
+  scrollbar-width: auto; /* Force scrollbar to always show */
+  scrollbar-color: rgba(107, 114, 128, 0.7) rgba(30, 30, 30, 0.3);
+  scrollbar-gutter: stable; /* Reserve space for scrollbar so layout doesn't shift */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(30, 30, 30, 0.1);
+  border-radius: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.6);
+  border-radius: 5px;
+  border: 2px solid rgba(30, 30, 30, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.8);
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: rgba(156, 163, 175, 0.6) rgba(30, 30, 30, 0.3);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(30, 30, 30, 0.3);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.6);
+  border: 2px solid rgba(30, 30, 30, 0.3);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+
+/* Force scrollbars to always be visible */
+.custom-scrollbar {
+  overflow: scroll !important;
+}
+
 /* Smooth transitions for theme changes */
 * {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
