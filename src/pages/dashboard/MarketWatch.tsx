@@ -377,6 +377,8 @@ const MarketWatch: React.FC = () => {
   const feedUnsubscribeRef = useRef<(() => void) | null>(null)
   const instrumentConfigRef = useRef<Record<number, any>>({})
   const previousPricesRef = useRef<Record<number, FeedInstrument>>({})
+  const subscriptionRef = useRef<{ subscribed: boolean; userId: string | null }>({ subscribed: false, userId: null })
+  const watchlistHashRef = useRef<string>('')
 
   // Column resize handlers
   const handleResizeStart = (e: React.MouseEvent, column: string) => {
@@ -629,32 +631,53 @@ const MarketWatch: React.FC = () => {
     }
   }, [selectedExchange])
 
-  // Send watchlist request when connected
+  // Subscribe to watchlist when connected (ONCE per user, not on watchlist changes)
   useEffect(() => {
-    if (isConnected) {
-      // Send watchlist data request with userId
-      const userData = localStorage.getItem('userData')
-      if (userData) {
-        const user = JSON.parse(userData)
-        const userId = user.userId.toString()
-        
-        // Subscribe to watchlist queue
-        marketWatchService.subscribeToWatchlist(userId)
-        
-        // Send watchlist data request
-        marketWatchService.sendWatchlistRequest(userId)
-        
-        // Subscribe to instruments queue
-        marketWatchService.subscribeToInstruments(userId)
-        
-        // Send instruments request with watchlist tokens
-        if (watchlist.length > 0) {
-          const instrumentTokens = watchlist.map(item => item.token.toString())
-          marketWatchService.sendInstrumentsRequest(userId, instrumentTokens)
-
-        }
-      }
+    if (!isConnected) return
+    
+    const userData = localStorage.getItem('userData')
+    if (!userData) return
+    
+    const user = JSON.parse(userData)
+    const userId = user.userId.toString()
+    
+    // Guard: prevent duplicate subscriptions for same user
+    if (subscriptionRef.current.subscribed && subscriptionRef.current.userId === userId) {
+      return // Already subscribed
     }
+    
+    console.log('📌 Subscribing to watchlist for user:', userId)
+    subscriptionRef.current = { subscribed: true, userId }
+    
+    // Subscribe to watchlist queue (once)
+    marketWatchService.subscribeToWatchlist(userId)
+    // Send watchlist data request (once)
+    marketWatchService.sendWatchlistRequest(userId)
+    // Subscribe to instruments queue (once)
+    marketWatchService.subscribeToInstruments(userId)
+  }, [isConnected]) // Only depends on connection, NOT watchlist
+
+  // Send instruments request only when watchlist tokens change
+  useEffect(() => {
+    if (!isConnected || watchlist.length === 0) return
+    
+    const userData = localStorage.getItem('userData')
+    if (!userData) return
+    
+    const user = JSON.parse(userData)
+    const userId = user.userId.toString()
+    
+    // Guard: only send if watchlist tokens actually changed
+    const watchlistHash = watchlist.map(item => item.token.toString()).join(',')
+    if (watchlistHash === watchlistHashRef.current) {
+      return // Same watchlist, don't re-send
+    }
+    
+    console.log('📌 Sending instruments request with', watchlist.length, 'tokens')
+    watchlistHashRef.current = watchlistHash
+    
+    const instrumentTokens = watchlist.map(item => item.token.toString())
+    marketWatchService.sendInstrumentsRequest(userId, instrumentTokens)
   }, [isConnected, watchlist])
 
   // Initialize WebSocket connection
@@ -662,9 +685,17 @@ const MarketWatch: React.FC = () => {
     const initializeConnection = async () => {
       try {
         setIsLoading(true)
-        await marketWatchService.connect(() => {
-          setIsConnected(true)
-        })
+        await marketWatchService.connect(
+          () => {
+            setIsConnected(true)
+          },
+          () => {
+            console.log('❌ WebSocket DISCONNECTED - resetting subscription guards')
+            setIsConnected(false)
+            subscriptionRef.current = { subscribed: false, userId: null }
+            watchlistHashRef.current = ''
+          }
+        )
         
         // Setup feed subscription (will be called here and after reconnection)
         setupFeedSubscription()
@@ -698,25 +729,13 @@ const MarketWatch: React.FC = () => {
       }
 
       console.log('🔌 Setting up new feed subscription...')
-      let lastUpdate = 0
-      const UPDATE_THROTTLE = 75 // Update at most every 50ms (~20 times per second)
       let dataReceivedCount = 0
       
       feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
-
-        console.log('data received',data)
         dataReceivedCount++
-        if (dataReceivedCount === 1 || dataReceivedCount % 50 === 0) {
+        if (dataReceivedCount === 1 || dataReceivedCount % 20 === 0) {
           console.log('📊 Market Watch Response [' + dataReceivedCount + ']:', data?.length || 0, 'instruments')
         }
-        
-        // IMPORTANT: Continue processing even if tab is hidden (but throttle more)
-        // This keeps the data current in background
-        const now = Date.now()
-        if (now - lastUpdate < UPDATE_THROTTLE) {
-          return // Skip this update
-        }
-        lastUpdate = now
         
         // Handle both array of instruments and single instrument
         if (Array.isArray(data)) {
