@@ -18,7 +18,8 @@ import {
   Search,
   Plus,
   TrendingUp,
-  Briefcase
+  Briefcase,
+  Upload
 } from 'lucide-react'
 import { useTabs } from '../../hooks/useTabs'
 
@@ -133,7 +134,8 @@ const dashboardTabConfigs = {
   '/dashboard/toolbar': { title: 'Tool Bar', icon: Settings },
   '/dashboard/messages': { title: 'Messages', icon: FileText },
   '/dashboard/exchange-schedule': { title: 'Exchange Time Schedule', icon: FileText },
-  '/dashboard/configure-2fa': { title: 'Configure 2FA', icon: Lock }
+  '/dashboard/configure-2fa': { title: 'Configure 2FA', icon: Lock },
+  '/dashboard/file-upload': { title: 'File Upload', icon: Upload }
 }
 
 export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
@@ -535,6 +537,11 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
         label: 'Configure 2FA',
         path: '/dashboard/configure-2fa',
         action: () => navigate('/dashboard/configure-2fa')
+      },
+      {
+        label: 'File Upload',
+        path: '/dashboard/file-upload',
+        action: () => navigate('/dashboard/file-upload')
       }
     ]
   },

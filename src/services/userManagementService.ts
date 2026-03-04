@@ -111,12 +111,12 @@ class UserManagementService {
     }
 
     console.log('🔧 Editing User Details:', {
-      endpoint: `${this.baseUrl}/editUserDetails`,
+      endpoint: `https://api-staging.rivoplus.live/user/portal/editUserDetails`,
       payload: request
     })
 
     const response = await apiClient.post<any>(
-      `${this.baseUrl}/editUserDetails`,
+      `https://api-staging.rivoplus.live/user/portal/editUserDetails`,
       request
     )
 

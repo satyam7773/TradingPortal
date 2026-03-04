@@ -9,7 +9,8 @@ import {
   UserList,
   UserDetails,
   ApiTestPage,
-  SearchUser
+  SearchUser,
+  FileUploadPage
 } from './pages'
 import CreateNewUser from './pages/user-management/CreateNewUser'
 import MarketWatch from './pages/dashboard/MarketWatch'
@@ -42,6 +43,7 @@ const App: React.FC = () => {
           <Route path="manage-traders" element={<ManageTraders />} />
           <Route path="trade-account" element={<TradeAccount />} />
           <Route path="settlement" element={<Settlement />} />
+          <Route path="file-upload" element={<FileUploadPage />} />
           <Route path="*" element={<div className="p-8 text-center">
             <h1 className="text-2xl font-bold mb-4">Page Not Found</h1>
             <p className="text-gray-600 mb-4">The route you're looking for doesn't exist within /dashboard</p>

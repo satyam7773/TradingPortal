@@ -79,6 +79,13 @@ class MarketWatchService {
   }
 
   /**
+   * Check if WebSocket is connected
+   */
+  isConnected(): boolean {
+    return this.socket !== null && this.socket.readyState === WebSocket.OPEN && this.stompConnected
+  }
+
+  /**
    * Disconnect WebSocket
    */
   disconnect(): void {

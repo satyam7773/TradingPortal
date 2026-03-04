@@ -111,10 +111,10 @@ const TableRow = memo(({
   deletingToken: number | null
 }) => {
   const change = instrument.ltp - instrument.close
-  const isPositive = change > 0
+  const isPositive = change >= 0
   
   // Check if bid price is going up or down (for Exchange triangle)
-  const isBidPositive = changes.bid === 'up' || (!changes.bid && isPositive)
+  const isBidPositive = isPositive
   
   const instrumentName = config?.tradeSymbol || config?.instrumentName || config?.script || `Token ${instrument.insToken}`
   const exchangeName = config?.exchange || ''
@@ -122,15 +122,18 @@ const TableRow = memo(({
   const expiry = formatExpiry(config?.expiry)
   const lastTradedTime = formatTimestamp(instrument.lastTradedTime)
   
+  // Use token for stable alternating pattern (won't change on deletion)
+  const isEvenRow = instrument.insToken % 2 === 0
+  
   return (
     <tr
       className={`hover:bg-slate-700 transition-colors ${
-        index % 2 === 0 ? 'bg-slate-800' : 'bg-slate-850'
+        isEvenRow ? 'bg-slate-800' : 'bg-slate-850'
       }`}
     >
       {/* Actions */}
       <td className={`px-3 py-2 text-center sticky left-0 ${
-        index % 2 === 0 ? 'bg-slate-800' : 'bg-slate-850'
+        isEvenRow ? 'bg-slate-800' : 'bg-slate-850'
       }`}>
         <button
           onClick={(e) => {
@@ -629,66 +632,59 @@ const MarketWatch: React.FC = () => {
     }
   }, [selectedExchange])
 
-  // Send watchlist request when connected
-  useEffect(() => {
-    if (isConnected) {
-      // Send watchlist data request with userId
-      const userData = localStorage.getItem('userData')
-      if (userData) {
-        const user = JSON.parse(userData)
-        const userId = user.userId.toString()
-        
-        // Subscribe to watchlist queue
-        marketWatchService.subscribeToWatchlist(userId)
-        
-        // Send watchlist data request
-        marketWatchService.sendWatchlistRequest(userId)
-        
-        // Subscribe to instruments queue
-        marketWatchService.subscribeToInstruments(userId)
-        
-        // Send instruments request with watchlist tokens
-        if (watchlist.length > 0) {
-          const instrumentTokens = watchlist.map(item => item.token.toString())
-          marketWatchService.sendInstrumentsRequest(userId, instrumentTokens)
+  // Create refs for subscription guards
+  const subscriptionRef = useRef({ subscribed: false, userId: null as string | null })
+  const watchlistHashRef = useRef('')
 
-        }
-      }
+  // Subscribe to watchlist and instruments when connected (only once per user)
+  useEffect(() => {
+    if (!isConnected) return
+
+    const userData = localStorage.getItem('userData')
+    if (!userData) return
+
+    const user = JSON.parse(userData)
+    const userId = user.userId.toString()
+
+    // Guard: check if already subscribed for this user
+    if (subscriptionRef.current.subscribed && subscriptionRef.current.userId === userId) {
+      console.log('✅ Already subscribed to watchlist and instruments for user:', userId)
+      return
     }
+
+    console.log('🔌 Subscribing to watchlist and instruments for user:', userId)
+    
+    // Mark as subscribed
+    subscriptionRef.current = { subscribed: true, userId }
+
+    // Subscribe to watchlist and instruments queues only
+    marketWatchService.subscribeToWatchlist(userId)
+    marketWatchService.subscribeToInstruments(userId)
+  }, [isConnected])
+
+  // Send instruments request only when watchlist tokens change
+  useEffect(() => {
+    if (!isConnected || watchlist.length === 0) return
+
+    const userData = localStorage.getItem('userData')
+    if (!userData) return
+
+    const user = JSON.parse(userData)
+    const userId = user.userId.toString()
+
+    // Guard: check if watchlist tokens have actually changed using hash
+    const currentHash = watchlist.map(item => item.token.toString()).join(',')
+    if (currentHash === watchlistHashRef.current) {
+      console.log('✅ Watchlist tokens unchanged, skipping instruments request')
+      return
+    }
+
+    console.log('🔄 Watchlist tokens changed:', currentHash)
+    watchlistHashRef.current = currentHash
   }, [isConnected, watchlist])
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const initializeConnection = async () => {
-      try {
-        setIsLoading(true)
-        await marketWatchService.connect(() => {
-          setIsConnected(true)
-        })
-        
-        // Setup feed subscription (will be called here and after reconnection)
-        setupFeedSubscription()
-      } catch (error) {
-        console.error('Failed to connect to market watch:', error)
-        toast.error('Failed to connect to market watch')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    initializeConnection()
-
-    // Handle tab/window close - disconnect socket
-    const handlePageClose = () => {
-      if (feedUnsubscribeRef.current) {
-        feedUnsubscribeRef.current()
-      }
-      marketWatchService.disconnect()
-    }
-
-    // Debounce reconnection attempts to prevent rapid duplicate calls
-
-
     // Setup feed data subscription
     const setupFeedSubscription = () => {
       // Unsubscribe from previous subscription if exists
@@ -803,14 +799,79 @@ const MarketWatch: React.FC = () => {
       console.log('✅ Feed subscription ready - socket will stay connected')
     }
 
+    const initializeConnection = async () => {
+      try {
+        setIsLoading(true)
+        await marketWatchService.connect(() => {
+          setIsConnected(true)
+        })
+        
+        // Setup feed subscription (will be called here and after reconnection)
+        setupFeedSubscription()
+      } catch (error) {
+        console.error('Failed to connect to market watch:', error)
+        toast.error('Failed to connect to market watch')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    initializeConnection()
+
+    // Handle tab/window close - disconnect socket
+    const handlePageClose = () => {
+      if (feedUnsubscribeRef.current) {
+        feedUnsubscribeRef.current()
+      }
+      marketWatchService.disconnect()
+    }
+
+    // Debounce reconnection attempts to prevent rapid duplicate calls
 
 
-    // Socket stays connected during tab switches - no reconnection needed
-    const handleVisibilityChange = () => {
+    // Handle tab visibility change - reconnect if needed
+    const handleVisibilityChange = async () => {
       if (document.hidden) {
         console.log('⏸️  Tab is hidden')
       } else {
-        console.log('▶️  Tab is visible')
+        console.log('▶️  Tab is visible - checking connection')
+        
+        // When tab becomes visible, always reset subscription guards to force re-subscription
+        subscriptionRef.current = { subscribed: false, userId: null }
+        watchlistHashRef.current = ''
+        
+        // Check if connection is still alive
+        const isConnectedNow = marketWatchService.isConnected()
+        console.log(`📊 Connection status: ${isConnectedNow ? 'ALIVE' : 'DEAD'}`)
+        
+        if (!isConnectedNow) {
+          console.log('🔌 Connection lost, attempting to reconnect...')
+          setIsConnected(false)
+          
+          try {
+            // Disconnect first to clean up any stale connection
+            marketWatchService.disconnect()
+            console.log('Cleaned up old connection')
+            
+            // Wait a moment before reconnecting
+            await new Promise(resolve => setTimeout(resolve, 500))
+            
+            // Reconnect
+            await marketWatchService.connect(() => {
+              console.log('✅ Reconnected successfully after tab visibility change')
+              setIsConnected(true)
+              // Re-setup feed subscription to receive data again
+              setupFeedSubscription()
+            })
+          } catch (error) {
+            console.error('❌ Failed to reconnect:', error)
+            toast.error('Failed to reconnect to market data')
+          }
+        } else {
+          console.log('✅ Connection still alive, subscriptions will re-establish')
+          // Even if connection is alive, re-setup feed subscription
+          setupFeedSubscription()
+        }
       }
     }
 
@@ -828,6 +889,11 @@ const MarketWatch: React.FC = () => {
       if (feedUnsubscribeRef.current) {
         feedUnsubscribeRef.current()
       }
+      
+      // Reset subscription guards on unmount
+      subscriptionRef.current = { subscribed: false, userId: null }
+      watchlistHashRef.current = ''
+      
       marketWatchService.disconnect()
     }
   }, [])
@@ -920,10 +986,10 @@ const MarketWatch: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-bg-primary">
-      <div className="w-full">
+    <div className="h-full flex flex-col overflow-hidden bg-bg-primary">
+      <div className="w-full flex-shrink-0">
         {/* Search Filters */}
-        <div className="mb-4 px-4 pt-4">
+        <div className="flex-shrink-0 mb-4 px-4 pt-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Exchange Dropdown */}
             <div className="relative exchange-dropdown-container">
@@ -1132,7 +1198,7 @@ const MarketWatch: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg"
+              className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg hidden"
             >
               <p className="text-sm text-text-primary">
                 <span className="font-semibold">Selected:</span> {selectedScript.tradeSymbol || selectedScript.instrumentName || selectedScript.script} 
@@ -1153,9 +1219,9 @@ const MarketWatch: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-surface-primary border border-border-primary rounded-xl overflow-hidden shadow-lg mx-4"
+            className="flex-1 bg-surface-primary border border-border-primary rounded-xl overflow-hidden shadow-lg mx-4 mb-4 flex flex-col min-h-0"
           >
-            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-violet-600 p-4 flex items-center justify-between relative overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-violet-600 p-4 flex items-center justify-between relative overflow-hidden flex-shrink-0">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
               <div className="flex items-center gap-4 relative z-10">
                 <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg">
@@ -1174,110 +1240,128 @@ const MarketWatch: React.FC = () => {
               </div>
             
             </div>
-
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full min-w-max table-fixed">
+            {/* Single Scrollable Table Container with Sticky Header */}
+            <div className="flex-1 overflow-auto min-h-0" style={{maxHeight: 'calc(110vh - 400px)'}}>
+              {/* Fixed Table Header */}
+              <table className="w-full table-fixed border-collapse">
+                <colgroup>
+                  <col style={{width: `${columnWidths.actions}px`}} />
+                  <col style={{width: `${columnWidths.exchange}px`}} />
+                  <col style={{width: `${columnWidths.symbol}px`}} />
+                  <col style={{width: `${columnWidths.expiry}px`}} />
+                  <col style={{width: `${columnWidths.buyQty}px`}} />
+                  <col style={{width: `${columnWidths.buyPrice}px`}} />
+                  <col style={{width: `${columnWidths.sellPrice}px`}} />
+                  <col style={{width: `${columnWidths.sellQty}px`}} />
+                  <col style={{width: `${columnWidths.ltp}px`}} />
+                  <col style={{width: `${columnWidths.netChange}px`}} />
+                  <col style={{width: `${columnWidths.open}px`}} />
+                  <col style={{width: `${columnWidths.high}px`}} />
+                  <col style={{width: `${columnWidths.low}px`}} />
+                  <col style={{width: `${columnWidths.close}px`}} />
+                  <col style={{width: `${columnWidths.ltt}px`}} />
+                </colgroup>
                 <thead>
-                  <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600">
-                    <th className="px-3 py-3 text-center text-xs font-bold text-white uppercase tracking-wider sticky left-0 bg-slate-800 z-10 relative" style={{width: `${columnWidths.actions}px`}}>
+                  <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600 sticky top-0 z-10">
+                    <th className="px-3 py-3 text-center text-xs font-bold text-white uppercase tracking-wider sticky left-0 bg-slate-800 z-10 relative">
                       Actions
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'actions')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.exchange}px`}}>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
                       Exchange
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'exchange')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.symbol}px`}}>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
                       Symbol
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'symbol')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.expiry}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Expiry
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'expiry')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.buyQty}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Buy Qty
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'buyQty')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.buyPrice}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Buy Price
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'buyPrice')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.sellPrice}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Sell Price
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'sellPrice')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.sellQty}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Sell Qty
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'sellQty')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.ltp}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       LTP
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'ltp')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.netChange}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Net Change
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'netChange')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.open}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Open
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'open')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.high}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       High
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'high')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.low}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Low
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'low')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.close}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Close
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'close')}
                       />
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative" style={{width: `${columnWidths.ltt}px`}}>
+                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       LTT
                       <div 
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
@@ -1304,8 +1388,6 @@ const MarketWatch: React.FC = () => {
                 </tbody>
               </table>
             </div>
-
-           
           </motion.div>
         )}
 
@@ -1319,7 +1401,8 @@ const MarketWatch: React.FC = () => {
             className="action-menu-popup fixed bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl z-[99999] overflow-hidden min-w-[200px]"
             style={{
               left: `${actionMenuPosition.x}px`,
-              top: `${actionMenuPosition.y + 8}px`,
+              top: actionMenuPosition.y + 250 > window.innerHeight ? `${actionMenuPosition.y - 200}px` : `${actionMenuPosition.y + 8}px`,
+              bottom: actionMenuPosition.y + 250 > window.innerHeight ? 'auto' : undefined,
             }}
             onClick={(e) => e.stopPropagation()}
           >

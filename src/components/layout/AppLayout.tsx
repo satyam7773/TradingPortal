@@ -256,9 +256,9 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({
   }, [location.pathname, clearAllTabs])
   
   return (
-    <div className="min-h-screen flex flex-col bg-bg-primary">
+    <div className="h-screen flex flex-col overflow-hidden bg-bg-primary">
       {/* Top Header with Logo and Menu */}
-      <header className="bg-surface-primary border-b border-border-primary shadow-lg backdrop-blur-sm relative z-50">
+      <header className="bg-surface-primary border-b border-border-primary shadow-lg backdrop-blur-sm relative z-50 flex-shrink-0">
         <div className="flex items-center justify-between px-6 py-3">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3">
@@ -296,12 +296,14 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({
     </header>
 
       {/* Tab Bar */}
-      <div className="relative z-40">
+      <div className="relative z-40 flex-shrink-0">
         <TabBar />
       </div>
 
       {/* Main Content */}
-      <MainContentArea location={location} />
+      <div className="flex-1 overflow-hidden">
+        <MainContentArea location={location} />
+      </div>
     </div>
   )
 }
@@ -345,11 +347,11 @@ const MainContentArea: React.FC<{ location: any }> = ({ location }) => {
   }, [isCreateUserOnCurrentPage, isEditModeOnCurrentPage, showSplitLayout, tabs, navigate])
   
   return (
-    <main className="flex-1 overflow-auto relative z-10">
+    <main className="h-full flex flex-col overflow-hidden relative z-10">
       {showSplitLayout ? (
-        <div className="flex h-full">
+        <div className="flex h-full overflow-hidden">
           {/* Create/Edit User Panel - 40% (always visible when tab exists) */}
-          <div className="w-[40%] border-r-2 border-border-primary overflow-auto">
+          <div className="w-[40%] border-r-2 border-border-primary overflow-y-auto">
             {isCreateUserOnCurrentPage || isEditModeOnCurrentPage ? (
               <Outlet />
             ) : (
@@ -358,7 +360,7 @@ const MainContentArea: React.FC<{ location: any }> = ({ location }) => {
             )}
           </div>
           {/* Right Panel - 60% (shows current page or other tabs) */}
-          <div className="w-[60%] overflow-auto">
+          <div className="w-[60%] overflow-hidden flex flex-col">
             {isCreateUserOnCurrentPage || isEditModeOnCurrentPage ? (
               // If on Create/Edit User page, show other tabs or placeholder
               hasOtherTabs ? (
@@ -388,7 +390,7 @@ const MainContentArea: React.FC<{ location: any }> = ({ location }) => {
           </div>
         </div>
       ) : (
-        <div className="p-6">
+        <div className="h-full overflow-hidden">
           <Outlet />
         </div>
       )}

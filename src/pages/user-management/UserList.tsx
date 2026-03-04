@@ -76,7 +76,7 @@ const UserList: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUserType, setFilterUserType] = useState<string>('All');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('Active');
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserData[]>([]);
@@ -443,9 +443,7 @@ const UserList: React.FC = () => {
       storageKey="userList:showFilters"
       filterWidthClass="lg:w-[22%]"
       filters={
-        <div className="space-y-4 p-4">
-          <div className="text-sm font-semibold mb-4 text-slate-700 dark:text-slate-200">Filters</div>
-          
+        <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-xs text-slate-600 dark:text-slate-300 block font-medium">Search :</label>
             <div className="relative">
@@ -455,7 +453,7 @@ const UserList: React.FC = () => {
                 placeholder="Username, name, IP..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-8 py-2.5 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                className="pl-9 pr-8 py-2.5 w-full bg-white/70 dark:bg-slate-700/50 border border-slate-200/50 dark:border-slate-600/50 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 transition-all backdrop-blur-sm"
               />
               {searchTerm && (
                 <button
@@ -473,7 +471,7 @@ const UserList: React.FC = () => {
             <select
               value={filterUserType}
               onChange={(e) => setFilterUserType(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200/50 dark:border-slate-600/50 text-sm bg-white/70 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 transition-all backdrop-blur-sm"
             >
               <option value="All">All Types</option>
               <option value="Master">Master</option>
@@ -486,7 +484,7 @@ const UserList: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-600 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200/50 dark:border-slate-600/50 text-sm bg-white/70 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 transition-all backdrop-blur-sm"
             >
               <option value="All">All Status</option>
               <option value="Active">Active</option>
@@ -494,7 +492,7 @@ const UserList: React.FC = () => {
             </select>
           </div>
 
-          <div className="pt-3 space-y-2">
+          {/* <div className="pt-3 space-y-2">
             <button 
               onClick={() => {
                 addTab({
@@ -508,12 +506,12 @@ const UserList: React.FC = () => {
               <Plus className="w-4 h-4" />
               Add User
             </button>
-          </div>
+          </div> */}
         </div>
       }
     >
       {/* Right side - Table */}
-      <div className="p-4 flex flex-col gap-4">
+      <div className="flex flex-col overflow-hidden flex-1">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
@@ -529,10 +527,10 @@ const UserList: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
-            <div className="overflow-x-auto tabs-scrollbar">
-              <table className="min-w-[1500px] w-full">
-                <colgroup>
+          <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+            {/* Single Table with Sticky Header */}
+            <table className="min-w-[1500px] w-full table-fixed border-collapse bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-none">
+              <colgroup>
                   <col style={{width: '100px'}} />
                   <col style={{width: '140px'}} />
                   <col style={{width: '140px'}} />
@@ -552,7 +550,7 @@ const UserList: React.FC = () => {
                   <col style={{width: '150px'}} />
                 </colgroup>
                 <thead>
-                  <tr className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 border-b border-gray-200/50 dark:border-slate-600/50 sticky top-0 z-10">
+                  <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sticky top-0 z-10 border-none">
                     <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Actions</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Username</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
@@ -572,7 +570,7 @@ const UserList: React.FC = () => {
                     <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Last Login</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100/50 dark:divide-slate-700/30">
+                <tbody className="">
                   {displayUsers.map((user, idx) => (
                     <tr 
                       key={user.id} 
@@ -743,7 +741,6 @@ const UserList: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
         )}
       </div>
     </FilterLayout>
@@ -751,7 +748,7 @@ const UserList: React.FC = () => {
 
   return (
     <>
-      <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+      <div className="h-full flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
         {renderUserListContent()}
       </div>
 
@@ -1099,7 +1096,8 @@ const UserList: React.FC = () => {
           className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl z-[99999] overflow-hidden"
           style={{
             left: `${actionMenuPosition.x}px`,
-            top: `${actionMenuPosition.y + 8}px`,
+            top: actionMenuPosition.y + 250 > window.innerHeight ? `${actionMenuPosition.y - 220}px` : `${actionMenuPosition.y + 8}px`,
+            bottom: actionMenuPosition.y + 250 > window.innerHeight ? 'auto' : undefined,
           }}
           onClick={(e) => e.stopPropagation()}
         >

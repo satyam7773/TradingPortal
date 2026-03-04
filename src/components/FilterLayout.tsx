@@ -38,22 +38,21 @@ export const FilterLayout: React.FC<FilterLayoutProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* Toggle button when filters hidden */}
         {!showFilters && (
-          <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 p-4 border-r border-gray-200/50 dark:border-slate-700/50">
+          <div className="flex items-start justify-center pt-4 px-2">
             <button
               onClick={show}
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 whitespace-nowrap"
+              className="p-2.5 bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-110 flex items-center justify-center group"
               title="Show Filters"
             >
-              <ChevronDown className="w-4 h-4 rotate-90" />
-              <span className="text-sm font-semibold">Show Filters</span>
+              <ChevronDown className="w-5 h-5 rotate-90 group-hover:scale-125 transition-transform" />
             </button>
           </div>
         )}
 
         {/* Left Side - Filters */}
         {showFilters && (
-          <div className={`${filterWidthClass} border-r border-gray-200/50 dark:border-slate-700/50 overflow-auto`}> 
-            <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 p-6 h-full">
+          <div className={`${filterWidthClass} overflow-auto bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900`}> 
+            <div className="p-6 h-full">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   {/* header slot content could include an icon/title */}

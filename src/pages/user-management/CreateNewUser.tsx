@@ -383,6 +383,42 @@ const CreateNewUser: React.FC = () => {
     }
   }, [isEditMode, editingUserId, tabs])
 
+  // Fetch fresh user details from API when in edit mode
+  useEffect(() => {
+    if (isEditMode && editingUserId && !editingUser) {
+      const fetchFreshUserDetails = async () => {
+        try {
+          const response = await userManagementService.fetchUserDetails(parseInt(editingUserId))
+          if (response?.responseCode === '0' || response?.responseCode === '1000') {
+            const apiUserData = response.data.userInfo
+            // Map API response to editingUser format
+            setEditingUser({
+              name: apiUserData.name,
+              username: apiUserData.username,
+              roleId: 3, // Will be overridden by userProfile.roleId if available
+              mobileNumber: apiUserData.mobileNumber,
+              city: apiUserData.city,
+              mobile: apiUserData.mobileNumber,
+              remark: apiUserData.remarks,
+              remarks: apiUserData.remarks,
+              pnlSharing: apiUserData.pnlSharing,
+              brkSharing: apiUserData.brkSharing,
+              brokeragePercentage: apiUserData.brkSharing,
+              addMaster: apiUserData.addMaster,
+              changePasswordFirstLogin: apiUserData.changePasswordFirstLogin,
+              allowedExchanges: apiUserData.allowedExchanges,
+              highLowTradeLimit: apiUserData.highLowTradeLimit,
+              ...(response.data.userProfile && { roleId: response.data.userProfile.roleId })
+            })
+          }
+        } catch (error) {
+          console.error('❌ Error fetching fresh user details:', error)
+        }
+      }
+      fetchFreshUserDetails()
+    }
+  }, [isEditMode, editingUserId, editingUser])
+
   // Compute patched form initial values using useMemo
   const patchedFormInitialValues = React.useMemo(() => {
     if (isEditMode && editingUser && userConfig && !configLoading) {
@@ -416,8 +452,8 @@ const CreateNewUser: React.FC = () => {
         
         highArr.forEach((ex: string) => {
           const key = ex.trim().toLowerCase();
-          if (key && highTradeLimitObj.hasOwnProperty(key)) {
-            highTradeLimitObj[key] = true;
+          if (key && key in highTradeLimitObj) {
+            highTradeLimitObj[key as keyof typeof highTradeLimitObj] = true;
           }
         });
       }
@@ -430,7 +466,7 @@ const CreateNewUser: React.FC = () => {
         retypePassword: '',
         accountName: editingUser.username || '',
         userType: editingUser.roleId === 3 ? 'master' : (editingUser.roleId === 4 ? 'client' : ''),
-        mobileNumber: editingUser.mobile || '',
+        mobileNumber: editingUser.mobileNumber || editingUser.mobile || '',
         city: editingUser.city || '',
         credit: editingUser.credit ?? 0,
         remark: editingUser.remark ?? '',
@@ -521,7 +557,7 @@ const CreateNewUser: React.FC = () => {
           allowedKeys = userInfo.exchanges
             .split(',')
             .map((name) => name.trim().toLowerCase())
-            .filter((name) => name)
+            .filter((name: string) => name)
         }
 
         setSelectedUserAllowedExchanges(allowedKeys)
@@ -626,7 +662,7 @@ const CreateNewUser: React.FC = () => {
         // Build update payload - only include editable fields from API spec
         const updatePayload = {
           name: values.name,
-          mobile: values.mobileNumber,
+          mobileNumber: values.mobileNumber,
           city: values.city,
           remarks: values.remark,
           pnlSharing: values.pnlSharing || 0,
@@ -693,8 +729,8 @@ const CreateNewUser: React.FC = () => {
           confirmPassword: values.retypePassword,
           credits: values.credit,
           remarks: values.remark,
-          pnlSharing: values.userType === 'master' ? values.pnlSharing : 0,
-          brokeragePercentage: values.userType === 'master' ? values.brokerageSharing : 0,
+          pnlSharing: values.userType === 'master' ? Number(values.pnlSharing) || 0 : 0,
+          brokeragePercentage: values.userType === 'master' ? Number(values.brokerageSharing) || 0 : 0,
           highLowTradeLimit,
           addMaster: values.addMaster,
           changePasswordFirstLogin: values.changePasswordOnFirstLogin,
@@ -1472,8 +1508,8 @@ const CreateNewUser: React.FC = () => {
                 )}
               </motion.div>
 
-              {/* High Trade Limit - Only when Admin account is selected OR in edit mode for Master users with highLowTradeLimit */}
-              {(selectedUserRole === 2 || (isEditMode && editingUser?.roleId === 3 && editingUser?.highLowTradeLimit)) && (
+              {/* High Trade Limit - Only when Admin account is selected OR Master user type is selected OR in edit mode for Master users with highLowTradeLimit */}
+              {(selectedUserRole === 2 || values.userType === 'master' || (isEditMode && editingUser?.roleId === 3 && editingUser?.highLowTradeLimit)) && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'reac
 import { tabLoaders } from './user-details-tabs';
 import UserDetailsTab from './UserDetailsTab';
 import { createPortal } from 'react-dom';
-import { User, Edit, X, Shield, Settings, Clock, MoreHorizontal, Lock, Share2 } from 'lucide-react';
+import { User, Edit, X, Shield, Settings, Clock, MoreHorizontal, Lock, Share2, AlertCircle } from 'lucide-react';
 import { userManagementService } from '../../services';
 import toast from 'react-hot-toast';
 import ChangePassword from './user-details-tabs/ChangePassword';
@@ -379,6 +379,16 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
     fetchUserDetails();
   }, [fetchUserDetails]);
 
+  // Handle user update callback from UserDetailsTab
+  const handleUserUpdated = useCallback(async () => {
+    try {
+      console.log('🔄 User updated, refetching details...');
+      await fetchUserDetails(user || undefined);
+    } catch (error) {
+      console.error('❌ Error refetching user details:', error);
+    }
+  }, [user, fetchUserDetails]);
+
   // Close action menu when clicking outside (for clicks outside the modal)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -517,16 +527,32 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       >
         {/* Modal Header - Compact */}
         <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 px-6 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-1">
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-xl border border-white/30 shadow-lg">
               <User className="w-5 h-5 text-white" />
             </div>
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-bold text-white">{user.username}</h2>
-              <p className="text-blue-100 text-xs flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                User Profile Details
-              </p>
+              <div className="flex items-center gap-4 mt-2">
+                <p className="text-blue-100 text-xs flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                  User Profile Details
+                </p>
+                {/* Breadcrumb Navigation */}
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-50 text-xs font-semibold bg-white/10 px-2 py-1 rounded-md backdrop-blur">
+                    {(() => {
+                      const userDataStr = localStorage.getItem('userData');
+                      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+                      return userData?.username || 'Admin';
+                    })()}
+                  </span>
+                  <span className="text-blue-100 text-xs font-bold">›</span>
+                  <span className="text-blue-50 text-xs font-semibold bg-white/10 px-2 py-1 rounded-md backdrop-blur">
+                    {user.username}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
           <button
@@ -659,7 +685,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               <>
                 {/* User Details Tab */}
                 {activeTab === 'details' && (
-                  <UserDetailsTab user={user} userDetails={userDetails} getTypeColor={getTypeColor} />
+                  <UserDetailsTab user={user} userDetails={userDetails} getTypeColor={getTypeColor} onUserUpdated={handleUserUpdated} />
                 )}
 
                 {/* Settings Tab */}
@@ -768,13 +794,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                   {/* Action Buttons - FIRST COLUMN */}
                                   <td className="px-2 py-2 text-center">
                                     <div className="flex items-center justify-center gap-1">
-                                      <button
-                                        className="inline-flex items-center justify-center p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-200"
-                                        onClick={() => setSelectedChildUser(transformedUser)}
-                                      >
-                                        <Edit className="w-4 h-4" />
-                                      </button>
-                                      
                                       <div className="relative">
                                         <button 
                                           ref={(el) => {

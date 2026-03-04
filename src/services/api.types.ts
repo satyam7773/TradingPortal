@@ -354,6 +354,8 @@ export interface UserConfigResponse {
   email: string | null
   brokeragePercentage: number
   pnlSharing: number
+  parentBrkSharing?: number
+  parentPnlSharing?: number
   allowedExchanges: ExchangeConfig[]
   addMaster: boolean
   userList?: UserInHierarchy[]

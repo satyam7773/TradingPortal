@@ -12,17 +12,42 @@ interface UserProfile {
 }
 
 interface UserInfo {
+  username: string;
   name: string;
-  remarks?: string;
-  ipAddress: string;
+  remarks: string;
   createdAt: string;
   lastLoginDate: string;
-  allowedExchanges?: Array<{ name: string }>;
+  ipAddress: string | null;
+  exchanges?: string;
+  allowedExchanges?: Array<{
+    name: string;
+    turnover?: boolean;
+    lot?: boolean;
+    groupId?: any;
+  }>;
+  highLowTradeLimit?: string;
+  changePasswordFirstLogin?: boolean;
+  brkSharing?: number | null;
+  pnlSharing?: number | null;
+  mobileNumber?: string;
+  city?: string;
+  addMaster?: boolean;
+  parentPnlSharing?: number;
+  parentBrkSharing?: number;
+  parentAllowedExchanges?: Array<{
+    name: string;
+    turnover?: boolean;
+    lot?: boolean;
+    groupId?: any;
+  }>;
+  parentHighLowTradeLimit?: string;
 }
 
 interface UserDetailsResponse {
   userProfile: UserProfile;
   userInfo: UserInfo;
+  userSettings?: any;
+  userList?: any[];
   [key: string]: any;
 } 
 
@@ -30,6 +55,7 @@ interface UserDetailsTabProps {
   user: any;
   userDetails: UserDetailsResponse;
   getTypeColor: (type: string) => string;
+  onUserUpdated?: () => void;
 }
 
 // Exchange data
@@ -107,7 +133,7 @@ const formatDate = (date: any): string => {
   }
 };
 
-const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getTypeColor }) => {
+const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getTypeColor, onUserUpdated }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [parentUserConfig, setParentUserConfig] = useState<any>(null);
@@ -115,8 +141,12 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   
   // State for editable fields
   const [editedName, setEditedName] = useState(userDetails.userInfo.name);
-  const [editedMobile, setEditedMobile] = useState(user?.mobile || '');
-  const [editedCity, setEditedCity] = useState(user?.city || '');
+  const [editedMobile, setEditedMobile] = useState(
+    user?.mobileNumber || user?.mobile || userDetails.userInfo?.mobileNumber || (userDetails as any)?.userInfo?.mobileNumber || ''
+  );
+  const [editedCity, setEditedCity] = useState(
+    user?.city || userDetails.userInfo?.city || (userDetails as any)?.userInfo?.city || ''
+  );
   const [editedRemarks, setEditedRemarks] = useState(userDetails.userInfo.remarks || '');
   const [editedPnlSharing, setEditedPnlSharing] = useState(
     user?.pnlSharing || user?.sharing || (userDetails as any)?.userInfo?.pnlSharing || 0
@@ -131,23 +161,34 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   
   // Parse allowed exchanges
   const parseAllowedExchanges = () => {
-    // Try multiple sources for allowed exchanges
-    const exchanges = user?.allowedExchanges || userDetails?.userInfo?.allowedExchanges;
-    
-    if (!exchanges) return {};
+    // Get all available exchanges from parent
+    const parentExchanges = userDetails?.userInfo?.parentAllowedExchanges || user?.parentAllowedExchanges || [];
+    const currentExchanges = userDetails?.userInfo?.allowedExchanges || user?.allowedExchanges || [];
     
     const obj: any = {};
-    const exchangesList = Array.isArray(exchanges) ? exchanges : 
-                          typeof exchanges === 'string' ? 
-                          exchanges.split(',').map((e: string) => ({ name: e.trim() })) : [];
     
-    exchangesList.forEach((ex: any) => {
+    // Add all parent exchanges as keys (default to unchecked)
+    parentExchanges.forEach((ex: any) => {
       const name = ex?.name || ex;
       const key = String(name).toLowerCase();
       if (exchangeData.find(e => e.key === key)) {
-        obj[key] = true;
+        obj[key] = false; // Default unchecked
       }
     });
+    
+    // Mark currently allowed ones as checked
+    const allowedList = Array.isArray(currentExchanges) ? currentExchanges : 
+                        typeof currentExchanges === 'string' ? 
+                        currentExchanges.split(',').map((e: string) => ({ name: e.trim() })) : [];
+    
+    allowedList.forEach((ex: any) => {
+      const name = ex?.name || ex;
+      const key = String(name).toLowerCase();
+      if (exchangeData.find(e => e.key === key)) {
+        obj[key] = true; // Checked
+      }
+    });
+    
     return obj;
   };
 
@@ -155,28 +196,44 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
 
   // Parse high/low trade limit
   const parseHighLowTradeLimit = () => {
-    // Try multiple sources for high/low trade limit
-    const tradeLimits = user?.highLowTradeLimit || (userDetails as any)?.userInfo?.highLowTradeLimit || user?.high_low_trade_limit;
-    
-    if (!tradeLimits) return {};
+    // Get all available limits from parent
+    const parentLimits = userDetails?.userInfo?.parentHighLowTradeLimit || user?.parentHighLowTradeLimit || '';
+    const currentLimits = userDetails?.userInfo?.highLowTradeLimit || user?.highLowTradeLimit || '';
     
     const obj: any = {};
     
-    // Handle array of objects with 'name' property
-    if (Array.isArray(tradeLimits)) {
-      tradeLimits.forEach((ex: any) => {
+    // Add all parent limit exchanges as keys (default to unchecked)
+    if (typeof parentLimits === 'string' && parentLimits) {
+      parentLimits.split(',').forEach((key: string) => {
+        const cleanKey = key.trim().toLowerCase();
+        if (exchangeData.find(e => e.key === cleanKey)) {
+          obj[cleanKey] = false; // Default unchecked
+        }
+      });
+    } else if (Array.isArray(parentLimits)) {
+      parentLimits.forEach((ex: any) => {
         const name = ex?.name || ex;
         const key = String(name).toLowerCase();
         if (exchangeData.find(e => e.key === key)) {
-          obj[key] = true;
+          obj[key] = false; // Default unchecked
         }
       });
-    } else if (typeof tradeLimits === 'string') {
-      // Handle comma-separated string
-      tradeLimits.split(',').forEach((key: string) => {
+    }
+    
+    // Mark currently allowed ones as checked
+    if (typeof currentLimits === 'string' && currentLimits) {
+      currentLimits.split(',').forEach((key: string) => {
         const cleanKey = key.trim().toLowerCase();
         if (exchangeData.find(e => e.key === cleanKey)) {
-          obj[cleanKey] = true;
+          obj[cleanKey] = true; // Checked
+        }
+      });
+    } else if (Array.isArray(currentLimits)) {
+      currentLimits.forEach((ex: any) => {
+        const name = ex?.name || ex;
+        const key = String(name).toLowerCase();
+        if (exchangeData.find(e => e.key === key)) {
+          obj[key] = true; // Checked
         }
       });
     }
@@ -215,6 +272,12 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   // Sync state with props when userDetails changes
   useEffect(() => {
     setEditedName(userDetails.userInfo.name);
+    setEditedMobile(
+      user?.mobileNumber || user?.mobile || userDetails.userInfo?.mobileNumber || (userDetails as any)?.userInfo?.mobileNumber || ''
+    );
+    setEditedCity(
+      user?.city || userDetails.userInfo?.city || (userDetails as any)?.userInfo?.city || ''
+    );
     setEditedRemarks(userDetails.userInfo.remarks || '');
     setEditedPnlSharing(user?.pnlSharing || user?.sharing || (userDetails as any)?.userInfo?.pnlSharing || 0);
     setEditedBrokerageSharing(user?.brokeragePercentage || user?.brkSharing || (userDetails as any)?.userInfo?.brkSharing || 0);
@@ -233,8 +296,12 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   const handleCancel = () => {
     setIsEditMode(false);
     setEditedName(userDetails.userInfo.name);
-    setEditedMobile(user?.mobile || '');
-    setEditedCity(user?.city || '');
+    setEditedMobile(
+      user?.mobileNumber || user?.mobile || userDetails.userInfo?.mobileNumber || (userDetails as any)?.userInfo?.mobileNumber || ''
+    );
+    setEditedCity(
+      user?.city || userDetails.userInfo?.city || (userDetails as any)?.userInfo?.city || ''
+    );
     setEditedRemarks(userDetails.userInfo.remarks || '');
     setEditedPnlSharing(user?.pnlSharing || user?.sharing || (userDetails as any)?.userInfo?.pnlSharing || 0);
     setEditedBrokerageSharing(user?.brokeragePercentage || user?.brkSharing || (userDetails as any)?.userInfo?.brkSharing || 0);
@@ -269,13 +336,22 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         .map(([key]) => key.toUpperCase())
         .join(',');
 
+      // Get userType from roleId (3 = Master, 4 = Client)
+      const userType = userDetails.userProfile.roleId;
+
       const updatePayload: any = {
+        userType,
         name: editedName,
-        mobile: editedMobile,
+        mobileNumber: editedMobile,
         city: editedCity,
-        remarks: editedRemarks,
-        allowedExchanges,
+        remarks: editedRemarks || null,
+        changePasswordFirstLogin: false,
       };
+
+      // Add allowed exchanges if available
+      if (allowedExchanges.length > 0) {
+        updatePayload.allowedExchanges = allowedExchanges;
+      }
 
       // Add master-only fields
       if (isMaster) {
@@ -299,6 +375,11 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
       if (response?.responseCode === '0' || response?.responseCode === '1000') {
         toast.success('User details updated successfully!');
         setIsEditMode(false);
+        
+        // Refresh the user data
+        if (onUserUpdated) {
+          onUserUpdated();
+        }
       } else {
         toast.error(response?.responseMessage || 'Failed to update user details');
       }
@@ -435,7 +516,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                 />
               ) : (
                 <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-slate-800 dark:text-white font-medium">
-                  {user?.mobile || 'N/A'}
+                  {userDetails.userInfo?.mobileNumber || (userDetails as any)?.userInfo?.mobileNumber || 'N/A'}
                 </div>
               )}
             </div>
@@ -453,7 +534,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                 />
               ) : (
                 <div className="px-4 py-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-slate-800 dark:text-white font-medium">
-                  {user?.city || 'N/A'}
+                  {userDetails.userInfo?.city || (userDetails as any)?.userInfo?.city || 'N/A'}
                 </div>
               )}
             </div>
@@ -527,7 +608,11 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {exchangeData
-                  .filter(exchange => Object.keys(editedAllowedExchanges).length === 0 || editedAllowedExchanges.hasOwnProperty(exchange.key))
+                  .filter((exchange) => {
+                    // Only show exchanges that are in parent's allowed list
+                    const parentExchanges = userDetails?.userInfo?.parentAllowedExchanges || [];
+                    return parentExchanges.some(pex => String(pex.name).toLowerCase() === exchange.key);
+                  })
                   .map((exchange) => (
                   <label key={exchange.key} className="relative flex items-center p-3 bg-surface-secondary border-2 border-border-primary rounded-lg cursor-pointer hover:border-blue-500 transition-all"
                     style={{
@@ -622,22 +707,22 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                         max="100"
                         placeholder="Enter P&L sharing"
                         className={`w-full h-12 px-4 py-3 bg-surface-secondary border-2 rounded-lg text-text-primary font-medium focus:ring-2 transition-all ${
-                          editedPnlSharing > (parentUserConfig?.pnlSharing || 100)
+                          editedPnlSharing > ((userDetails.userInfo as any)?.parentPnlSharing || 100)
                             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
                             : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'
                         }`}
                       />
-                      {editedPnlSharing > (parentUserConfig?.pnlSharing || 100) && (
-                        <div className="mt-1 text-xs text-red-400">Cannot exceed available P&L sharing of {(parentUserConfig?.pnlSharing || 100).toFixed(2)}</div>
+                      {editedPnlSharing > ((userDetails.userInfo as any)?.parentPnlSharing || 100) && (
+                        <div className="mt-1 text-xs text-red-400">Cannot exceed available P&L sharing of {((userDetails.userInfo as any)?.parentPnlSharing || 100).toFixed(2)}</div>
                       )}
                       <div className="grid grid-cols-2 gap-3 mt-3">
                         <div className="bg-surface-secondary rounded-lg p-3 border border-border-primary">
                           <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide font-semibold">Our</p>
-                          <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{(parentUserConfig?.pnlSharing || 100).toFixed(2)}</p>
+                          <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{((userDetails.userInfo as any)?.parentPnlSharing || 100).toFixed(2)}</p>
                         </div>
                         <div className="bg-surface-secondary rounded-lg p-3 border border-border-primary">
                           <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide font-semibold">Remaining</p>
-                          <p className={`text-lg font-bold ${editedPnlSharing > (parentUserConfig?.pnlSharing || 100) ? 'text-red-600 dark:text-red-400' : 'text-text-primary'}`}>{((parentUserConfig?.pnlSharing || 100) - editedPnlSharing).toFixed(2)}</p>
+                          <p className={`text-lg font-bold ${editedPnlSharing > ((userDetails.userInfo as any)?.parentPnlSharing || 100) ? 'text-red-600 dark:text-red-400' : 'text-text-primary'}`}>{(((userDetails.userInfo as any)?.parentPnlSharing || 100) - editedPnlSharing).toFixed(2)}</p>
                         </div>
                       </div>
                     </>
@@ -661,22 +746,22 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                         max="100"
                         placeholder="Enter brokerage sharing"
                         className={`w-full h-12 px-4 py-3 bg-surface-secondary border-2 rounded-lg text-text-primary font-medium focus:ring-2 transition-all ${
-                          editedBrokerageSharing > (parentUserConfig?.brokeragePercentage || 100)
+                          editedBrokerageSharing > ((userDetails.userInfo as any)?.parentBrkSharing || 100)
                             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
                             : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'
                         }`}
                       />
-                      {editedBrokerageSharing > (parentUserConfig?.brokeragePercentage || 100) && (
-                        <div className="mt-1 text-xs text-red-400">Cannot exceed available brokerage of {(parentUserConfig?.brokeragePercentage || 100).toFixed(2)}</div>
+                      {editedBrokerageSharing > ((userDetails.userInfo as any)?.parentBrkSharing || 100) && (
+                        <div className="mt-1 text-xs text-red-400">Cannot exceed available brokerage of {((userDetails.userInfo as any)?.parentBrkSharing || 100).toFixed(2)}</div>
                       )}
                       <div className="grid grid-cols-2 gap-3 mt-3">
                         <div className="bg-surface-secondary rounded-lg p-3 border border-border-primary">
                           <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide font-semibold">Our</p>
-                          <p className="text-lg font-bold text-pink-600 dark:text-pink-400">{(parentUserConfig?.brokeragePercentage || 100).toFixed(2)}</p>
+                          <p className="text-lg font-bold text-pink-600 dark:text-pink-400">{((userDetails.userInfo as any)?.parentBrkSharing || 100).toFixed(2)}</p>
                         </div>
                         <div className="bg-surface-secondary rounded-lg p-3 border border-border-primary">
                           <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide font-semibold">Remaining</p>
-                          <p className={`text-lg font-bold ${editedBrokerageSharing > (parentUserConfig?.brokeragePercentage || 100) ? 'text-red-600 dark:text-red-400' : 'text-text-primary'}`}>{((parentUserConfig?.brokeragePercentage || 100) - editedBrokerageSharing).toFixed(2)}</p>
+                          <p className={`text-lg font-bold ${editedBrokerageSharing > ((userDetails.userInfo as any)?.parentBrkSharing || 100) ? 'text-red-600 dark:text-red-400' : 'text-text-primary'}`}>{(((userDetails.userInfo as any)?.parentBrkSharing || 100) - editedBrokerageSharing).toFixed(2)}</p>
                         </div>
                       </div>
                     </>
@@ -738,7 +823,15 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {exchangeData
-                    .filter(exchange => Object.keys(editedHighLowTradeLimit).length === 0 || editedHighLowTradeLimit.hasOwnProperty(exchange.key))
+                    .filter((exchange) => {
+                      // Only show exchanges that are in parent's high trade limit list
+                      const parentLimits = userDetails?.userInfo?.parentHighLowTradeLimit || '';
+                      if (typeof parentLimits === 'string' && parentLimits) {
+                        const parentKeys = parentLimits.split(',').map(k => k.trim().toLowerCase());
+                        return parentKeys.includes(exchange.key);
+                      }
+                      return false;
+                    })
                     .map((exchange) => (
                     <label key={`high-${exchange.key}`} className="relative flex items-center p-3 bg-surface-secondary border-2 border-border-primary rounded-lg cursor-pointer hover:border-emerald-500 transition-all"
                       style={{
