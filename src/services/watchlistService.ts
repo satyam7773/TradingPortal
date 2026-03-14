@@ -53,18 +53,19 @@ class WatchlistService {
   }
 
   /**
-   * Add instrument to watchlist
+   * Add instrument to watchlist tab
    */
-  async addToWatchlist(userId: number, token: number): Promise<boolean> {
+  async addToWatchlist(userId: number, token: number, watchListTabId?: number): Promise<boolean> {
     const requestPayload = {
       userId: userId,
       requestTimestamp: Date.now().toString(),
       data: {
-        token: token
+        token: String(token),
+        ...(watchListTabId && { watchListTabId })
       }
     }
 
-    console.log('➕ Adding to Watchlist:', { userId, token })
+    console.log('➕ Adding to Watchlist:', { userId, token, watchListTabId })
 
     const response = await apiClient.post<AddWatchlistResponse>(
       `${this.baseUrl}/add`,
@@ -81,16 +82,17 @@ class WatchlistService {
   /**
    * Remove instrument from watchlist
    */
-  async removeFromWatchlist(userId: number, token: number): Promise<boolean> {
+  async removeFromWatchlist(userId: number, token: number, watchListTabId?: number): Promise<boolean> {
     const requestPayload = {
       userId: userId,
       requestTimestamp: Date.now().toString(),
       data: {
-        token: token
+        token: String(token),
+        ...(watchListTabId && { watchListTabId })
       }
     }
 
-    console.log('➖ Removing from Watchlist:', { userId, token })
+    console.log('➖ Removing from Watchlist:', { userId, token, watchListTabId })
 
     const response = await apiClient.post<AddWatchlistResponse>(
       `${this.baseUrl}/delete`,

@@ -68,12 +68,17 @@ class UserManagementService {
     }
 
     console.log('🔧 Creating User:', {
-      endpoint: `${this.baseUrl}/createUser`,
+      endpoint: `https://api-staging.rivoplus.live/user-new/createUser`,
       payload: request
     })
 
+    // const response = await apiClient.post<any>(
+    //   `${this.baseUrl}/createUser`,
+    //   request
+    // )
+
     const response = await apiClient.post<any>(
-      `${this.baseUrl}/createUser`,
+      `https://api-staging.rivoplus.live/user-new/createUser`,
       request
     )
 
@@ -506,7 +511,7 @@ class UserManagementService {
       data: string[];
     }>(
       `${this.baseUrl}/fetchBrokerageExchanges?userId=${userId}&datatype=${datatype}`
-    )
+    ) as any
 
     return response.data
   }
@@ -538,6 +543,31 @@ class UserManagementService {
     )
 
     return response
+  }
+
+  /**
+   * Fetch user positions
+   */
+  async getUserPositions(userId: number): Promise<any> {
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/positions',
+        request
+      )
+      console.log('🔍 Service Response from API:', response);
+      console.log('🔍 Service Response Keys:', Object.keys(response || {}));
+
+      // Return the full response object (contains responseCode, responseMessage, data)
+      return response as any
+    } catch (error) {
+      console.error('🔍 Service Error:', error);
+      throw error;
+    }
   }
 }
 

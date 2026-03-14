@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2 } from 'lucide-react'
+import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2, Plus } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import marketWatchService from '../../services/marketWatchService'
 import watchlistService from '../../services/watchlistService'
+import watchlistTabsService, { type WatchlistTab } from '../../services/watchlistTabsService'
 import userManagementService from '../../services/userManagementService'
+import orderService from '../../services/orderService'
 import ConfigManager from '../../utils/configManager'
 import toast from 'react-hot-toast'
 
@@ -348,6 +350,26 @@ const MarketWatch: React.FC = () => {
   const [showClientListModal, setShowClientListModal] = useState(false)
   const [clientSearchTerm, setClientSearchTerm] = useState('')
   
+  // Order form state
+  const [buyOrderQuantity, setBuyOrderQuantity] = useState('1')
+  const [buyOrderPrice, setBuyOrderPrice] = useState('0')
+  const [buyOrderType, setBuyOrderType] = useState('MARKET')
+  const [buyOrderRemark, setBuyOrderRemark] = useState('')
+  const [isBuyOrderSubmitting, setIsBuyOrderSubmitting] = useState(false)
+  
+  const [sellOrderQuantity, setSellOrderQuantity] = useState('1')
+  const [sellOrderPrice, setSellOrderPrice] = useState('0')
+  const [sellOrderType, setSellOrderType] = useState('MARKET')
+  const [sellOrderRemark, setSellOrderRemark] = useState('')
+  const [isSellOrderSubmitting, setIsSellOrderSubmitting] = useState(false)
+  
+  // Watchlist Tabs state
+  const [watchlistTabs, setWatchlistTabs] = useState<WatchlistTab[]>([])
+  const [selectedTabId, setSelectedTabId] = useState<number | null>(null)
+  const [isLoadingTabs, setIsLoadingTabs] = useState(false)
+  const [editingTabId, setEditingTabId] = useState<number | null>(null)
+  const [editingTabName, setEditingTabName] = useState('')
+  
   // Draggable modal state
   const [buyModalPosition, setBuyModalPosition] = useState({ x: 0, y: 0 })
   const [sellModalPosition, setSellModalPosition] = useState({ x: 0, y: 0 })
@@ -423,17 +445,34 @@ const MarketWatch: React.FC = () => {
     [watchlist]
   )
 
-  // Memoize filtered feed data using Map for O(1) lookup
+  // Get tokens from selected tab's watchlist
+  const selectedTabTokens = useMemo(() => {
+    const selectedTab = watchlistTabs.find(tab => tab.tabId === selectedTabId)
+    if (!selectedTab || !Array.isArray(selectedTab.watchList)) {
+      console.log('⚠️ No selected tab or watchList, returning empty Set')
+      return new Set<number>()
+    }
+    const tokens = new Set(selectedTab.watchList.map(item => {
+      const token = typeof item.token === 'string' ? parseInt(item.token) : item.token
+      console.log('📌 Tab token:', token, 'from item:', item)
+      return token
+    }))
+    console.log('✅ Selected tab tokens:', Array.from(tokens))
+    return tokens
+  }, [watchlistTabs, selectedTabId])
+
+  // Memoize filtered feed data - show only tokens from selected tab
   const filteredFeedData = useMemo(() => {
-    // Only keep instruments in watchlist
+    // Filter by selected tab's tokens AND exclude deleting token
     const filtered: FeedInstrument[] = []
     for (const instrument of feedData) {
-      if (watchlistTokens.has(instrument.insToken) && instrument.insToken !== deletingToken) {
+      if (selectedTabTokens.has(instrument.insToken) && instrument.insToken !== deletingToken) {
         filtered.push(instrument)
       }
     }
+    console.log('🔍 Filtered feed data:', filtered.length, 'instruments from', feedData.length, 'total feed items for tab', selectedTabId)
     return filtered
-  }, [feedData, watchlistTokens, deletingToken])
+  }, [feedData, selectedTabTokens, deletingToken, selectedTabId])
   
   // Throttle price change updates
   const [throttledPriceChanges, setThrottledPriceChanges] = useState<Record<number, PriceChange>>({})
@@ -486,6 +525,54 @@ const MarketWatch: React.FC = () => {
       console.error('❌ Failed to fetch watchlist:', error)
     }
   }
+
+  // Fetch watchlist tabs
+  const fetchWatchlistTabs = async () => {
+    try {
+      setIsLoadingTabs(true)
+      const userData = localStorage.getItem('userData')
+      if (userData) {
+        const user = JSON.parse(userData)
+        const userId = user.userId
+        console.log('🔄 Fetching watchlist tabs for userId:', userId)
+        const tabsData = await watchlistTabsService.getWatchlistTabs(userId)
+        console.log('📑 Received tabs:', tabsData)
+        setWatchlistTabs(tabsData)
+        
+        // Auto-select first tab if not selected
+        if (tabsData.length > 0 && !selectedTabId) {
+          setSelectedTabId(tabsData[0].tabId)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch watchlist tabs:', error)
+      toast.error('Failed to load watchlist tabs')
+    } finally {
+      setIsLoadingTabs(false)
+    }
+  }
+
+  // Update tab name
+  const handleUpdateTabName = async (tabId: number) => {
+    if (!editingTabName.trim()) {
+      toast.error('Tab name cannot be empty')
+      return
+    }
+
+    try {
+      await watchlistTabsService.updateTabName(tabId, editingTabName)
+      setEditingTabId(null)
+      setEditingTabName('')
+      toast.success('Tab updated successfully')
+      
+      // Refresh all tabs
+      await fetchWatchlistTabs()
+    } catch (error: any) {
+      console.error('❌ Failed to update tab:', error)
+      toast.error(error.message || 'Failed to update tab')
+    }
+  }
+
 
   // Load exchanges on mount
   useEffect(() => {
@@ -572,8 +659,8 @@ const MarketWatch: React.FC = () => {
       console.warn('⚠️ No instruments found in config')
     }
 
-    // Fetch watchlist on mount
-    fetchWatchlist()
+    // Fetch watchlist tabs on mount
+    fetchWatchlistTabs()
   }, [])
 
   // Add to watchlist function
@@ -585,18 +672,23 @@ const MarketWatch: React.FC = () => {
         const user = JSON.parse(userData)
         const userId = user.userId
         
-        // Check if already in watchlist
-        const isAlreadyInWatchlist = watchlist.some(item => item.token === token)
-        if (isAlreadyInWatchlist) {
-          toast.error('Already in watchlist')
+        // Check if no tab selected
+        if (!selectedTabId) {
+          toast.error('Please select a watchlist tab first')
           return
         }
         
-        await watchlistService.addToWatchlist(userId, token)
+        // Allow same token across different tabs, but prevent duplicate in selected tab
+        if (selectedTabTokens.has(token)) {
+          toast.error('Token already exists in selected tab')
+          return
+        }
+        
+        await watchlistTabsService.addToWatchlist(userId, token, selectedTabId)
         toast.success('Added to watchlist')
         
-        // Refresh watchlist
-        await fetchWatchlist()
+        // Refresh watchlist tabs
+        await fetchWatchlistTabs()
       }
     } catch (error: any) {
       console.error('❌ Failed to add to watchlist:', error)
@@ -988,8 +1080,50 @@ const MarketWatch: React.FC = () => {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-bg-primary">
       <div className="w-full flex-shrink-0">
+        {/* Watchlist Tabs Section */}
+        <div className="flex-shrink-0 px-4 pt-2 border-b border-border-primary">
+          <div className="flex items-center gap-2 overflow-x-auto tabs-scrollbar mb-1">
+            {/* Tab Buttons */}
+            {watchlistTabs.map((tab) => (
+              <div key={tab.tabId} className="flex items-center gap-1">
+                {editingTabId === tab.tabId ? (
+                  <input
+                    type="text"
+                    value={editingTabName}
+                    onChange={(e) => setEditingTabName(e.target.value)}
+                    onBlur={() => handleUpdateTabName(tab.tabId)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleUpdateTabName(tab.tabId)
+                      }
+                    }}
+                    autoFocus
+                    className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm font-semibold focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => setSelectedTabId(tab.tabId)}
+                    onDoubleClick={() => {
+                      setEditingTabId(tab.tabId)
+                      setEditingTabName(tab.tabName)
+                    }}
+                    className={`px-4 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                      selectedTabId === tab.tabId
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                    }`}
+                    title="Double-click to edit tab name"
+                  >
+                    {tab.tabName}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Search Filters */}
-        <div className="flex-shrink-0 mb-4 px-4 pt-4">
+        <div className="flex-shrink-0 mb-4 px-4 pt-2">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Exchange Dropdown */}
             <div className="relative exchange-dropdown-container">
@@ -1214,7 +1348,7 @@ const MarketWatch: React.FC = () => {
 
 
         {/* Live Feed Data Section */}
-        {feedData.length > 0 && watchlist.length > 0 && (
+        {feedData.length > 0 && selectedTabId && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1241,7 +1375,7 @@ const MarketWatch: React.FC = () => {
             
             </div>
             {/* Single Scrollable Table Container with Sticky Header */}
-            <div className="flex-1 overflow-auto min-h-0" style={{maxHeight: 'calc(110vh - 400px)'}}>
+            <div className="flex-1 overflow-auto min-h-0" style={{maxHeight: 'calc(100vh - 350px)'}}>
               {/* Fixed Table Header */}
               <table className="w-full table-fixed border-collapse">
                 <colgroup>
@@ -1474,11 +1608,11 @@ const MarketWatch: React.FC = () => {
                   await new Promise(resolve => setTimeout(resolve, 500))
                   
                   const userData = localStorage.getItem('userData')
-                  if (userData && tokenToDelete) {
+                  if (userData && tokenToDelete && selectedTabId) {
                     const user = JSON.parse(userData)
-                    await watchlistService.removeFromWatchlist(user.userId, tokenToDelete)
+                    await watchlistTabsService.removeFromWatchlist(user.userId, tokenToDelete, selectedTabId)
                     toast.success('Removed from watchlist', { id: deleteToast })
-                    await fetchWatchlist()
+                    await fetchWatchlistTabs()
                   }
                 } catch (error) {
                   toast.error('Failed to remove from watchlist')
@@ -1501,7 +1635,7 @@ const MarketWatch: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100000] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/40 z-[100000] p-4"
             onClick={() => setShowBuyOrderModal(false)}
           >
             <motion.div
@@ -1518,7 +1652,8 @@ const MarketWatch: React.FC = () => {
                 left: buyModalPosition.x !== 0 ? `${buyModalPosition.x}px` : '50%',
                 top: buyModalPosition.y !== 0 ? `${buyModalPosition.y}px` : '50%',
                 transform: buyModalPosition.x !== 0 ? 'none' : 'translate(-50%, -50%)',
-                cursor: isDraggingBuy ? 'grabbing' : 'auto'
+                cursor: isDraggingBuy ? 'grabbing' : 'auto',
+                zIndex: 100001
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1615,25 +1750,31 @@ const MarketWatch: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Order Type</label>
-                          <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
-                            <option>Market</option>
-                            <option>Limit</option>
-                            <option>Stop Loss</option>
+                          <select 
+                            value={buyOrderType}
+                            onChange={(e) => setBuyOrderType(e.target.value)}
+                            className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
+                            <option value="MARKET">Market</option>
+                            <option value="LIMIT">Limit</option>
+                            <option value="STOP_LOSS">Stop Loss</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Quantity</label>
                           <input
                             type="number"
-                            defaultValue="1"
+                            value={buyOrderQuantity}
+                            onChange={(e) => setBuyOrderQuantity(e.target.value)}
                             className="w-full px-3 py-3 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-blue-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Sell Price</label>
+                          <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Price</label>
                           <input
                             type="number"
-                            defaultValue={liveData?.ask.toFixed(2) || '0'}
+                            value={buyOrderPrice}
+                            onChange={(e) => setBuyOrderPrice(e.target.value)}
+                            placeholder="0"
                             className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-blue-500"
                           />
                         </div>
@@ -1657,14 +1798,17 @@ const MarketWatch: React.FC = () => {
                           <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">LotSize</label>
                           <input
                             type="number"
-                            defaultValue="100.000"
-                            className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-blue-500"
+                            defaultValue={config?.lotSize || '100'}
+                            disabled
+                            className="w-full px-3 py-3 bg-gray-200 dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none cursor-not-allowed"
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Remark</label>
                           <input
                             type="text"
+                            value={buyOrderRemark}
+                            onChange={(e) => setBuyOrderRemark(e.target.value)}
                             placeholder="Optional note..."
                             className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500"
                           />
@@ -1674,17 +1818,79 @@ const MarketWatch: React.FC = () => {
                       {/* Action Buttons */}
                       <div className="flex gap-4 pt-4">
                         <button
-                          onClick={() => {
-                            toast.success('Buy order submitted')
-                            setShowBuyOrderModal(false)
+                          onClick={async () => {
+                            try {
+                              setIsBuyOrderSubmitting(true)
+                              
+                              if (!selectedClient) {
+                                toast.error('Please select a client')
+                                return
+                              }
+
+                              if (!buyOrderQuantity || parseFloat(buyOrderQuantity) <= 0) {
+                                toast.error('Please enter a valid quantity')
+                                return
+                              }
+
+                              if (buyOrderType === 'LIMIT' && (!buyOrderPrice || parseFloat(buyOrderPrice) <= 0)) {
+                                toast.error('Please enter a valid price for limit order')
+                                return
+                              }
+
+                              const submitToast = toast.loading('Placing buy order...')
+                              
+                              const userData = localStorage.getItem('userData')
+                              const loggedInUserId = userData ? JSON.parse(userData).userId : null
+                              
+                              const response = await orderService.placeBuyOrder(
+                                loggedInUserId,
+                                selectedClient.userId,
+                                config?.exchange || 'MCX',
+                                config?.tradeSymbol || config?.instrumentName || config?.script || '',
+                                selectedOrderInstrument?.token || 0,
+                                parseInt(buyOrderQuantity),
+                                parseFloat(buyOrderPrice || liveData?.ask.toString() || '0'),
+                                config?.lotSize || 100
+                              )
+
+                              if (response?.responseCode === '0') {
+                                toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+                                
+                                // Reset form
+                                setBuyOrderQuantity('1')
+                                setBuyOrderPrice('0')
+                                setBuyOrderType('MARKET')
+                                setBuyOrderRemark('')
+                                setSelectedClient(null)
+                                setClientSearchTerm('')
+                                
+                                setShowBuyOrderModal(false)
+                              } else {
+                                toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+                              }
+                            } catch (error: any) {
+                              toast.error(error.message || 'Error placing buy order')
+                            } finally {
+                              setIsBuyOrderSubmitting(false)
+                            }
                           }}
-                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg"
+                          disabled={isBuyOrderSubmitting}
+                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Submit
+                          {isBuyOrderSubmitting ? 'Submitting...' : 'Submit'}
                         </button>
                         <button
-                          onClick={() => setShowBuyOrderModal(false)}
-                          className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
+                          onClick={() => {
+                            setShowBuyOrderModal(false)
+                            setBuyOrderQuantity('1')
+                            setBuyOrderPrice('0')
+                            setBuyOrderType('MARKET')
+                            setBuyOrderRemark('')
+                            setSelectedClient(null)
+                            setClientSearchTerm('')
+                          }}
+                          disabled={isBuyOrderSubmitting}
+                          className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
                         >
                           Cancel
                         </button>
@@ -1704,7 +1910,7 @@ const MarketWatch: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100000] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/40 z-[100000] p-4"
             onClick={() => setShowSellOrderModal(false)}
           >
             <motion.div
@@ -1721,7 +1927,8 @@ const MarketWatch: React.FC = () => {
                 left: sellModalPosition.x !== 0 ? `${sellModalPosition.x}px` : '50%',
                 top: sellModalPosition.y !== 0 ? `${sellModalPosition.y}px` : '50%',
                 transform: sellModalPosition.x !== 0 ? 'none' : 'translate(-50%, -50%)',
-                cursor: isDraggingSell ? 'grabbing' : 'auto'
+                cursor: isDraggingSell ? 'grabbing' : 'auto',
+                zIndex: 100001
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1818,25 +2025,31 @@ const MarketWatch: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Order Type</label>
-                          <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
-                            <option>Market</option>
-                            <option>Limit</option>
-                            <option>Stop Loss</option>
+                          <select 
+                            value={sellOrderType}
+                            onChange={(e) => setSellOrderType(e.target.value)}
+                            className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
+                            <option value="MARKET">Market</option>
+                            <option value="LIMIT">Limit</option>
+                            <option value="STOP_LOSS">Stop Loss</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Quantity</label>
                           <input
                             type="number"
-                            defaultValue="1"
+                            value={sellOrderQuantity}
+                            onChange={(e) => setSellOrderQuantity(e.target.value)}
                             className="w-full px-3 py-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-red-500"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Buy Price</label>
+                          <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Price</label>
                           <input
                             type="number"
-                            defaultValue={liveData?.bid.toFixed(2) || '0'}
+                            value={sellOrderPrice}
+                            onChange={(e) => setSellOrderPrice(e.target.value)}
+                            placeholder="0"
                             className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-red-500"
                           />
                         </div>
@@ -1860,14 +2073,17 @@ const MarketWatch: React.FC = () => {
                           <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">LotSize</label>
                           <input
                             type="number"
-                            defaultValue="100.000"
-                            className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-red-500"
+                            defaultValue={config?.lotSize || '100'}
+                            disabled
+                            className="w-full px-3 py-3 bg-gray-200 dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none cursor-not-allowed"
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Remark</label>
                           <input
                             type="text"
+                            value={sellOrderRemark}
+                            onChange={(e) => setSellOrderRemark(e.target.value)}
                             placeholder="Optional note..."
                             className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500"
                           />
@@ -1877,17 +2093,79 @@ const MarketWatch: React.FC = () => {
                       {/* Action Buttons */}
                       <div className="flex gap-4 pt-4">
                         <button
-                          onClick={() => {
-                            toast.success('Sell order submitted')
-                            setShowSellOrderModal(false)
+                          onClick={async () => {
+                            try {
+                              setIsSellOrderSubmitting(true)
+                              
+                              if (!selectedClient) {
+                                toast.error('Please select a client')
+                                return
+                              }
+
+                              if (!sellOrderQuantity || parseFloat(sellOrderQuantity) <= 0) {
+                                toast.error('Please enter a valid quantity')
+                                return
+                              }
+
+                              if (sellOrderType === 'LIMIT' && (!sellOrderPrice || parseFloat(sellOrderPrice) <= 0)) {
+                                toast.error('Please enter a valid price for limit order')
+                                return
+                              }
+
+                              const submitToast = toast.loading('Placing sell order...')
+                              
+                              const userData = localStorage.getItem('userData')
+                              const loggedInUserId = userData ? JSON.parse(userData).userId : null
+                              
+                              const response = await orderService.placeSellOrder(
+                                loggedInUserId,
+                                selectedClient.userId,
+                                config?.exchange || 'MCX',
+                                config?.tradeSymbol || config?.instrumentName || config?.script || '',
+                                selectedOrderInstrument?.token || 0,
+                                parseInt(sellOrderQuantity),
+                                parseFloat(sellOrderPrice || liveData?.bid.toString() || '0'),
+                                config?.lotSize || 100
+                              )
+
+                              if (response?.responseCode === '0') {
+                                toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+                                
+                                // Reset form
+                                setSellOrderQuantity('1')
+                                setSellOrderPrice('0')
+                                setSellOrderType('MARKET')
+                                setSellOrderRemark('')
+                                setSelectedClient(null)
+                                setClientSearchTerm('')
+                                
+                                setShowSellOrderModal(false)
+                              } else {
+                                toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+                              }
+                            } catch (error: any) {
+                              toast.error(error.message || 'Error placing sell order')
+                            } finally {
+                              setIsSellOrderSubmitting(false)
+                            }
                           }}
-                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg"
+                          disabled={isSellOrderSubmitting}
+                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Submit
+                          {isSellOrderSubmitting ? 'Submitting...' : 'Submit'}
                         </button>
                         <button
-                          onClick={() => setShowSellOrderModal(false)}
-                          className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
+                          onClick={() => {
+                            setShowSellOrderModal(false)
+                            setSellOrderQuantity('1')
+                            setSellOrderPrice('0')
+                            setSellOrderType('MARKET')
+                            setSellOrderRemark('')
+                            setSelectedClient(null)
+                            setClientSearchTerm('')
+                          }}
+                          disabled={isSellOrderSubmitting}
+                          className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
                         >
                           Cancel
                         </button>
@@ -1907,7 +2185,7 @@ const MarketWatch: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100000] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 z-[100000] p-4"
             onClick={() => setShowScripInfoModal(false)}
           >
             <motion.div
@@ -1915,6 +2193,7 @@ const MarketWatch: React.FC = () => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 100001 }}
               className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
