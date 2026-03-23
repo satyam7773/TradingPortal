@@ -72,9 +72,14 @@ interface ApiUser {
 }
 
 const UserList: React.FC = () => {
+  const USER_LIST_CACHE_KEY = 'userListCache';
+  const USER_LIST_CACHE_TIME_KEY = 'userListCacheTime';
+  const USER_LIST_CACHE_FILTER_TYPE_KEY = 'userListCacheFilterType';
+  const CACHED_USER_ID_KEY = 'cachedUserId';
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [userFilterType, setUserFilterType] = useState<'OWN' | 'ALL'>('OWN');
   const [filterUserType, setFilterUserType] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('Active');
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
@@ -97,22 +102,32 @@ const UserList: React.FC = () => {
   const { user: loggedInUser } = useAppSelector(state => state.auth);
   const { addTab, tabs, removeTab } = useTabs();
 
+  const clearUserListCache = useCallback(() => {
+    sessionStorage.removeItem(USER_LIST_CACHE_KEY);
+    sessionStorage.removeItem(USER_LIST_CACHE_TIME_KEY);
+    sessionStorage.removeItem(USER_LIST_CACHE_FILTER_TYPE_KEY);
+  }, []);
+
+  const setUserListCache = useCallback((transformedUsers: UserData[], filterType: 'OWN' | 'ALL') => {
+    sessionStorage.setItem(USER_LIST_CACHE_KEY, JSON.stringify(transformedUsers));
+    sessionStorage.setItem(USER_LIST_CACHE_TIME_KEY, Date.now().toString());
+    sessionStorage.setItem(USER_LIST_CACHE_FILTER_TYPE_KEY, filterType);
+  }, []);
+
   // Function to refetch user list
   const refetchUserList = useCallback(async () => {
     try {
-      const response = await userManagementService.getUserList();
+      const response = await userManagementService.getUserList(userFilterType);
       if (response?.responseCode === '0' || response?.responseCode === '1000') {
         const apiUsers: ApiUser[] = response.data?.userList || [];
         const transformedUsers = apiUsers.map(transformApiUser);
         setUsers(transformedUsers);
-        // Update cache
-        sessionStorage.setItem('userListCache', JSON.stringify(transformedUsers));
-        sessionStorage.setItem('userListCacheTime', Date.now().toString());
+        setUserListCache(transformedUsers, userFilterType);
       }
     } catch (error: any) {
       // Error refreshing user list
     }
-  }, []);
+  }, [setUserListCache, userFilterType]);
 
   const getRoleType = (roleId: number): 'Client' | 'Master' | 'Admin' => {
     switch (roleId) {
@@ -180,32 +195,31 @@ const UserList: React.FC = () => {
     const currentLoggedInUserId = loggedInUser?.userId || storedUserId;
     
     // Check if we have a cached userId and it differs from current user
-    const cachedUserId = sessionStorage.getItem('cachedUserId');
+    const cachedUserId = sessionStorage.getItem(CACHED_USER_ID_KEY);
     
     if (!currentLoggedInUserId) {
       // No user logged in (logout detected) - clear all caches
-      sessionStorage.removeItem('userListCache');
-      sessionStorage.removeItem('userListCacheTime');
-      sessionStorage.removeItem('cachedUserId');
+      clearUserListCache();
+      sessionStorage.removeItem(CACHED_USER_ID_KEY);
       setUsers([]);
     } else if (cachedUserId && cachedUserId !== String(currentLoggedInUserId)) {
       // User has changed - clear all caches
-      sessionStorage.removeItem('userListCache');
-      sessionStorage.removeItem('userListCacheTime');
-      sessionStorage.removeItem('cachedUserId');
+      clearUserListCache();
+      sessionStorage.removeItem(CACHED_USER_ID_KEY);
     } else if (currentLoggedInUserId && !cachedUserId) {
       // Store current user ID for future comparison
-      sessionStorage.setItem('cachedUserId', String(currentLoggedInUserId));
+      sessionStorage.setItem(CACHED_USER_ID_KEY, String(currentLoggedInUserId));
     }
-  }, [loggedInUser]);
+  }, [CACHED_USER_ID_KEY, clearUserListCache, loggedInUser]);
 
   useEffect(() => {
     // Check if we have cached data
-    const cachedData = sessionStorage.getItem('userListCache');
-    const cacheTimestamp = sessionStorage.getItem('userListCacheTime');
+    const cachedData = sessionStorage.getItem(USER_LIST_CACHE_KEY);
+    const cacheTimestamp = sessionStorage.getItem(USER_LIST_CACHE_TIME_KEY);
+    const cachedFilterType = sessionStorage.getItem(USER_LIST_CACHE_FILTER_TYPE_KEY);
     const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
     
-    if (cachedData && cacheTimestamp) {
+    if (cachedData && cacheTimestamp && cachedFilterType === userFilterType) {
       const age = Date.now() - parseInt(cacheTimestamp);
       if (age < CACHE_DURATION) {
         const cachedUsers = JSON.parse(cachedData);
@@ -222,22 +236,19 @@ const UserList: React.FC = () => {
           setLoading(false);
           return;
         } else {
-          sessionStorage.removeItem('userListCache');
-          sessionStorage.removeItem('userListCacheTime');
+          clearUserListCache();
         }
       }
     }
     const fetchUserList = async () => {
       setLoading(true);
       try {
-        const response = await userManagementService.getUserList();
+        const response = await userManagementService.getUserList(userFilterType);
         if (response?.responseCode === '0' || response?.responseCode === '1000') {
           const apiUsers: ApiUser[] = response.data?.userList || [];
           const transformedUsers = apiUsers.map(transformApiUser);
           setUsers(transformedUsers);
-          // Cache the data
-          sessionStorage.setItem('userListCache', JSON.stringify(transformedUsers));
-          sessionStorage.setItem('userListCacheTime', Date.now().toString());
+          setUserListCache(transformedUsers, userFilterType);
         } else {
           toast.error(response?.responseMessage || 'Failed to fetch user list');
           setUsers([]);
@@ -252,7 +263,7 @@ const UserList: React.FC = () => {
     };
 
     fetchUserList();
-  }, []);
+  }, [clearUserListCache, setUserListCache, userFilterType]);
 
   useEffect(() => {
     const username = searchParams.get('username');
@@ -268,11 +279,10 @@ const UserList: React.FC = () => {
       const userListTabExists = tabs.some(tab => tab.path === '/dashboard/user-list');
       
       if (!userListTabExists) {
-        sessionStorage.removeItem('userListCache');
-        sessionStorage.removeItem('userListCacheTime');
+        clearUserListCache();
       }
     };
-  }, [tabs]);
+  }, [clearUserListCache, tabs]);
 
   // Close action menu when clicking outside
   useEffect(() => {
@@ -467,6 +477,18 @@ const UserList: React.FC = () => {
           </div>
 
           <div className="space-y-2">
+            <label className="text-xs text-slate-600 dark:text-slate-300 block font-medium">Type :</label>
+            <select
+              value={userFilterType}
+              onChange={(e) => setUserFilterType(e.target.value as 'OWN' | 'ALL')}
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200/50 dark:border-slate-600/50 text-sm bg-white/70 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 transition-all backdrop-blur-sm"
+            >
+              <option value="OWN">OWN</option>
+              <option value="ALL">ALL</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-xs text-slate-600 dark:text-slate-300 block font-medium">User Type :</label>
             <select
               value={filterUserType}
@@ -551,8 +573,8 @@ const UserList: React.FC = () => {
                 </colgroup>
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sticky top-0 z-10 border-none">
-                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Actions</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Username</th>
+                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-9">Username</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
                     <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Type</th>
                     <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Parent</th>
@@ -576,7 +598,7 @@ const UserList: React.FC = () => {
                       key={user.id} 
                       className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
                     >
-                      <td className="px-2 py-2 text-center">
+                      <td className="px-2 py-2 text-center sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={async (e) => {
@@ -661,7 +683,7 @@ const UserList: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-4 py-2 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-8">
                         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedUser(user)}>
                           <span className="font-semibold text-slate-800 dark:text-white text-sm truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{user.username}</span>
                           <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>

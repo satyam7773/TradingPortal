@@ -142,7 +142,7 @@ class UserManagementService {
   /**
    * Get user list
    */
-  async getUserList(): Promise<any> {
+  async getUserList(userFilterType: 'OWN' | 'ALL' = 'OWN'): Promise<any> {
     // Get userId from localStorage
     const userDataStr = localStorage.getItem('userData')
     const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
@@ -154,7 +154,7 @@ class UserManagementService {
     }
 
     const response = await apiClient.post<any>(
-      'user/portal/fetchUserList',
+      `https://api-staging.rivoplus.live/user/portal/fetchUserList?userFilterType=${userFilterType}`,
       request
     )
 
@@ -567,6 +567,103 @@ class UserManagementService {
     } catch (error) {
       console.error('🔍 Service Error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch user clients for trading
+   */
+  async fetchUserClientsForTrade(): Promise<any> {
+    const userDataStr = localStorage.getItem('userData')
+    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+    const userId = storedUserData?.userId || 2
+
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/user/portal/fetchUserClientsTrade',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to fetch user clients:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch symbols for trading
+   */
+  async fetchSymbols(exchange?: string): Promise<any> {
+    const userDataStr = localStorage.getItem('userData')
+    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+    const userId = storedUserData?.userId || 2
+
+    const request: any = {
+      requestTimestamp: Date.now().toString(),
+      userId
+    }
+
+    // Add exchange to data if provided
+    if (exchange) {
+      request.data = {
+        exchange
+      }
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/fetchSymbols',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to fetch symbols:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch user positions for specific exchange, token and user IDs
+   */
+  async fetchUserPositionsForExchange(exchange: string, token: number, userIds: number[]): Promise<any> {
+    const userDataStr = localStorage.getItem('userData')
+    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+    const userId = storedUserData?.userId || 2
+
+    const data: any = {
+      userIds
+    }
+
+    // Only add exchange if not empty (not "All Exchanges")
+    if (exchange) {
+      data.exchange = exchange
+    }
+
+    // Only add token if not 0 (not "All Symbols")
+    if (token !== 0) {
+      data.token = token
+    }
+
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId,
+      data
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/positions/portal',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to fetch positions:', error)
+      throw error
     }
   }
 }

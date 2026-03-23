@@ -18,3 +18,17 @@ To run:
 Notes:
 - Auth is mocked via redux-saga and demo API. Replace `/api/auth/login` with your backend.
 - Add additional tooling: ESLint, Prettier, Husky, CI as desired.
+
+
+---------
+buy sell logic 
+
+Buy Order Modal:
+
+Label now shows "Sell Price (ASK)" instead of "Price"
+Added live market ASK price display below the input field
+
+Sell Order Modal:
+
+Label now shows "Buy Price (BID)" instead of "Price"
+Added live market BID price display below the input field

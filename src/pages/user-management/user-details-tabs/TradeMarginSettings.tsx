@@ -18,7 +18,7 @@ interface TradeMarginItem {
 }
 
 const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
-  const [selectedExchange, setSelectedExchange] = useState<string>('NSE');
+  const [selectedExchange, setSelectedExchange] = useState<string>('');
   const [marginInput, setMarginInput] = useState<string>('');
   const [cfMarginInput, setCfMarginInput] = useState<string>('');
   const [minVolumeInput, setMinVolumeInput] = useState<string>('');
@@ -27,11 +27,18 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   
-  // Parse exchanges from userDetails
-  const availableExchanges = React.useMemo(() => {
-    const exchangesStr = userDetails?.userInfo?.exchanges || 'NSE';
-    return exchangesStr.split(',').map((ex: string) => ex.trim()).filter(Boolean);
+  // Extract allowed exchanges from userDetails
+  const allowedExchanges = React.useMemo(() => {
+    const exchanges = userDetails?.userInfo?.allowedExchanges || [];
+    return Array.isArray(exchanges) ? exchanges.map((ex: any) => ex.name) : [];
   }, [userDetails]);
+
+  // Set first exchange as default when allowed exchanges are loaded
+  useEffect(() => {
+    if (allowedExchanges.length > 0 && !selectedExchange) {
+      setSelectedExchange(allowedExchanges[0]);
+    }
+  }, [allowedExchanges, selectedExchange]);
 
   // Fetch margin settings when exchange changes
   useEffect(() => {
@@ -218,13 +225,18 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
             <select
               value={selectedExchange}
               onChange={(e) => setSelectedExchange(e.target.value)}
-              className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+              disabled={allowedExchanges.length === 0}
+              className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {availableExchanges.map((exchange: string) => (
-                <option key={exchange} value={exchange}>
-                  {exchange}
-                </option>
-              ))}
+              {allowedExchanges.length === 0 ? (
+                <option>No exchanges available</option>
+              ) : (
+                allowedExchanges.map((exchange: string) => (
+                  <option key={exchange} value={exchange}>
+                    {exchange}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

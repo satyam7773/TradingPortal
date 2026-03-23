@@ -2,63 +2,145 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, Search, TrendingUp, TrendingDown, DollarSign, AlertCircle } from 'lucide-react';
 import userManagementService from '../../services/userManagementService';
 import toast from 'react-hot-toast';
+import FilterLayout from '../../components/FilterLayout';
 
 interface PositionData {
+  positionId: number;
+  positionDate: number;
+  positionDays: number;
+  username: string;
+  parentUsername: string;
   exchange: string;
   tradeSymbol: string;
-  netQuantity: number;
-  positionSide: 'BUY' | 'SELL';
+  position: 'BUY' | 'SELL';
+  quantity: number;
   averagePrice: number;
+  ltp: number | null;
+  pnl: number;
+  pnlPercentage: number;
   realisedPnl: number;
-  unrealisedPnl: number;
+  totalPnl: number;
   marginUsed: number;
-  updatedAt: string;
-  buyQuantity: number;
-  sellQuantity: number;
-  token: number;
 }
 
 interface PositionResponse {
-  unrealisedPnl: number;
-  realisedPnl: number;
-  credits: number;
-  equity: number;
-  marginUsed: number;
-  freeMargin: number;
-  totalPnl: number;
-  positionsData: PositionData[];
+  balance: number;
+  totalBuy: number;
+  totalSell: number;
+  other: number;
+  brokerage: number;
+  positions: PositionData[];
 }
 
 const UserWisePosition: React.FC = () => {
-  const [userId, setUserId] = useState<string>('');
-  const [searchInput, setSearchInput] = useState('');
+  const [selectedUsername, setSelectedUsername] = useState<string>('');
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedExchange, setSelectedExchange] = useState<string>('NSE');
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('All Symbols');
+  const [selectedToken, setSelectedToken] = useState<number | null>(null);
+  const [plPercent, setPlPercent] = useState<string>('');
+  const [posiDays, setPosiDays] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [positionData, setPositionData] = useState<PositionResponse | null>(null);
   const [filteredPositions, setFilteredPositions] = useState<PositionData[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [exchanges, setExchanges] = useState<any[]>([]);
+  const [symbols, setSymbols] = useState<any[]>([]);
+  const [filteredSymbols, setFilteredSymbols] = useState<any[]>([]);
 
-  const handleSearch = async () => {
-    if (!userId.trim()) {
-      toast.error('Please enter a User ID');
+  // Load initial data (users and exchanges)
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        setInitialLoading(true);
+        
+        // Fetch users/clients for trading
+        const usersResponse = await userManagementService.fetchUserClientsForTrade();
+        if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
+          setUsers(usersResponse.data);
+        }
+
+        // Fetch exchanges
+        const exchangesResponse = await userManagementService.fetchExchanges();
+        if (Array.isArray(exchangesResponse)) {
+          setExchanges(exchangesResponse);
+          if (exchangesResponse.length > 0) {
+            setSelectedExchange(exchangesResponse[0].name);
+            
+            // Fetch symbols for the first exchange
+            const symbolsResponse = await userManagementService.fetchSymbols(exchangesResponse[0].name);
+            if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+              setSymbols(symbolsResponse.data);
+              setFilteredSymbols(symbolsResponse.data);
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('❌ Error loading initial data:', error);
+        toast.error('Failed to load initial data');
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  // Fetch symbols when exchange changes
+  useEffect(() => {
+    if (selectedExchange) {
+      const fetchSymbolsForExchange = async () => {
+        try {
+          const symbolsResponse = await userManagementService.fetchSymbols(selectedExchange);
+          if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+            setSymbols(symbolsResponse.data);
+            setFilteredSymbols(symbolsResponse.data);
+            setSelectedSymbol('All Symbols');
+            setSelectedToken(null);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching symbols:', error);
+        }
+      };
+      fetchSymbolsForExchange();
+    }
+  }, [selectedExchange]);
+
+  const handleView = async () => {
+    if (!selectedUsername.trim()) {
+      toast.error('Please select a username');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await userManagementService.getUserPositions(parseInt(userId));
-      console.log('📊 Full Response:', response);
-      console.log('Response Type:', typeof response);
-      console.log('Response Keys:', Object.keys(response || {}));
-      console.log('Response.responseCode:', response?.responseCode);
-      console.log('Response.data:', response?.data);
+      // Find user ID
+      const userData = users.find(u => u.name === selectedUsername);
+      if (!userData) {
+        toast.error('User not found');
+        return;
+      }
+
+      // Use the new positions API with exchange, token, and userIds
+      // Send empty string for exchange if "All Exchanges" is selected (backend will handle it)
+      // Send 0 for token if "All Symbols" is selected (backend will handle it)
+      const exchangeToUse = selectedExchange === '' ? '' : selectedExchange;
+      const tokenToUse = selectedToken === null ? 0 : selectedToken;
       
-      // Check if response has responseCode directly (API returns full object)
+      const response = await userManagementService.fetchUserPositionsForExchange(
+        exchangeToUse,
+        tokenToUse,
+        [userData.id]
+      );
+      
       if (response?.responseCode === '0') {
-        console.log('✅ Setting position data:', response.data);
-        setPositionData(response.data);
-        setFilteredPositions(response.data?.positionsData || []);
+        // Extract positions from response.data.positions
+        const posData = response.data;
+        setPositionData(posData);
+        setFilteredPositions(posData?.positions || []);
         toast.success('Positions loaded successfully');
       } else {
-        console.error('❌ Response check failed:', response);
         toast.error(response?.responseMessage || 'Failed to fetch positions');
       }
     } catch (error: any) {
@@ -72,230 +154,345 @@ const UserWisePosition: React.FC = () => {
     }
   };
 
-  const handleSearchInputChange = (value: string) => {
-    setSearchInput(value);
-    if (positionData?.positionsData) {
-      const filtered = positionData.positionsData.filter(pos =>
-        pos.tradeSymbol.toLowerCase().includes(value.toLowerCase()) ||
-        pos.exchange.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredPositions(filtered);
+  const handleMainFilterApply = () => {
+    if (!positionData?.positions) return;
+
+    let filtered = [...positionData.positions];
+
+    // Filter by exchange
+    if (selectedExchange && selectedExchange !== 'All') {
+      filtered = filtered.filter(p => p.exchange === selectedExchange);
     }
+
+    // Filter by symbol
+    if (selectedSymbol && selectedSymbol !== 'All Symbols') {
+      filtered = filtered.filter(p => p.tradeSymbol === selectedSymbol);
+    }
+
+    setFilteredPositions(filtered);
+    toast.success('Filters applied');
+  };
+
+  const handleAdvanceFilterApply = () => {
+    if (!positionData?.positions) return;
+
+    let filtered = [...positionData.positions];
+
+    // Filter by P/L %
+    if (plPercent) {
+      const plValue = parseFloat(plPercent);
+      filtered = filtered.filter(p => {
+        return p.pnlPercentage >= plValue;
+      });
+    }
+
+    // Filter by Position Days
+    if (posiDays) {
+      const days = parseInt(posiDays);
+      filtered = filtered.filter(p => {
+        return p.positionDays <= days;
+      });
+    }
+
+    setFilteredPositions(filtered);
+    toast.success('Advance filters applied');
+  };
+
+  const handleClear = () => {
+    setSelectedUsername('');
+    setSelectedExchange('NSE');
+    setSelectedSymbol('All Symbols');
+    setPlPercent('');
+    setPosiDays('');
+    setPositionData(null);
+    setFilteredPositions([]);
+    setUsers([]);
   };
 
   const StatCard = ({ label, value, icon: Icon, color }: any) => (
-    <div className="bg-white/60 dark:bg-slate-700/60 backdrop-blur-sm rounded-xl p-4 border border-gray-200/50 dark:border-slate-600/50">
-      <div className="flex items-center justify-between">
+    <div className="bg-white/60 dark:bg-slate-700/60 backdrop-blur-sm rounded-lg p-2 border border-gray-200/50 dark:border-slate-600/50">
+      <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">{label}</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">{value}</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{value}</p>
         </div>
-        <div className={`${color} p-3 rounded-lg`}>
-          <Icon className="w-5 h-5 text-white" />
+        <div className={`${color} p-2 rounded`}>
+          <Icon className="w-4 h-4 text-white" />
         </div>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-6">
-      <div className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 overflow-hidden flex flex-col h-full">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200/50 dark:border-slate-700/50">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
-              <BarChart3 className="w-6 h-6 text-white" />
+    <FilterLayout
+      storageKey="userWisePosition:showFilters"
+      filterWidthClass="lg:w-[25%]"
+      filters={
+        <div className="space-y-4 p-4">
+          {/* Main Filter Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Main Filter</h3>
+              <button onClick={handleClear} className="text-xs text-red-600 dark:text-red-400 hover:underline">✕</button>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
-                User Wise Position
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                View and manage user positions across all instruments
-              </p>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Username :</label>
+              <select
+                value={selectedUsername}
+                onChange={(e) => {
+                  setSelectedUsername(e.target.value);
+                  const userData = users.find(u => u.name === e.target.value);
+                  setSelectedUserId(userData?.id || null);
+                }}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select User</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.name}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
+              <select
+                value={selectedExchange}
+                onChange={(e) => {
+                  if (e.target.value === 'All') {
+                    setSelectedExchange('');
+                  } else {
+                    setSelectedExchange(e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="All">All Exchanges</option>
+                {exchanges.map(ex => (
+                  <option key={ex.name} value={ex.name}>{ex.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Symbol :</label>
+              <select
+                value={selectedSymbol}
+                onChange={(e) => {
+                  setSelectedSymbol(e.target.value);
+                  if (e.target.value === '' || e.target.value === 'All') {
+                    setSelectedToken(null);
+                  } else {
+                    const symData = filteredSymbols.find(s => s.tradeSymbol === e.target.value);
+                    setSelectedToken(symData?.token || null);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
+              >
+                <option value="">All Symbols</option>
+                {filteredSymbols.map(sym => (
+                  <option key={sym.token} value={sym.tradeSymbol}>{sym.tradeSymbol}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleView}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition disabled:opacity-50"
+              >
+                View
+              </button>
+              <button
+                onClick={handleClear}
+                className="flex-1 px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded font-semibold text-sm transition"
+              >
+                Clear
+              </button>
             </div>
           </div>
 
-          {/* Search Section */}
-          <div className="flex gap-3">
-            <div className="flex-1">
+          {/* Advance Filter Section */}
+          <div className="space-y-3 pt-4 border-t border-gray-300 dark:border-slate-600">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Advance Filter</h3>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">P/L % :</label>
               <input
                 type="number"
-                placeholder="Enter User ID..."
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={plPercent}
+                onChange={(e) => setPlPercent(e.target.value)}
+                placeholder="e.g., 2.00"
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
               />
             </div>
-            <button
-              onClick={handleSearch}
-              disabled={loading}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-lg transition-all shadow-lg disabled:opacity-50 flex items-center gap-2"
-            >
-              <Search className="w-5 h-5" />
-              Search
-            </button>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Posi Days :</label>
+              <input
+                type="number"
+                value={posiDays}
+                onChange={(e) => setPosiDays(e.target.value)}
+                placeholder="e.g., 10"
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleAdvanceFilterApply}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-sm transition"
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => {
+                  setPlPercent('');
+                  setPosiDays('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded font-semibold text-sm transition"
+              >
+                Clear
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {loading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="inline-block">
-                  <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
-                </div>
-                <p className="text-slate-600 dark:text-slate-400 mt-4">Loading positions...</p>
+      }
+    >
+      {/* Main Content Area */}
+      <div className="p-4 flex flex-col h-full">
+        {loading ? (
+          <div className="flex items-center justify-center flex-1">
+            <div className="text-center">
+              <div className="inline-block">
+                <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
               </div>
+              <p className="text-slate-600 dark:text-slate-400 mt-4">Loading positions...</p>
             </div>
-          ) : !positionData ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <BarChart3 className="w-16 h-16 text-blue-400 dark:text-blue-300 mb-4 mx-auto" />
-                <p className="text-slate-600 dark:text-slate-400">Search for a user to view their positions</p>
-              </div>
+          </div>
+        ) : !positionData ? (
+          <div className="flex items-center justify-center flex-1">
+            <div className="text-center">
+              <BarChart3 className="w-16 h-16 text-blue-400 dark:text-blue-300 mb-4 mx-auto" />
+              <p className="text-slate-600 dark:text-slate-400">Select a user and click View to see positions</p>
             </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto flex flex-col p-6">
-              {/* Summary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                <StatCard
-                  label="Total P&L"
-                  value={`₹${positionData.totalPnl?.toFixed(2) || '0'}`}
-                  icon={DollarSign}
-                  color={positionData.totalPnl >= 0 ? 'bg-green-500' : 'bg-red-500'}
-                />
-                <StatCard
-                  label="Realised P&L"
-                  value={`₹${positionData.realisedPnl?.toFixed(2) || '0'}`}
-                  icon={TrendingDown}
-                  color={positionData.realisedPnl >= 0 ? 'bg-green-500' : 'bg-red-500'}
-                />
-                <StatCard
-                  label="Unrealised P&L"
-                  value={`₹${positionData.unrealisedPnl?.toFixed(2) || '0'}`}
-                  icon={TrendingUp}
-                  color={positionData.unrealisedPnl >= 0 ? 'bg-green-500' : 'bg-red-500'}
-                />
-                <StatCard
-                  label="Equity"
-                  value={`₹${positionData.equity?.toFixed(2) || '0'}`}
-                  icon={DollarSign}
-                  color="bg-blue-500"
-                />
-                <StatCard
-                  label="Margin Used"
-                  value={`₹${positionData.marginUsed?.toFixed(2) || '0'}`}
-                  icon={AlertCircle}
-                  color="bg-orange-500"
-                />
-                <StatCard
-                  label="Free Margin"
-                  value={`₹${positionData.freeMargin?.toFixed(2) || '0'}`}
-                  icon={TrendingUp}
-                  color="bg-green-500"
-                />
-              </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 flex-1 overflow-hidden">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              <StatCard
+                label="Balance"
+                value={`₹${positionData.balance?.toFixed(2) || '0'}`}
+                icon={DollarSign}
+                color={positionData.balance >= 0 ? 'bg-green-500' : 'bg-red-500'}
+              />
+              <StatCard
+                label="Total Buy"
+                value={`₹${positionData.totalBuy?.toFixed(2) || '0'}`}
+                icon={TrendingUp}
+                color="bg-green-500"
+              />
+              <StatCard
+                label="Total Sell"
+                value={`₹${positionData.totalSell?.toFixed(2) || '0'}`}
+                icon={TrendingDown}
+                color="bg-red-500"
+              />
+              <StatCard
+                label="Other"
+                value={`₹${positionData.other?.toFixed(2) || '0'}`}
+                icon={AlertCircle}
+                color="bg-blue-500"
+              />
+              <StatCard
+                label="Brokerage"
+                value={`₹${positionData.brokerage?.toFixed(2) || '0'}`}
+                icon={DollarSign}
+                color="bg-orange-500"
+              />
+              <StatCard
+                label="Positions"
+                value={`${positionData.positions?.length || '0'}`}
+                icon={BarChart3}
+                color="bg-purple-500"
+              />
+            </div>
 
-              {/* Positions Table */}
-              {filteredPositions.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center bg-white/50 dark:bg-slate-800/50 rounded-xl border border-gray-200/50 dark:border-slate-700/50">
-                  <div className="text-center">
-                    <AlertCircle className="w-12 h-12 mx-auto text-gray-300 dark:text-slate-600 mb-2" />
-                    <p className="text-slate-600 dark:text-slate-400">No positions found</p>
-                  </div>
+            {/* Positions Table */}
+            {filteredPositions.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center bg-white/50 dark:bg-slate-800/50 rounded-xl border border-gray-200/50 dark:border-slate-700/50">
+                <div className="text-center">
+                  <AlertCircle className="w-12 h-12 mx-auto text-gray-300 dark:text-slate-600 mb-2" />
+                  <p className="text-slate-600 dark:text-slate-400">No positions found</p>
                 </div>
-              ) : (
-                <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl border border-gray-200/50 dark:border-slate-700/50 overflow-x-auto">
-                  <div className="mb-3 px-4 pt-4">
-                    <input
-                      type="text"
-                      placeholder="Search by symbol or exchange..."
-                      value={searchInput}
-                      onChange={(e) => handleSearchInputChange(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <table className="min-w-[1200px] w-full table-fixed border-collapse">
-                    <colgroup>
-                      <col style={{ width: '120px' }} />
-                      <col style={{ width: '150px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '120px' }} />
-                      <col style={{ width: '120px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '120px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '150px' }} />
-                    </colgroup>
-                    <thead>
-                      <tr className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-600 sticky top-0 z-10">
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Exchange</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Trade Symbol</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Net Qty</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Side</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Avg Price</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Realised P&L</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Unrealised</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Margin</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Buy Qty</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Sell Qty</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Token</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Updated At</th>
+              </div>
+            ) : (
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-xl border border-gray-200/50 dark:border-slate-700/50 overflow-x-auto overflow-y-auto flex-1">
+                <table className="min-w-[1200px] w-full">
+                  <thead className="sticky top-0 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-600 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDate</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDays</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Exchange</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Symbol</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Position</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Quantity</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Avg Price</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Realised P&L</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Unrealised P&L</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Margin Used</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Buy Qty</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Sell Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
+                    {filteredPositions.map((position, idx) => (
+                      <tr
+                        key={idx}
+                        className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
+                      >
+                        <td className="px-4 py-2 text-xs text-slate-700 dark:text-slate-300">{position.positionDate ? new Date(position.positionDate).toLocaleDateString() : '-'}</td>
+                        <td className="px-4 py-2 text-xs text-center text-slate-700 dark:text-slate-300">{position.positionDays || '-'}</td>
+                        <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">{position.exchange}</td>
+                        <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">{position.tradeSymbol}</td>
+                        <td className="px-4 py-2 text-xs text-center">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            position.position === 'BUY'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                          }`}>
+                            {position.position}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-center text-slate-700 dark:text-slate-300 font-semibold">{position.quantity}</td>
+                        <td className="px-4 py-2 text-xs text-right text-slate-700 dark:text-slate-300">₹{position.averagePrice?.toFixed(2)}</td>
+                        <td className={`px-4 py-2 text-xs text-right font-semibold ${
+                          position.realisedPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          ₹{position.realisedPnl?.toFixed(2)}
+                        </td>
+                        <td className={`px-4 py-2 text-xs text-right font-semibold ${
+                          position.pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          ₹{position.pnl?.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-right text-slate-700 dark:text-slate-300">₹{position.marginUsed?.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-xs text-center text-slate-700 dark:text-slate-300">{position.pnlPercentage?.toFixed(2)}%</td>
+                        <td className="px-4 py-2 text-xs text-center text-slate-700 dark:text-slate-300">{position.username}</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
-                      {filteredPositions.map((position, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
-                        >
-                          <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 font-medium">{position.exchange}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 font-semibold">{position.tradeSymbol}</td>
-                          <td className="px-4 py-3 text-sm text-center text-slate-700 dark:text-slate-300">{position.netQuantity}</td>
-                          <td className="px-4 py-3 text-sm text-center">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              position.positionSide === 'BUY'
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                            }`}>
-                              {position.positionSide}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-slate-700 dark:text-slate-300">₹{position.averagePrice?.toFixed(2)}</td>
-                          <td className={`px-4 py-3 text-sm text-right font-semibold ${
-                            position.realisedPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            ₹{position.realisedPnl?.toFixed(2)}
-                          </td>
-                          <td className={`px-4 py-3 text-sm text-right font-semibold ${
-                            position.unrealisedPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            ₹{position.unrealisedPnl?.toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-slate-700 dark:text-slate-300">₹{position.marginUsed?.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-center text-slate-700 dark:text-slate-300">{position.buyQuantity}</td>
-                          <td className="px-4 py-3 text-sm text-center text-slate-700 dark:text-slate-300">{position.sellQuantity}</td>
-                          <td className="px-4 py-3 text-sm text-center text-slate-600 dark:text-slate-400">{position.token}</td>
-                          <td className="px-4 py-3 text-sm text-center text-slate-600 dark:text-slate-400">
-                            {new Date(position.updatedAt).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    </FilterLayout>
   );
 };
 

@@ -391,6 +391,17 @@ const CreateNewUser: React.FC = () => {
           const response = await userManagementService.fetchUserDetails(parseInt(editingUserId))
           if (response?.responseCode === '0' || response?.responseCode === '1000') {
             const apiUserData = response.data.userInfo
+            const userSettings = response.data.userSettings
+            
+            // Extract marginSquareOff from userSettings.userInfo array
+            let marginSquareOffValue = false
+            if (userSettings?.userInfo && Array.isArray(userSettings.userInfo)) {
+              const marginSquareOffToggle = userSettings.userInfo.find((item: any) => item.toggle === 'marginSquareOff')
+              if (marginSquareOffToggle) {
+                marginSquareOffValue = marginSquareOffToggle.value
+              }
+            }
+            
             // Map API response to editingUser format
             setEditingUser({
               name: apiUserData.name,
@@ -408,6 +419,7 @@ const CreateNewUser: React.FC = () => {
               changePasswordFirstLogin: apiUserData.changePasswordFirstLogin,
               allowedExchanges: apiUserData.allowedExchanges,
               highLowTradeLimit: apiUserData.highLowTradeLimit,
+              marginSquareOff: marginSquareOffValue,
               ...(response.data.userProfile && { roleId: response.data.userProfile.roleId })
             })
           }
