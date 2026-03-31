@@ -14,6 +14,8 @@ import {
 } from './pages'
 import CreateNewUser from './pages/user-management/CreateNewUser'
 import MarketWatch from './pages/dashboard/MarketWatch'
+import LoginHistory from './pages/dashboard/LoginHistory'
+import Groups from './pages/dashboard/Groups'
 import UserWisePosition from './pages/reports/UserWisePosition'
 import ManageTraders from './pages/reports/ManageTraders'
 import TradeAccount from './pages/reports/TradeAccount'
@@ -32,6 +34,8 @@ const App: React.FC = () => {
           <Route index element={<DashboardPage />} />
           <Route path="markets" element={<Markets />} />
           <Route path="market-watch" element={<MarketWatch />} />
+          <Route path="login-history" element={<LoginHistory />} />
+          <Route path="groups" element={<Groups />} />
           <Route path="orders" element={<Orders />} />
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="user-list" element={<UserList />} />

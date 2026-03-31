@@ -14,6 +14,8 @@ interface TradeMarginItem {
   minVolume: number;
   volumeStep: number;
   expiry: number;
+  callputMargin?: number;
+  callputMarginPercentage?: boolean;
   updatedDate?: string;
 }
 
@@ -23,6 +25,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
   const [cfMarginInput, setCfMarginInput] = useState<string>('');
   const [minVolumeInput, setMinVolumeInput] = useState<string>('');
   const [volumeStepInput, setVolumeStepInput] = useState<string>('');
+  const [callputMarginInput, setCallputMarginInput] = useState<string>('');
   const [marginData, setMarginData] = useState<TradeMarginItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
@@ -77,7 +80,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     }
 
     // Check if values are entered
-    if (!marginInput.trim() && !cfMarginInput.trim() && !minVolumeInput.trim() && !volumeStepInput.trim()) {
+    if (!marginInput.trim() && !cfMarginInput.trim() && !minVolumeInput.trim() && !volumeStepInput.trim() && !callputMarginInput.trim()) {
       toast.error('Please enter at least one value');
       return;
     }
@@ -99,6 +102,10 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
       toast.error('Please enter a valid number for Volume Step');
       return;
     }
+    if (callputMarginInput && isNaN(parseFloat(callputMarginInput))) {
+      toast.error('Please enter a valid number for Callput Margin');
+      return;
+    }
 
     // Apply to selected items
     const updatedData = marginData.map((item, idx) => {
@@ -109,6 +116,8 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
           cfMargin: cfMarginInput ? parseFloat(cfMarginInput) : item.cfMargin,
           minVolume: minVolumeInput ? parseFloat(minVolumeInput) : item.minVolume,
           volumeStep: volumeStepInput ? parseFloat(volumeStepInput) : item.volumeStep,
+          callputMargin: callputMarginInput ? parseFloat(callputMarginInput) : item.callputMargin,
+          callputMarginPercentage: callputMarginInput ? true : item.callputMarginPercentage,
         };
       }
       return item;
@@ -134,7 +143,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
 
       const selectedTradeMargins = Array.from(selectedItems).map((idx) => {
         const item = marginData[idx];
-        return {
+        const payload: any = {
           instrumentId: item.instrumentId,
           margin: item.margin,
           marginPercentage: item.marginPercentage,
@@ -142,6 +151,14 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
           minVolume: item.minVolume,
           volumeStep: item.volumeStep,
         };
+        
+        // Add callput fields if exchange is CALLPUT
+        if (selectedExchange === 'CALLPUT' && item.callputMargin !== undefined) {
+          payload.callputMargin = item.callputMargin;
+          payload.callputMarginPercentage = item.callputMarginPercentage || true;
+        }
+        
+        return payload;
       });
 
       // Build the request payload
@@ -174,6 +191,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         setCfMarginInput('');
         setMinVolumeInput('');
         setVolumeStepInput('');
+        setCallputMarginInput('');
       } else {
         toast.error(response?.responseMessage || 'Failed to update trade margin settings');
       }
@@ -284,6 +302,19 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
             />
           </div>
 
+          {selectedExchange === 'CALLPUT' && (
+            <div className="space-y-1">
+              <label className="text-xs text-slate-600 dark:text-slate-300 block">Callput Margin (%) :</label>
+              <input
+                type="text"
+                value={callputMarginInput}
+                onChange={(e) => setCallputMarginInput(e.target.value)}
+                placeholder="Enter value"
+                className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+              />
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleApply}
@@ -332,13 +363,16 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                     <th className="px-3 py-3 min-w-[120px]">CF Margin</th>
                     <th className="px-3 py-3 min-w-[130px]">Min Volume</th>
                     <th className="px-3 py-3 min-w-[130px]">Volume Step</th>
+                    {selectedExchange === 'CALLPUT' && (
+                      <th className="px-3 py-3 min-w-[150px]">Callput Margin %</th>
+                    )}
                     <th className="px-3 py-3 min-w-[150px]">Expiry Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
                   {marginData.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      <td colSpan={selectedExchange === 'CALLPUT' ? 9 : 8} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                         No margin settings found for {selectedExchange}
                       </td>
                     </tr>
@@ -362,6 +396,9 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.cfMargin != null ? Number(item.cfMargin).toFixed(2) : '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.minVolume != null ? Number(item.minVolume) : '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.volumeStep != null ? Number(item.volumeStep) : '-'}</td>
+                        {selectedExchange === 'CALLPUT' && (
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.callputMargin != null ? Number(item.callputMargin).toFixed(2) + '%' : '-'}</td>
+                        )}
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
                           {item.expiry ? new Date(item.expiry).toLocaleDateString() : '-'}
                         </td>

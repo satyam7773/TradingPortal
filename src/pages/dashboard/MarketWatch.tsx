@@ -7,6 +7,7 @@ import watchlistService from '../../services/watchlistService'
 import watchlistTabsService, { type WatchlistTab } from '../../services/watchlistTabsService'
 import userManagementService from '../../services/userManagementService'
 import orderService from '../../services/orderService'
+import orderUpdateService from '../../services/orderUpdateService'
 import ConfigManager from '../../utils/configManager'
 import toast from 'react-hot-toast'
 
@@ -552,6 +553,18 @@ const MarketWatch: React.FC = () => {
     }
   }
 
+  // Sync watchlist state with selected tab's watchList
+  useEffect(() => {
+    const selectedTab = watchlistTabs.find(tab => tab.tabId === selectedTabId)
+    if (selectedTab && Array.isArray(selectedTab.watchList)) {
+      console.log('🔄 Syncing watchlist with selected tab:', selectedTabId, 'items:', selectedTab.watchList.length)
+      setWatchlist(selectedTab.watchList)
+    } else {
+      console.log('⚠️ No selected tab or empty watchList, clearing watchlist state')
+      setWatchlist([])
+    }
+  }, [watchlistTabs, selectedTabId])
+
   // Update tab name
   const handleUpdateTabName = async (tabId: number) => {
     if (!editingTabName.trim()) {
@@ -619,19 +632,26 @@ const MarketWatch: React.FC = () => {
 
     fetchExchanges()
 
-    // Fetch clients list
-    const fetchClients = async () => {
-      try {
-        const clientsData = await userManagementService.fetchClients()
-        if (clientsData && Array.isArray(clientsData)) {
-          setClients(clientsData)
+    // Fetch clients list (only for admin/master users, not for clients)
+    const userData = localStorage.getItem('userData')
+    const user = userData ? JSON.parse(userData) : null
+    const roleId = user?.roleId
+    const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
+    
+    if (isAdminUser) {
+      const fetchClients = async () => {
+        try {
+          const clientsData = await userManagementService.fetchClients()
+          if (clientsData && Array.isArray(clientsData)) {
+            setClients(clientsData)
+          }
+        } catch (error) {
+          console.error('❌ Failed to fetch clients:', error)
         }
-      } catch (error) {
-        console.error('❌ Failed to fetch clients:', error)
       }
-    }
 
-    fetchClients()
+      fetchClients()
+    }
 
     // Build instrument config cache
     const fullConfig = ConfigManager.getFullConfig()
@@ -727,32 +747,54 @@ const MarketWatch: React.FC = () => {
   // Create refs for subscription guards
   const subscriptionRef = useRef({ subscribed: false, userId: null as string | null })
   const watchlistHashRef = useRef('')
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Subscribe to watchlist and instruments when connected (only once per user)
+  // Monitor socket connection status and subscribe when ready
   useEffect(() => {
-    if (!isConnected) return
+    const checkAndSubscribe = async () => {
+      // If socket is not connected, try to connect it
+      if (!marketWatchService.isConnected()) {
+        console.log('⏳ Socket not connected, attempting to connect...')
+        try {
+          // Try to connect the socket
+          await marketWatchService.connect(() => {
+            console.log('🔌 Socket connected from MarketWatch page')
+          })
+          console.log('✅ Socket connection successful')
+        } catch (error) {
+          console.warn('⚠️  Failed to connect socket from MarketWatch, will retry in 500ms:', error)
+          setTimeout(checkAndSubscribe, 500)
+          return
+        }
+      }
 
-    const userData = localStorage.getItem('userData')
-    if (!userData) return
+      const userData = localStorage.getItem('userData')
+      if (!userData) {
+        console.warn('⚠️  No user data found, cannot subscribe')
+        return
+      }
 
-    const user = JSON.parse(userData)
-    const userId = user.userId.toString()
+      const user = JSON.parse(userData)
+      const userId = user.userId.toString()
 
-    // Guard: check if already subscribed for this user
-    if (subscriptionRef.current.subscribed && subscriptionRef.current.userId === userId) {
-      console.log('✅ Already subscribed to watchlist and instruments for user:', userId)
-      return
+      // Guard: check if already subscribed for this user
+      if (subscriptionRef.current.subscribed && subscriptionRef.current.userId === userId) {
+        console.log('✅ Already subscribed to watchlist and instruments for user:', userId)
+        return
+      }
+
+      console.log('✅ Socket ready! Subscribing to watchlist, instruments, and order updates for user:', userId)
+      
+      // Mark as subscribed
+      subscriptionRef.current = { subscribed: true, userId }
+
+      // Subscribe to watchlist and instruments queues
+      marketWatchService.subscribeToWatchlist(userId)
+      marketWatchService.subscribeToInstruments(userId)
     }
 
-    console.log('🔌 Subscribing to watchlist and instruments for user:', userId)
-    
-    // Mark as subscribed
-    subscriptionRef.current = { subscribed: true, userId }
-
-    // Subscribe to watchlist and instruments queues only
-    marketWatchService.subscribeToWatchlist(userId)
-    marketWatchService.subscribeToInstruments(userId)
-  }, [isConnected])
+    checkAndSubscribe()
+  }, [])
 
   // Send instruments request only when watchlist tokens change
   useEffect(() => {
@@ -773,16 +815,33 @@ const MarketWatch: React.FC = () => {
 
     console.log('🔄 Watchlist tokens changed:', currentHash)
     watchlistHashRef.current = currentHash
+
+    // Request instrument feed data for the watchlist tokens
+    const tokens = watchlist.map(item => item.token.toString())
+    console.log('📤 Requesting feed data for tokens:', tokens)
+    marketWatchService.sendInstrumentsRequest(userId, tokens)
   }, [isConnected, watchlist])
 
-  // Initialize WebSocket connection
+  // Setup feed subscription - Keep subscription logic only
   useEffect(() => {
-    // Setup feed data subscription
-    const setupFeedSubscription = () => {
+    const setupFeedSubscription = (attempt = 1) => {
       // Unsubscribe from previous subscription if exists
       if (feedUnsubscribeRef.current) {
         console.log('🔌 Unsubscribing from previous feed...')
         feedUnsubscribeRef.current()
+      }
+
+      // Retry logic - wait for socket connection with exponential backoff
+      if (!marketWatchService.isConnected()) {
+        if (attempt < 6) {
+          const waitTime = Math.min(1000 * Math.pow(1.5, attempt - 1), 5000)
+          console.log(`⏳ Socket not connected yet (attempt ${attempt}/6), retrying in ${waitTime}ms...`)
+          retryTimeoutRef.current = setTimeout(() => setupFeedSubscription(attempt + 1), waitTime)
+          return
+        } else {
+          console.warn('❌ Socket connection timeout after 6 attempts')
+          return
+        }
       }
 
       console.log('🔌 Setting up new feed subscription...')
@@ -791,7 +850,6 @@ const MarketWatch: React.FC = () => {
       let dataReceivedCount = 0
       
       feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
-
         console.log('data received',data)
         dataReceivedCount++
         if (dataReceivedCount === 1 || dataReceivedCount % 50 === 0) {
@@ -891,83 +949,35 @@ const MarketWatch: React.FC = () => {
       console.log('✅ Feed subscription ready - socket will stay connected')
     }
 
-    const initializeConnection = async () => {
-      try {
-        setIsLoading(true)
-        await marketWatchService.connect(() => {
-          setIsConnected(true)
-        })
-        
-        // Setup feed subscription (will be called here and after reconnection)
-        setupFeedSubscription()
-      } catch (error) {
-        console.error('Failed to connect to market watch:', error)
-        toast.error('Failed to connect to market watch')
-      } finally {
-        setIsLoading(false)
-      }
-    }
+    setupFeedSubscription()
 
-    initializeConnection()
-
-    // Handle tab/window close - disconnect socket
+    // Handle tab/window close - unsubscribe only
     const handlePageClose = () => {
       if (feedUnsubscribeRef.current) {
         feedUnsubscribeRef.current()
       }
-      marketWatchService.disconnect()
+      // Don't disconnect socket - it's managed globally from login
     }
 
-    // Debounce reconnection attempts to prevent rapid duplicate calls
-
-
-    // Handle tab visibility change - reconnect if needed
+    // Handle tab visibility change - re-subscribe when tab becomes visible
     const handleVisibilityChange = async () => {
       if (document.hidden) {
         console.log('⏸️  Tab is hidden')
       } else {
-        console.log('▶️  Tab is visible - checking connection')
+        console.log('▶️  Tab is visible - re-establishing subscription')
         
-        // When tab becomes visible, always reset subscription guards to force re-subscription
+        // When tab becomes visible, reset subscription guards to force re-subscription
         subscriptionRef.current = { subscribed: false, userId: null }
         watchlistHashRef.current = ''
         
-        // Check if connection is still alive
-        const isConnectedNow = marketWatchService.isConnected()
-        console.log(`📊 Connection status: ${isConnectedNow ? 'ALIVE' : 'DEAD'}`)
-        
-        if (!isConnectedNow) {
-          console.log('🔌 Connection lost, attempting to reconnect...')
-          setIsConnected(false)
-          
-          try {
-            // Disconnect first to clean up any stale connection
-            marketWatchService.disconnect()
-            console.log('Cleaned up old connection')
-            
-            // Wait a moment before reconnecting
-            await new Promise(resolve => setTimeout(resolve, 500))
-            
-            // Reconnect
-            await marketWatchService.connect(() => {
-              console.log('✅ Reconnected successfully after tab visibility change')
-              setIsConnected(true)
-              // Re-setup feed subscription to receive data again
-              setupFeedSubscription()
-            })
-          } catch (error) {
-            console.error('❌ Failed to reconnect:', error)
-            toast.error('Failed to reconnect to market data')
-          }
-        } else {
-          console.log('✅ Connection still alive, subscriptions will re-establish')
-          // Even if connection is alive, re-setup feed subscription
+        // Re-setup feed subscription if socket is still connected
+        if (marketWatchService.isConnected()) {
           setupFeedSubscription()
+        } else {
+          console.log('⚠️  Socket not connected, waiting for reconnection')
         }
       }
     }
-
-
 
     // Add event listeners
     window.addEventListener('beforeunload', handlePageClose)
@@ -978,15 +988,33 @@ const MarketWatch: React.FC = () => {
       window.removeEventListener('beforeunload', handlePageClose)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       
+      // Clear any pending retry timeout
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+        retryTimeoutRef.current = null
+      }
+      
       if (feedUnsubscribeRef.current) {
         feedUnsubscribeRef.current()
+      }
+      
+      // Unsubscribe from STOMP queues when component unmounts
+      const userData = localStorage.getItem('userData')
+      if (userData) {
+        const user = JSON.parse(userData)
+        const userId = user.userId.toString()
+        if (subscriptionRef.current.subscribed) {
+          console.log(`🔕 Unsubscribing from watchlist and instruments for user: ${userId}`)
+          marketWatchService.unsubscribeFromWatchlist(userId)
+          marketWatchService.unsubscribeFromInstruments(userId)
+        }
       }
       
       // Reset subscription guards on unmount
       subscriptionRef.current = { subscribed: false, userId: null }
       watchlistHashRef.current = ''
       
-      marketWatchService.disconnect()
+      // Don't disconnect socket on unmount - it's managed globally from login
     }
   }, [])
 
@@ -1785,7 +1813,7 @@ const MarketWatch: React.FC = () => {
                                   className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
                                   <option value="MARKET">Market</option>
                                   <option value="LIMIT">Limit</option>
-                                  <option value="STOP_LOSS">Stop Loss</option>
+                                  {/* <option value="STOP_LOSS">Stop Loss</option> */}
                                 </select>
                               </div>
                               <div>
@@ -1884,7 +1912,8 @@ const MarketWatch: React.FC = () => {
                                 selectedOrderInstrument?.token || 0,
                                 parseInt(buyOrderQuantity),
                                 parseFloat(buyOrderPrice || liveData?.ask.toString() || '0'),
-                                config?.lotSize || 100
+                                config?.lotSize || 100,
+                                buyOrderType as 'MARKET' | 'LIMIT' | 'STOP_LOSS'
                               )
 
                               if (response?.responseCode === '0') {
@@ -2186,7 +2215,8 @@ const MarketWatch: React.FC = () => {
                                 selectedOrderInstrument?.token || 0,
                                 parseInt(sellOrderQuantity),
                                 parseFloat(sellOrderPrice || liveData?.bid.toString() || '0'),
-                                config?.lotSize || 100
+                                config?.lotSize || 100,
+                                sellOrderType as 'MARKET' | 'LIMIT' | 'STOP_LOSS'
                               )
 
                               if (response?.responseCode === '0') {

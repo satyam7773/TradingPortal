@@ -21,6 +21,9 @@ export const TabBar: React.FC<TabBarProps> = ({ className = '' }) => {
     const newActiveTab = removeTab(tabId)
     if (newActiveTab) {
       navigate(newActiveTab.path)
+    } else {
+      // No tabs remaining, navigate to dashboard
+      navigate('/dashboard')
     }
   }
 

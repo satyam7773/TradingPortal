@@ -15,6 +15,10 @@ interface BrokerageItem {
   parentTurnoverWiseBrokerage?: number | null;
   brokeragePerLotFlag?: boolean;
   brokerageTurnoverFlag?: boolean;
+  callputBrokeragePerLot?: number;
+  callputBrokeragePerLotFlag?: boolean;
+  callputBrokerageTurnover?: number;
+  callputBrokerageTurnoverFlag?: boolean;
 }
 
 const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
@@ -31,6 +35,10 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
 
   // Filter fields for Symbol Wise Setting
   const [brokerageRs, setBrokerageRs] = useState<string>('');
+
+  // Filter fields for Callput brokerage
+  const [callputBrokeragePerLac, setCallputBrokeragePerLac] = useState<string>('');
+  const [callputBrokerageRs, setCallputBrokerageRs] = useState<string>('');
 
   // Fetch allowed exchanges based on datatype (TURNOVER or LOT)
   const fetchAllowedExchanges = async (datatype: string) => {
@@ -164,14 +172,40 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
         return;
       }
 
+      // Validate callput value if entered
+      let callputValue: number | undefined;
+      if (selectedExchange === 'CALLPUT' && callputBrokeragePerLac.trim()) {
+        callputValue = parseFloat(callputBrokeragePerLac);
+        if (isNaN(callputValue)) {
+          toast.error('Please enter a valid number for Callput Brk Rs. 1/Lac');
+          return;
+        }
+      }
+
       // Apply to selected items
       const updatedData = brokerageData.map((item, idx) => {
         if (selectedItems.has(idx)) {
-          return {
+          const updated: any = {
             ...item,
             turnoverWiseBrokerage: brokerageValue,
             brokerageRs: brokerageValue,
+            brokerageTurnoverFlag: true,
+            brokeragePerLotFlag: false,
           };
+          
+          if (selectedExchange === 'CALLPUT') {
+            if (callputValue !== undefined) {
+              updated.callputBrokerageTurnover = callputValue;
+              updated.callputBrokerageTurnoverFlag = true;
+            } else {
+              updated.callputBrokerageTurnover = 0;
+              updated.callputBrokerageTurnoverFlag = false;
+            }
+            updated.callputBrokeragePerLot = 0;
+            updated.callputBrokeragePerLotFlag = false;
+          }
+          
+          return updated;
         }
         return item;
       });
@@ -192,13 +226,40 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
         return;
       }
 
+      // Validate callput value if entered
+      let callputValue: number | undefined;
+      if (selectedExchange === 'CALLPUT' && callputBrokerageRs.trim()) {
+        callputValue = parseFloat(callputBrokerageRs);
+        if (isNaN(callputValue)) {
+          toast.error('Please enter a valid number for Callput Brk (Rs.)');
+          return;
+        }
+      }
+
       // Apply to selected items
       const updatedData = brokerageData.map((item, idx) => {
         if (selectedItems.has(idx)) {
-          return {
+          const updated: any = {
             ...item,
             brokerageRs: brokerageValue,
+            turnoverWiseBrokerage: brokerageValue,
+            brokeragePerLotFlag: true,
+            brokerageTurnoverFlag: false,
           };
+          
+          if (selectedExchange === 'CALLPUT') {
+            if (callputValue !== undefined) {
+              updated.callputBrokeragePerLot = callputValue;
+              updated.callputBrokeragePerLotFlag = true;
+            } else {
+              updated.callputBrokeragePerLot = 0;
+              updated.callputBrokeragePerLotFlag = false;
+            }
+            updated.callputBrokerageTurnover = 0;
+            updated.callputBrokerageTurnoverFlag = false;
+          }
+          
+          return updated;
         }
         return item;
       });
@@ -226,13 +287,23 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
       const selectedBrokerages = Array.from(selectedItems).map((idx) => {
         const item = brokerageData[idx];
         
-        return {
+        const payload: any = {
           instrumentId: item.instrumentId || 2,
           brokeragePerLot: item.brokerageRs || 0,
           brokeragePerLotFlag: item.brokeragePerLotFlag,
           brokerageTurnoverFlag: item.brokerageTurnoverFlag,
           brokerageTurnover: item.turnoverWiseBrokerage || 0,
         };
+        
+        // Add callput fields if exchange is CALLPUT
+        if (selectedExchange === 'CALLPUT') {
+          payload.callputBrokeragePerLot = item.callputBrokeragePerLot || 0;
+          payload.callputBrokeragePerLotFlag = item.callputBrokeragePerLotFlag || false;
+          payload.callputBrokerageTurnover = item.callputBrokerageTurnover || 0;
+          payload.callputBrokerageTurnoverFlag = item.callputBrokerageTurnoverFlag || false;
+        }
+        
+        return payload;
       });
 
       // Build the request payload
@@ -258,6 +329,12 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
 
         // Clear selection after update
         setSelectedItems(new Set());
+        
+        // Clear input fields
+        setBrokeragePerLac('');
+        setBrokerageRs('');
+        setCallputBrokeragePerLac('');
+        setCallputBrokerageRs('');
       } else {
         toast.error(response?.responseMessage || 'Failed to update brokerage settings');
       }
@@ -312,12 +389,15 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
           <th className="px-3 py-3 min-w-[150px]">Script</th>
           <th className="px-3 py-3 min-w-[200px]">Turnover Wise Brk ( Rs. per 1/Lac )</th>
           <th className="px-3 py-3 min-w-[200px]">Parent Turnover Wise Brk ( Rs. per 1/Lac )</th>
+          {selectedExchange === 'CALLPUT' && (
+            <th className="px-3 py-3 min-w-[200px]">Callput Turnover Brk ( Rs. per 1/Lac )</th>
+          )}
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
         {brokerageData.length === 0 ? (
           <tr>
-            <td colSpan={5} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            <td colSpan={selectedExchange === 'CALLPUT' ? 6 : 5} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
               No brokerage settings found for {selectedExchange}
             </td>
           </tr>
@@ -343,6 +423,11 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
               <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
                 {item.parentTurnoverWiseBrokerage != null ? Number(item.parentTurnoverWiseBrokerage).toFixed(2) : '-'}
               </td>
+              {selectedExchange === 'CALLPUT' && (
+                <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                  {item.callputBrokerageTurnover != null ? Number(item.callputBrokerageTurnover).toFixed(2) : '-'}
+                </td>
+              )}
             </tr>
           ))
         )}
@@ -366,12 +451,15 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
           <th className="px-3 py-3 min-w-[150px]">Script</th>
           <th className="px-3 py-3 min-w-[150px]">Brk (Rs.)</th>
           <th className="px-3 py-3 min-w-[150px]">Parent Brk (Rs.)</th>
+          {selectedExchange === 'CALLPUT' && (
+            <th className="px-3 py-3 min-w-[150px]">Callput Brk (Rs.)</th>
+          )}
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
         {brokerageData.length === 0 ? (
           <tr>
-            <td colSpan={6} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            <td colSpan={selectedExchange === 'CALLPUT' ? 7 : 6} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
               No brokerage settings found for {selectedExchange}
             </td>
           </tr>
@@ -397,6 +485,11 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
               <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
                 {item.parentBrokerageRs != null ? Number(item.parentBrokerageRs).toFixed(2) : '-'}
               </td>
+              {selectedExchange === 'CALLPUT' && (
+                <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                  {item.callputBrokeragePerLot != null ? Number(item.callputBrokeragePerLot).toFixed(2) : '-'}
+                </td>
+              )}
             </tr>
           ))
         )}
@@ -435,27 +528,55 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
           </div>
 
           {settingType === 'TURNOVER WISE SETTING' ? (
-            <div className="space-y-1">
-              <label className="text-xs text-slate-600 dark:text-slate-300 block">Brk Rs. 1/Lac :</label>
-              <input
-                type="text"
-                value={brokeragePerLac}
-                onChange={(e) => setBrokeragePerLac(e.target.value)}
-                placeholder="Enter value"
-                className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-              />
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-600 dark:text-slate-300 block">Brk Rs. 1/Lac :</label>
+                <input
+                  type="text"
+                  value={brokeragePerLac}
+                  onChange={(e) => setBrokeragePerLac(e.target.value)}
+                  placeholder="Enter value"
+                  className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                />
+              </div>
+              {selectedExchange === 'CALLPUT' && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-600 dark:text-slate-300 block">Callput Brk Rs. 1/Lac :</label>
+                  <input
+                    type="text"
+                    value={callputBrokeragePerLac}
+                    onChange={(e) => setCallputBrokeragePerLac(e.target.value)}
+                    placeholder="Enter value"
+                    className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                  />
+                </div>
+              )}
+            </>
           ) : (
-            <div className="space-y-1">
-              <label className="text-xs text-slate-600 dark:text-slate-300 block">Brk (Rs.) :</label>
-              <input
-                type="text"
-                value={brokerageRs}
-                onChange={(e) => setBrokerageRs(e.target.value)}
-                placeholder="Enter value"
-                className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-              />
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-600 dark:text-slate-300 block">Brk (Rs.) :</label>
+                <input
+                  type="text"
+                  value={brokerageRs}
+                  onChange={(e) => setBrokerageRs(e.target.value)}
+                  placeholder="Enter value"
+                  className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                />
+              </div>
+              {selectedExchange === 'CALLPUT' && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-600 dark:text-slate-300 block">Callput Brk (Rs.) :</label>
+                  <input
+                    type="text"
+                    value={callputBrokerageRs}
+                    onChange={(e) => setCallputBrokerageRs(e.target.value)}
+                    placeholder="Enter value"
+                    className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                  />
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex gap-2 pt-2">

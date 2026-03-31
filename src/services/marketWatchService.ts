@@ -1,7 +1,10 @@
 /**
  * Market Watch Service
  * Handles WebSocket connections and market data streaming via STOMP protocol
+ * Implements patterns from Flutter STOMP client for better reliability
  */
+
+import orderUpdateService from './orderUpdateService'
 
 class MarketWatchService {
   private socket: WebSocket | null = null
@@ -12,6 +15,18 @@ class MarketWatchService {
   private connectPromiseResolve: (() => void) | null = null
   private heartbeatInterval: NodeJS.Timeout | null = null
   private lastPingTime = 0
+  
+  // Track subscriptions to prevent duplicates
+  private subscribedUsers: Set<string> = new Set()
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectDelay = 1000 // 1 second
+  
+  // Health check tracking (similar to Flutter implementation)
+  private lastReceivedTimePerQueue: Map<string, number> = new Map()
+  private healthCheckInterval: NodeJS.Timeout | null = null
+  private healthCheckThreshold = 5000 // 5 seconds - if no data received, mark as disconnected
+  private isHealthCheckRunning = false
 
   /**
    * Connect to WebSocket for market data
@@ -19,6 +34,7 @@ class MarketWatchService {
   connect(onConnected?: () => void): Promise<void> {
     return new Promise((resolve, reject) => {
       if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+        console.log('✅ WebSocket already connected')
         if (onConnected) onConnected()
         resolve()
         return
@@ -29,22 +45,37 @@ class MarketWatchService {
       this.connectPromiseResolve = resolve
 
       const wsUrl = 'wss://quotes.rivoplus.live/ws/market'
+      
+      // Add a timeout - if connection doesn't complete in 10 seconds, reject
+      const connectionTimeout = setTimeout(() => {
+        console.error('❌ WebSocket connection timeout - no CONNECTED frame received within 10 seconds')
+        reject(new Error('WebSocket connection timeout'))
+        if (this.socket) {
+          this.socket.close()
+          this.socket = null
+        }
+      }, 10000)
 
       try {
         this.socket = new WebSocket(wsUrl)
 
         this.socket.onopen = () => {
+          console.log('🔌 WebSocket opened, sending STOMP CONNECT')
           // Send STOMP CONNECT frame
           this._sendStompConnect()
         }
 
         this.socket.onmessage = (event: MessageEvent) => {
           try {
+            console.log('📨 WebSocket message received:', event.data.substring(0, 50))
             // Accumulate message data (STOMP frames may come in chunks)
             this.messageBuffer += event.data
             
             // Process complete STOMP frames
             this._processStompFrames()
+            
+            // Clear timeout on first message - connection is working
+            clearTimeout(connectionTimeout)
           } catch (error) {
             console.error('Error processing message:', error, event.data)
           }
@@ -52,18 +83,46 @@ class MarketWatchService {
 
         this.socket.onerror = (error: Event) => {
           console.error('❌ WebSocket error:', error)
+          clearTimeout(connectionTimeout)
           reject(new Error('WebSocket connection failed'))
         }
 
         this.socket.onclose = () => {
+          console.log('⚠️  WebSocket closed')
+          clearTimeout(connectionTimeout)
           this.stompConnected = false
           this._stopHeartbeat()
         }
       } catch (error) {
         console.error('Error creating WebSocket:', error)
+        clearTimeout(connectionTimeout)
         reject(error)
       }
     })
+  }
+
+  /**
+   * Attempt to reconnect with exponential backoff
+   */
+  private async _reconnect(onConnected?: () => void): Promise<void> {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('❌ Max reconnection attempts reached')
+      return
+    }
+
+    this.reconnectAttempts++
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
+    console.log(`⏳ Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms...`)
+    
+    await new Promise(resolve => setTimeout(resolve, delay))
+    
+    try {
+      await this.connect(onConnected)
+      this.reconnectAttempts = 0 // Reset on successful connection
+    } catch (error) {
+      console.error(`❌ Reconnection attempt ${this.reconnectAttempts} failed:`, error)
+      await this._reconnect(onConnected)
+    }
   }
 
   /**
@@ -86,15 +145,99 @@ class MarketWatchService {
   }
 
   /**
+   * Start health check to monitor subscription health (Flutter pattern)
+   * Checks if data is being received on each queue
+   * NOTE: Disabled for now - causes false positives when market is closed or no price updates
+   */
+  private _startHealthCheck(): void {
+    if (this.isHealthCheckRunning) {
+      return // Already running
+    }
+
+    this.isHealthCheckRunning = true
+    // Health check is disabled - socket handles reconnection via heartbeat mechanism
+    // Uncomment below to enable health checks (useful for debugging connection issues)
+    /*
+    console.log('🏥 Starting health check for subscriptions')
+
+    this.healthCheckInterval = setInterval(() => {
+      try {
+        const now = Date.now()
+        
+        // Check each subscribed queue (exclude instruments queue like Flutter does)
+        this.lastReceivedTimePerQueue.forEach((lastReceivedTime, queue) => {
+          // Skip health check for instruments queue - it has sporadic data
+          if (queue.includes('/queue/instruments/')) {
+            return
+          }
+          
+          const elapsed = now - lastReceivedTime
+          
+          if (elapsed > this.healthCheckThreshold) {
+            console.warn(`⚠️  No data received from ${queue} for ${elapsed}ms (threshold: ${this.healthCheckThreshold}ms)`)
+            // Mark as disconnected to trigger reconnection
+            if (this.stompConnected) {
+              console.log('🔄 Marking connection as stale - will attempt reconnect')
+              this.stompConnected = false
+            }
+          }
+        })
+      } catch (error) {
+        console.error('Error in health check:', error)
+      }
+    }, this.healthCheckThreshold)
+    */
+  }
+
+  /**
+   * Stop health check
+   */
+  private _stopHealthCheck(): void {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval)
+      this.healthCheckInterval = null
+    }
+    this.isHealthCheckRunning = false
+    console.log('🏥 Health check stopped')
+  }
+
+  /**
+   * Update last received time for a queue (called when data is received)
+   */
+  private _updateLastReceivedTime(queue: string): void {
+    this.lastReceivedTimePerQueue.set(queue, Date.now())
+  }
+
+  /**
    * Disconnect WebSocket
    */
   disconnect(): void {
-    // Stop heartbeat
+    // Stop health check and heartbeat
+    this._stopHealthCheck()
     this._stopHeartbeat()
     
     if (this.socket) {
       this.socket.close()
       this.socket = null
+    }
+  }
+
+  /**
+   * Send raw STOMP frame (public method for external services)
+   * Used by orderUpdateService to send SUBSCRIBE/UNSUBSCRIBE frames
+   */
+  sendStompFrame(frame: string): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️  Cannot send STOMP frame - WebSocket not open')
+      return false
+    }
+
+    try {
+      this.socket.send(frame)
+      return true
+    } catch (error) {
+      console.error('❌ Error sending STOMP frame:', error)
+      return false
     }
   }
 
@@ -161,12 +304,72 @@ class MarketWatchService {
 
   /**
    * Subscribe to watchlist queue with userId
+   * Follows Flutter pattern: unsubscribe first to prevent duplicates, then resubscribe
    */
   subscribeToWatchlist(userId: string): void {
+    const subscriptionKey = `watchlist-${userId}`
+    
+    // Step 1: Always unsubscribe first (prevent duplicates - Flutter pattern)
+    if (this.subscribedUsers.has(subscriptionKey)) {
+      console.log(`🔄 Clearing previous watchlist subscription for user: ${userId}`)
+      this._unsubscribeFromWatchlistInternal(userId)
+    }
+
+    // Step 2: Now subscribe
     if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+      console.log(`🔌 Subscribing to watchlist for user: ${userId}`)
+      this.subscribedUsers.add(subscriptionKey)
+      this.lastReceivedTimePerQueue.set(`/queue/watchlist/${userId}`, Date.now())
       this._sendStompSubscribeToWatchlist(userId)
     } else {
-      console.error('❌ Cannot subscribe to watchlist - WebSocket not connected or STOMP not ready')
+      console.warn(`⚠️  Cannot subscribe to watchlist - WebSocket not connected. isConnected: ${this.isConnected()}, stompConnected: ${this.stompConnected}`)
+    }
+  }
+
+  /**
+   * Internal unsubscribe from watchlist - called by public method
+   */
+  private _unsubscribeFromWatchlistInternal(userId: string): void {
+    const wasSubscribed = this.subscribedUsers.has(`watchlist-${userId}`)
+    
+    if (wasSubscribed) {
+      console.log(`🔌 Unsubscribing from watchlist for user: ${userId}`)
+      // Try to send UNSUBSCRIBE frame if socket is open
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        const frame = `UNSUBSCRIBE\nid:sub-queue-watchlist\n\n\0`
+        try {
+          this.socket.send(frame)
+          console.log(`✅ UNSUBSCRIBE frame sent for watchlist/${userId}`)
+        } catch (error) {
+          console.warn(`⚠️  Failed to send UNSUBSCRIBE frame for watchlist:`, error)
+        }
+      } else {
+        console.warn(`⚠️  Socket not open, cannot send UNSUBSCRIBE for watchlist/${userId}`)
+      }
+    }
+    
+    // Always clear tracking regardless of whether frame was sent
+    this.subscribedUsers.delete(`watchlist-${userId}`)
+    this.lastReceivedTimePerQueue.delete(`/queue/watchlist/${userId}`)
+    console.log(`✅ Cleared watchlist subscription tracking for user: ${userId}`)
+  }
+
+  /**
+   * Unsubscribe from watchlist queue with userId
+   */
+  unsubscribeFromWatchlist(userId: string): void {
+    this._unsubscribeFromWatchlistInternal(userId)
+  }
+
+  /**
+   * Unsubscribe from instruments queue with userId
+   */
+  unsubscribeFromInstruments(userId: string): void {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+      console.log(`🔌 Unsubscribing from instruments for user: ${userId}`)
+      const frame = `UNSUBSCRIBE\nid:sub-queue-instruments\n\n\0`
+      this.socket.send(frame)
+      this.subscribedUsers.delete(`instruments-${userId}`)
     }
   }
 
@@ -204,26 +407,74 @@ class MarketWatchService {
 
   /**
    * Subscribe to instruments queue with userId
+   * Follows Flutter pattern: unsubscribe first to prevent duplicates, then resubscribe
    */
   subscribeToInstruments(userId: string): void {
+    const subscriptionKey = `instruments-${userId}`
+    
+    // Step 1: Always unsubscribe first (prevent duplicates - Flutter pattern)
+    if (this.subscribedUsers.has(subscriptionKey)) {
+      console.log(`🔄 Clearing previous instruments subscription for user: ${userId}`)
+      this._unsubscribeFromInstrumentsInternal(userId)
+    }
+
+    // Step 2: Now subscribe
     if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+      console.log(`🔌 Subscribing to instruments for user: ${userId}`)
+      this.subscribedUsers.add(subscriptionKey)
+      this.lastReceivedTimePerQueue.set(`/queue/instruments/${userId}`, Date.now())
       const frame = `SUBSCRIBE\nid:sub-queue-instruments\ndestination:/queue/instruments/${userId}\nack:auto\n\n\0`
       this.socket.send(frame)
     } else {
-      console.error('❌ Cannot subscribe to instruments - WebSocket not connected or STOMP not ready')
+      console.warn(`⚠️  Cannot subscribe to instruments - WebSocket not connected. isConnected: ${this.isConnected()}, stompConnected: ${this.stompConnected}`)
     }
+  }
+
+  /**
+   * Internal unsubscribe from instruments - called by public method
+   */
+  private _unsubscribeFromInstrumentsInternal(userId: string): void {
+    const wasSubscribed = this.subscribedUsers.has(`instruments-${userId}`)
+    
+    if (wasSubscribed) {
+      console.log(`🔌 Unsubscribing from instruments for user: ${userId}`)
+      // Try to send UNSUBSCRIBE frame if socket is open
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        const frame = `UNSUBSCRIBE\nid:sub-queue-instruments\n\n\0`
+        try {
+          this.socket.send(frame)
+          console.log(`✅ UNSUBSCRIBE frame sent for instruments/${userId}`)
+        } catch (error) {
+          console.warn(`⚠️  Failed to send UNSUBSCRIBE frame for instruments:`, error)
+        }
+      } else {
+        console.warn(`⚠️  Socket not open, cannot send UNSUBSCRIBE for instruments/${userId}`)
+      }
+    }
+    
+    // Always clear tracking regardless of whether frame was sent
+    this.subscribedUsers.delete(`instruments-${userId}`)
+    this.lastReceivedTimePerQueue.delete(`/queue/instruments/${userId}`)
+    console.log(`✅ Cleared instruments subscription tracking for user: ${userId}`)
   }
 
   /**
    * Send instruments polling request with userId and instrumentTokens
    */
   sendInstrumentsRequest(userId: string, instrumentTokens: string[]): void {
+    console.log('📤 sendInstrumentsRequest called with:', { userId, tokenCount: instrumentTokens.length, tokens: instrumentTokens })
+    console.log('🔍 Socket state:', this.socket?.readyState, 'STOMP connected:', this.stompConnected)
+    
     if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
       const payload = JSON.stringify({ userId, instrumentTokens })
       const frame = `SEND\ndestination:/app/instruments\ncontent-type:application/json\ncontent-length:${payload.length}\n\n${payload}\0`
+      console.log('✅ Sending instruments request frame')
       this.socket.send(frame)
     } else {
       console.error('❌ Cannot send instruments request - WebSocket not connected or STOMP not ready')
+      console.error('   Socket exists:', !!this.socket)
+      console.error('   Socket readyState:', this.socket?.readyState, '(1 = OPEN)')
+      console.error('   STOMP connected:', this.stompConnected)
     }
   }
 
@@ -263,6 +514,8 @@ class MarketWatchService {
     try {
       const lines = frameStr.split('\n')
       const command = lines[0].trim()
+      console.log(`📍 Processing STOMP frame: ${command}`)
+      
       const headers: Record<string, string> = {}
       let bodyStartIndex = 0
 
@@ -284,23 +537,49 @@ class MarketWatchService {
 
       switch (command) {
         case 'CONNECTED':
+          console.log('✅ STOMP CONNECTED frame received!')
           this.stompConnected = true
+          // Start health check on connection (Flutter pattern)
+          this._startHealthCheck()
           // Subscribe to feed after STOMP connection established
           this._sendStompSubscribe()
           // Call the onConnected callback
           if (this.onConnectedCallback) {
+            console.log('🔔 Calling onConnected callback')
             this.onConnectedCallback()
             this.onConnectedCallback = null
           }
           // Resolve the connect promise
           if (this.connectPromiseResolve) {
+            console.log('✅ Resolving connect promise')
             this.connectPromiseResolve()
             this.connectPromiseResolve = null
           }
           break
 
         case 'MESSAGE':
-          // Parse message body as JSON
+          console.log('📨 MESSAGE frame received from server')
+          console.log('📍 Destination:', headers['destination'])
+          console.log('📦 Body preview:', body.substring(0, 200))
+          
+          // Update last received time for health check (Flutter pattern)
+          const destination = headers['destination'] || 'unknown'
+          this._updateLastReceivedTime(destination)
+          
+          // Check if this is an order update message
+          if (destination.startsWith('/queue/positions/')) {
+            console.log('🎯 Detected order update message, routing to orderUpdateService')
+            // Route to order update service
+            try {
+              orderUpdateService.handleOrderMessage(body)
+            } catch (error) {
+              console.error('Error handling order message:', error)
+            }
+            // Don't process order messages through feed callbacks
+            break
+          }
+          
+          // Parse message body as JSON for market data
           try {
             const data = JSON.parse(body)
             // Notify all feed callbacks

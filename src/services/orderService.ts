@@ -67,6 +67,7 @@ class OrderService {
    * Place a buy order
    * @param loggedInUserId The ID of the logged-in user (admin/broker)
    * @param clientUserId The ID of the client for whom the order is being placed
+   * @param orderType The type of order - MARKET, LIMIT, or STOP_LOSS
    */
   async placeBuyOrder(
     loggedInUserId: number,
@@ -77,6 +78,7 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
+    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS' = 'MARKET',
     deviceId: string = '1234567890'
   ): Promise<PlaceOrderResponse> {
     const orderData: PlaceOrderRequest = {
@@ -89,7 +91,7 @@ class OrderService {
         exchange,
         tradeSymbol,
         side: 'BUY',
-        orderType: 'MARKET',
+        orderType,
         lotSize: quantity,
         price,
         token,
@@ -104,6 +106,7 @@ class OrderService {
    * Place a sell order
    * @param loggedInUserId The ID of the logged-in user (admin/broker)
    * @param clientUserId The ID of the client for whom the order is being placed
+   * @param orderType The type of order - MARKET, LIMIT, or STOP_LOSS
    */
   async placeSellOrder(
     loggedInUserId: number,
@@ -114,6 +117,7 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
+    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS' = 'MARKET',
     deviceId: string = '1234567890'
   ): Promise<PlaceOrderResponse> {
     const orderData: PlaceOrderRequest = {
@@ -126,7 +130,7 @@ class OrderService {
         exchange,
         tradeSymbol,
         side: 'SELL',
-        orderType: 'MARKET',
+        orderType,
         lotSize: quantity,
         price,
         token,

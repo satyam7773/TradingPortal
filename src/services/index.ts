@@ -9,11 +9,14 @@
 export { apiClient, TokenManager } from './apiClient'
 export { authService } from './authService'
 export { userManagementService } from './userManagementService'
+export { groupService } from './groupService'
 export { default as watchlistTabsService } from './watchlistTabsService'
+export { orderUpdateService } from './orderUpdateService'
 
 // Re-export types
 export * from './api.types'
 export type { WatchlistTab, WatchlistTabsResponse } from './watchlistTabsService'
+export type { OrderUpdate, OrderStatus } from './orderUpdateService'
 
 // You can add more services here as you build them:
 // export { tradingService } from './tradingService'

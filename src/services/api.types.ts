@@ -332,6 +332,14 @@ export interface ExchangeConfig {
   groupId?: any
 }
 
+// Exchange data from /user/portal/exchanges API
+export interface ExchangeData {
+  name: string
+  turnover: boolean
+  lot: boolean
+  groupId: number
+}
+
 export interface UserInHierarchy {
   name: string
   parentId: number

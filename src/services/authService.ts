@@ -111,6 +111,20 @@ class AuthService {
 
     return response.data
   }
+
+  /**
+   * Get login history
+   */
+  async fetchLoginHistory(userId: number, page: number = 0, size: number = 10): Promise<any> {
+    const response = await apiClient.get<{ data: any }>(
+      `${this.baseUrl}/login/history`,
+      {
+        params: { userId, page, size }
+      }
+    )
+
+    return response.data
+  }
 }
 
 export const authService = new AuthService()

@@ -1,5 +1,5 @@
 import { apiClient, TokenManager } from './apiClient'
-import { UserConfigResponse } from './api.types'
+import { UserConfigResponse, ExchangeData } from './api.types'
 
 /**
  * User Management Service
@@ -20,6 +20,24 @@ class UserManagementService {
 
     const response = await apiClient.post<{ data: UserConfigResponse }>(
       `${this.baseUrl}/fetchUserConfig`,
+      request
+    )
+    
+    return response.data
+  }
+
+  /**
+   * Fetch allowed exchanges for a user
+   */
+  async getExchanges(userId: number): Promise<ExchangeData[]> {
+    const request = {
+      userId,
+      requestTimestamp: '',
+      data: ''
+    }
+
+    const response = await apiClient.post<{ data: ExchangeData[] }>(
+      `${this.baseUrl}/portal/exchanges`,
       request
     )
     

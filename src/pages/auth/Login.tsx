@@ -13,6 +13,7 @@ import ThemeToggle from '../../components/ui/ThemeToggle'
 import ABQuotesLogo from '../../components/ui/ABQuotesLogo'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
+import marketWatchService from '../../services/marketWatchService'
 
 // Validation schema
 const validationSchema = Yup.object({
@@ -54,8 +55,24 @@ const Login: React.FC = () => {
   useEffect(() => {
     // If user must change password, don't navigate - show modal instead
     if (token && !loading && !(user && (user as any).changePasswordFlag)) {
-      console.log('✅ Login successful, navigating to dashboard')
-      navigate('/dashboard')
+      console.log('✅ Login successful, initializing socket connection before navigation')
+      
+      // Initialize WebSocket connection before navigating
+      const initializeSocket = async () => {
+        try {
+          await marketWatchService.connect(() => {
+            console.log('🔌 Socket connected successfully from Login')
+          })
+          console.log('✅ Socket connection established, navigating to dashboard')
+          navigate('/dashboard')
+        } catch (error) {
+          console.error('❌ Failed to connect socket:', error)
+          // Still navigate even if socket connection fails
+          navigate('/dashboard')
+        }
+      }
+      
+      initializeSocket()
     }
   }, [token, loading, navigate])
 

@@ -10,6 +10,8 @@ import { TabsProvider, useTabs } from '../../hooks/useTabs'
 import { TabBar } from '../ui/TabBar'
 import { User, Eye } from 'lucide-react'
 import apiService from '../../services/api'
+import marketWatchService from '../../services/marketWatchService'
+import orderUpdateService from '../../services/orderUpdateService'
 import toast from 'react-hot-toast'
 
 // Use Vite's import.meta.glob for proper bundling in production
@@ -172,6 +174,39 @@ const AppLayout: React.FC = () => {
   
   // Check if user is on first login
   const isFirstLogin = user?.firstLogin === true && !showFullMenu
+
+  // Initialize socket connection and order updates on mount/refresh
+  useEffect(() => {
+    const initializeSocketAndOrders = async () => {
+      const userDataStr = localStorage.getItem('userData')
+      if (!userDataStr) return
+
+      try {
+        const userData = JSON.parse(userDataStr)
+        const userId = userData.userId?.toString()
+        if (!userId) return
+
+        // Connect socket if not already connected
+        if (!marketWatchService.isConnected()) {
+          console.log('🔌 AppLayout: Initializing socket connection...')
+          await marketWatchService.connect(() => {
+            console.log('🔌 AppLayout: Socket connected, subscribing to order updates')
+            orderUpdateService.subscribeToOrders(userId)
+            console.log('📮 AppLayout: Subscribed to order updates for userId:', userId)
+          })
+        } else {
+          // Socket already connected, just subscribe to orders
+          console.log('🔌 AppLayout: Socket already connected, subscribing to order updates')
+          orderUpdateService.subscribeToOrders(userId)
+          console.log('📮 AppLayout: Subscribed to order updates for userId:', userId)
+        }
+      } catch (error) {
+        console.error('❌ AppLayout: Failed to initialize socket/orders:', error)
+      }
+    }
+
+    initializeSocketAndOrders()
+  }, [])
   
   const handleLogout = () => {
     try {

@@ -115,6 +115,7 @@ const dashboardTabConfigs = {
   '/dashboard/intraday-history': { title: 'Intraday History', icon: FileText },
   '/dashboard/rejection-log': { title: 'Rejection Log', icon: FileText },
   '/dashboard/login-history': { title: 'Login History', icon: FileText },
+  '/dashboard/groups': { title: 'Groups', icon: Settings },
   '/dashboard/account-summary': { title: 'Account Summary', icon: FileText },
   '/dashboard/bill-generate': { title: 'Bill Generate', icon: FileText },
   '/dashboard/deleted-trades': { title: 'Deleted Trades', icon: FileText },
@@ -382,6 +383,11 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
         label: 'Login History',
         path: '/dashboard/login-history',
         action: () => navigate('/dashboard/login-history')
+      },
+      {
+        label: 'Groups',
+        path: '/dashboard/groups',
+        action: () => navigate('/dashboard/groups')
       }
     ]
   },
