@@ -30,9 +30,13 @@ const IntradaySquareOffModal: React.FC<IntradaySquareOffModalProps> = ({
   const fetchExchanges = async () => {
     try {
       setIsLoading(true);
+<<<<<<< HEAD
       // Extract userId from user object (could be id or userId)
       const userId = user?.id || user?.userId;
       const response = await userManagementService.fetchExchanges(userId);
+=======
+      const response = await userManagementService.fetchExchanges();
+>>>>>>> copilot/vscode-mofdpmlg-ev3z
       
       if (Array.isArray(response)) {
         // Transform exchange array to Record<string, boolean>

@@ -556,15 +556,19 @@ class UserManagementService {
         brokerage: number;
       }>;
     };
-  }): Promise<any> {
+  }, isForAllUser: boolean = false): Promise<any> {
     console.log('💾 Updating Brokerage Settings:', {
       endpoint: '/user/settings/updateBrokerage',
+      isForAllUser,
       payload
     })
 
     const response = await apiClient.post<any>(
       '/user/settings/updateBrokerage',
-      payload
+      payload,
+      {
+        params: isForAllUser ? { isForAllUser: true } : {}
+      }
     )
 
     return response
@@ -688,6 +692,149 @@ class UserManagementService {
       return response
     } catch (error) {
       console.error('❌ Failed to fetch positions:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch trades for a user
+   * POST /oms/trades
+   * @param userId - User ID to fetch trades for
+   * @param page - Page number (starting from 0)
+   * @param type - Trade type (e.g., 'PENDING', 'COMPLETED', 'REJECTED', 'CANCELLED')
+   */
+  async fetchTrades(userId: number, params: {
+    from?: string;
+    to?: string;
+    exchange?: string;
+    page?: number;
+    tradeSymbol?: string;
+  } = {}): Promise<any> {
+    const request = {
+      userId,
+      data: {
+        from: params.from || new Date().toISOString().split('T')[0],
+        to: params.to || new Date().toISOString().split('T')[0],
+        exchange: params.exchange || '',
+        page: params.page || 0,
+        tradeSymbol: params.tradeSymbol || ''
+      }
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/portal/trades',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to fetch trades:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch own users (for user dropdown)
+   */
+  async fetchOwnUsers(userId: number): Promise<any> {
+    const request = {
+      userId
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/user/portal/fetchOwnUsers',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to fetch own users:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch orders with filters
+   */
+  async fetchOrders(userId: number, filters: {
+    limit?: number
+    offset?: number
+    fromDate?: string
+    toDate?: string
+    tradeSymbol?: string
+    exchange?: string
+    userId?: number
+  }): Promise<any> {
+    const request = {
+      userId,
+      data: {
+        limit: filters.limit || 10,
+        offset: filters.offset || 0,
+        fromDate: filters.fromDate || '',
+        toDate: filters.toDate || '',
+        tradeSymbol: filters.tradeSymbol || '',
+        exchange: filters.exchange || '',
+        userId: filters.userId !== undefined ? filters.userId : 0
+      }
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/orders',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to fetch orders:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update market trade rights for a user
+   */
+  async updateMarketTradeRights(payload: {
+    userId: number;
+    requestTimestamp: number;
+    data: {
+      isTradeLock: boolean;
+    };
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/user/market/trade/right',
+        payload
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to update market trade rights:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Cancel multiple orders at once
+   */
+  async cancelMultipleOrders(userId: number, orderIds: number[]): Promise<any> {
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId,
+      deviceId: '',
+      tradeOrderMethod: 'ANDROID',
+      data: {
+        userId,
+        orderIds
+      }
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/cancelMultipleOrders',
+        request
+      )
+      return response
+    } catch (error) {
+      console.error('❌ Failed to cancel multiple orders:', error)
       throw error
     }
   }

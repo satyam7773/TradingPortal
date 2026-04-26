@@ -8,6 +8,8 @@ import { userManagementService } from '../../services';
 import toast from 'react-hot-toast';
 import FilterLayout from '../../components/FilterLayout';
 import UserDetailsModal from './UserDetailsModal';
+import IntradaySquareOffModal from './IntradaySquareOffModal';
+import MarketTradeRightsModal from './MarketTradeRightsModal';
 import ChangePassword from './user-details-tabs/ChangePassword';
 import SharingDetails from './user-details-tabs/SharingDetails';
 import AddCredits from './user-details-tabs/AddCredits';
@@ -40,6 +42,8 @@ interface UserData {
   ipAddress: string;
   deviceId: string;
   lastLogin: string;
+  isActive: boolean;
+  isTradeLock: boolean;
 }
 
 interface ToggleSetting {
@@ -69,6 +73,8 @@ interface ApiUser {
   userSettingsToggles: ToggleSetting[];
   parentName: string;
   parentUsername: string;
+  isActive: boolean;
+  isTradeLock: boolean;
 }
 
 const UserList: React.FC = () => {
@@ -99,6 +105,10 @@ const UserList: React.FC = () => {
   const [creditError, setCreditError] = useState('');
   const [actionMenuPosition, setActionMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
+  const [selectedUserForIntradaySquareOff, setSelectedUserForIntradaySquareOff] = useState<any>(null);
+  const [showIntradaySquareOffModal, setShowIntradaySquareOffModal] = useState(false);
+  const [selectedUserForMarketTradeRights, setSelectedUserForMarketTradeRights] = useState<any>(null);
+  const [showMarketTradeRightsModal, setShowMarketTradeRightsModal] = useState(false);
   const { user: loggedInUser } = useAppSelector(state => state.auth);
   const { addTab, tabs, removeTab } = useTabs();
 
@@ -185,7 +195,9 @@ const UserList: React.FC = () => {
       createdDate: formatDate(apiUser.createdAt),
       ipAddress: apiUser.ipAddress || 'N/A',
       deviceId: apiUser.deviceId || 'N/A',
-      lastLogin: formatDate(apiUser.lastLoginDate)
+      lastLogin: formatDate(apiUser.lastLoginDate),
+      isActive: apiUser.isActive ?? true,
+      isTradeLock: apiUser.isTradeLock ?? false
     };
   };
 
@@ -228,7 +240,9 @@ const UserList: React.FC = () => {
           cachedUsers[0].hasOwnProperty('betEnabled') && 
           cachedUsers[0].hasOwnProperty('statusEnabled') &&
           cachedUsers[0].hasOwnProperty('sharing') &&
-          cachedUsers[0].hasOwnProperty('parentCredits')
+          cachedUsers[0].hasOwnProperty('parentCredits') &&
+          cachedUsers[0].hasOwnProperty('isActive') &&
+          cachedUsers[0].hasOwnProperty('isTradeLock')
         );
         
         if (isValidCache) {
@@ -306,13 +320,19 @@ const UserList: React.FC = () => {
         } else if (showAddCreditsModal) {
           setShowAddCreditsModal(false);
           setSelectedUserForAddCredits(null);
+        } else if (showIntradaySquareOffModal) {
+          setShowIntradaySquareOffModal(false);
+          setSelectedUserForIntradaySquareOff(null);
+        } else if (showMarketTradeRightsModal) {
+          setShowMarketTradeRightsModal(false);
+          setSelectedUserForMarketTradeRights(null);
         }
       }
     };
 
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
-  }, [showSharingModal, showPasswordModal, showAddCreditsModal]);
+  }, [showSharingModal, showPasswordModal, showAddCreditsModal, showIntradaySquareOffModal, showMarketTradeRightsModal]);
 
   const filteredUsers = users.filter(user => {
     // Apply search term filter
@@ -341,8 +361,8 @@ const UserList: React.FC = () => {
 
     // Apply status filter
     if (filterStatus !== 'All') {
-      if (filterStatus === 'Active' && !user.status) return false;
-      if (filterStatus === 'Inactive' && user.status) return false;
+      if (filterStatus === 'Active' && !user.isActive) return false;
+      if (filterStatus === 'Inactive' && user.isActive) return false;
     }
 
     return true;
@@ -362,7 +382,18 @@ const UserList: React.FC = () => {
         'creditBasedMargin': 'creditBasedMargin'
       };
 
+      // Map field names to display names
+      const fieldToDisplayName: Record<string, string> = {
+        'bet': 'Bet',
+        'closeOut': 'Close',
+        'margin': 'Margin',
+        'status': 'Status',
+        'creditLimit': 'Credit Limit',
+        'creditBasedMargin': 'CBM'
+      };
+
       const apiType = fieldToApiType[field];
+      const displayName = fieldToDisplayName[field];
       const user = users.find(u => u.id === userId);
       if (!user) return;
 
@@ -385,7 +416,8 @@ const UserList: React.FC = () => {
       });
 
       if (response?.responseCode === '0' || response?.responseCode === '1000') {
-        const successMsg = response?.responseMessage || 'Setting updated successfully';
+        const statusText = newValue ? 'enabled' : 'disabled';
+        const successMsg = `${user.username}: ${displayName} has been successfully ${statusText}`;
         toast.success(successMsg);
         
         // Update local state
@@ -1051,25 +1083,6 @@ const UserList: React.FC = () => {
                       const message = res?.responseMessage ?? res?.data?.responseMessage ?? 'Operation completed';
                       
                       if (code === '0' || code === '1000') {
-                        // Update the selected user's credit immediately
-                        const newCreditValue = creditTransType === 'Credit' 
-                          ? (selectedUserForAddCredits?.credit || 0) + enteredAmount
-                          : (selectedUserForAddCredits?.credit || 0) - enteredAmount;
-                        
-                        setSelectedUserForAddCredits({
-                          ...selectedUserForAddCredits,
-                          credit: newCreditValue
-                        });
-                        
-                        // Update local users state immediately
-                        setUsers(prevUsers =>
-                          prevUsers.map(u =>
-                            u.id === selectedUserForAddCredits.id
-                              ? { ...u, credit: newCreditValue }
-                              : u
-                          )
-                        );
-                        
                         toast.success(message);
                         
                         // Refetch user list to get latest data from server
@@ -1112,76 +1125,200 @@ const UserList: React.FC = () => {
         document.body
       )}
 
+      {/* Intraday SquareOff Modal */}
+      {showIntradaySquareOffModal && selectedUserForIntradaySquareOff && (
+        <IntradaySquareOffModal
+          isOpen={showIntradaySquareOffModal}
+          user={selectedUserForIntradaySquareOff}
+          onClose={() => {
+            setShowIntradaySquareOffModal(false);
+            setSelectedUserForIntradaySquareOff(null);
+          }}
+        />
+      )}
+
+      {/* Market Trade Rights Modal */}
+      {showMarketTradeRightsModal && selectedUserForMarketTradeRights && (
+        <MarketTradeRightsModal
+          isOpen={showMarketTradeRightsModal}
+          user={selectedUserForMarketTradeRights}
+          onClose={() => {
+            setShowMarketTradeRightsModal(false);
+            setSelectedUserForMarketTradeRights(null);
+          }}
+          onSave={async () => {
+            await refetchUserList();
+          }}
+        />
+      )}
+
       {/* Action Menu Portal */}
       {openActionMenu && actionMenuPosition && actionMenuUserId && createPortal(
         <div 
-          className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl z-[99999] overflow-hidden"
+          className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl z-[99999] overflow-auto max-h-96"
           style={{
-            left: `${actionMenuPosition.x}px`,
-            top: actionMenuPosition.y + 250 > window.innerHeight ? `${actionMenuPosition.y - 220}px` : `${actionMenuPosition.y + 8}px`,
-            bottom: actionMenuPosition.y + 250 > window.innerHeight ? 'auto' : undefined,
+            left: `${Math.min(actionMenuPosition.x, window.innerWidth - 240)}px`,
+            top: (() => {
+              // Menu height estimation: ~36px per button + padding
+              // Master: 5 buttons, Client: 12 buttons
+              const currentUser = users.find(u => u.id === actionMenuUserId);
+              const isMaster = currentUser?.type === 'Master';
+              const estimatedMenuHeight = isMaster ? 220 : 480;
+              const spaceBelow = window.innerHeight - actionMenuPosition.y - 40;
+              const spaceAbove = actionMenuPosition.y;
+              
+              // If there's enough space below, position downward
+              if (spaceBelow >= estimatedMenuHeight) {
+                return `${actionMenuPosition.y + 8}px`;
+              }
+              // If there's not enough space below but enough above, position upward
+              else if (spaceAbove >= estimatedMenuHeight) {
+                return `${actionMenuPosition.y - estimatedMenuHeight - 8}px`;
+              }
+              // If not enough space either way, prioritize the direction with more space
+              else if (spaceBelow >= spaceAbove) {
+                return `${actionMenuPosition.y + 8}px`;
+              } else {
+                return `${actionMenuPosition.y - Math.min(estimatedMenuHeight, spaceAbove) - 8}px`;
+              }
+            })(),
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              const user = users.find(u => u.id === actionMenuUserId);
-              if (user) {
-                setSelectedUserForPasswordChange(user);
-                setShowPasswordModal(true);
-              }
-              setOpenActionMenu(null);
-              setActionMenuPosition(null);
-              setActionMenuUserId(null);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2">
-            <span>📝</span> Change Password
-          </button>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              const user = users.find(u => u.id === actionMenuUserId);
-              if (user) {
-                setSelectedUserForSharingDetails(user);
-                setShowSharingModal(true);
-              }
-              setOpenActionMenu(null);
-              setActionMenuPosition(null);
-              setActionMenuUserId(null);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-            <span>📊</span> Share Details
-          </button>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              const user = users.find(u => u.id === actionMenuUserId);
-              if (user) {
-                setSelectedUserForAddCredits(user);
-                setShowAddCreditsModal(true);
-                // Clear all form values when opening modal
-                setCreditTransType('Credit');
-                setCreditAmount('');
-                setCreditNote('');
-                setCreditError('');
-              }
-              setOpenActionMenu(null);
-              setActionMenuPosition(null);
-              setActionMenuUserId(null);
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-            <span>💰</span> Add Credit
-          </button>
-          <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-            <span>📋</span> Account Limit
-          </button>
-          <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-            <span>📈</span> Carry Forward Margin
-          </button>
-          <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-            <span>📊</span> Exchangewise Interest %
-          </button>
+          {(() => {
+            const currentUser = users.find(u => u.id === actionMenuUserId);
+            const isMaster = currentUser?.type === 'Master';
+            
+            return (
+              <>
+                {/* Common options for all user types */}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const user = users.find(u => u.id === actionMenuUserId);
+                    if (user) {
+                      setSelectedUserForPasswordChange(user);
+                      setShowPasswordModal(true);
+                    }
+                    setOpenActionMenu(null);
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2">
+                  <span>📝</span> Change Password
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const user = users.find(u => u.id === actionMenuUserId);
+                    if (user) {
+                      setSelectedUserForSharingDetails(user);
+                      setShowSharingModal(true);
+                    }
+                    setOpenActionMenu(null);
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📊</span> Share Details
+                </button>
+
+                {/* Master user options */}
+                {isMaster && (
+                  <>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForAddCredits(user);
+                          setShowAddCreditsModal(true);
+                          setCreditTransType('Credit');
+                          setCreditAmount('');
+                          setCreditNote('');
+                          setCreditError('');
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>💰</span> Add Credit
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📋</span> Account Limit
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📈</span> Carry Forward Margin
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📊</span> Exchangewise Interest %
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>👤</span> Admin Rights
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForMarketTradeRights(user);
+                          setShowMarketTradeRightsModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📊</span> Market Trade Rights
+                    </button>
+                  </>
+                )}
+
+                {/* Client user options */}
+                {!isMaster && (
+                  <>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📊</span> % Margin Square off
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>🛑</span> Fresh StopLoss
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForIntradaySquareOff(user);
+                          setShowIntradaySquareOffModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>⏱️</span> Intraday SquareOff
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>🏢</span> Exchangewise Lot Limit
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📋</span> Carry Forward Option
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📈</span> Carry Forward Margin
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>📊</span> Trading Duration Rank
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>💹</span> Exchangewise Interest %
+                    </button>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>,
         document.body
       )}

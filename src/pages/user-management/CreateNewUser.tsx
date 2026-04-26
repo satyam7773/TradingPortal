@@ -21,7 +21,7 @@ import {
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import { navigateWithScrollToTop } from '../../utils/navigation'
-import { userManagementService } from '../../services'
+import { userManagementService, groupService } from '../../services'
 import { UserConfigResponse } from '../../services/api.types'
 import { useTabs } from '../../hooks/useTabs'
 
@@ -189,6 +189,8 @@ const CreateNewUser: React.FC = () => {
   const [selectedUserAllowedExchanges, setSelectedUserAllowedExchanges] = useState<string[]>([])
   const [selectedUserAllowedExchangeCount, setSelectedUserAllowedExchangeCount] = useState(0)
   const [isFetchingSelectedUserDetails, setIsFetchingSelectedUserDetails] = useState(false)
+  const [exchangeGroups, setExchangeGroups] = useState<{ [key: string]: any[] }>({})
+  const [groupsLoading, setGroupsLoading] = useState(false)
 
   // Dynamic validation schema based on selected user role
   const getValidationSchema = () => {
@@ -431,6 +433,11 @@ const CreateNewUser: React.FC = () => {
     }
   }, [isEditMode, editingUserId, editingUser])
 
+  // Fetch exchange groups when component loads
+  useEffect(() => {
+    fetchExchangeGroupsForAll()
+  }, [])
+
   // Compute patched form initial values using useMemo
   const patchedFormInitialValues = React.useMemo(() => {
     if (isEditMode && editingUser && userConfig && !configLoading) {
@@ -450,7 +457,7 @@ const CreateNewUser: React.FC = () => {
             enabled: true,
             turnoverBrk: !!ex.turnover,
             symbolBrk: !!ex.lot,
-            group: ex.groupId ? String(ex.groupId) : '',
+            group: ex.groupName ? ex.groupName : '',
             highLowLimit: false
           };
         }
@@ -639,6 +646,41 @@ const CreateNewUser: React.FC = () => {
     return selectedUserAllowedExchanges.includes(key)
   }
 
+  // Fetch groups for all exchanges
+  const fetchExchangeGroupsForAll = async () => {
+    try {
+      setGroupsLoading(true)
+      const response = await groupService.getGroupsByExchangeWise()
+      
+      if (response?.responseCode === '0' && response?.data) {
+        const groups: { [key: string]: any[] } = {}
+        
+        // Process each exchange and store full group objects
+        Object.entries(response.data).forEach(([exchangeName, groupList]: [string, any]) => {
+          if (Array.isArray(groupList)) {
+            groups[exchangeName.toLowerCase()] = groupList
+          }
+        })
+        
+        setExchangeGroups(groups)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching exchange groups:', error)
+      toast.error('Failed to fetch exchange groups')
+    } finally {
+      setGroupsLoading(false)
+    }
+  }
+
+  // Helper function to get groupId from selected group name
+  const getGroupIdFromName = (exchangeKey: string, groupName: string): number | null => {
+    const groups = exchangeGroups[exchangeKey]
+    if (!groups || !Array.isArray(groups)) return null
+    
+    const group = groups.find((g: any) => g.groupName === groupName)
+    return group?.groupId || null
+  }
+
   const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
     try {
       console.log('Form Submitted:', values)
@@ -649,20 +691,32 @@ const CreateNewUser: React.FC = () => {
         return
       }
 
+      // Validate that all enabled and allowed exchanges have a group selected (only for clients, not masters)
+      if (values.userType === 'client') {
+        const enabledExchangesWithoutGroup = Object.entries(values.exchanges)
+          .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled && !exchange.group)
+          .map(([key]) => key.toUpperCase())
+
+        if (enabledExchangesWithoutGroup.length > 0) {
+          toast.error(`Please select groups for: ${enabledExchangesWithoutGroup.join(', ')}`)
+          return
+        }
+      }
+
       if (isEditMode && editingUser) {
         // EDIT MODE - Use editUserDetails API
         const userDataStr = localStorage.getItem('userData')
         const userData = userDataStr ? JSON.parse(userDataStr) : null
         const parentUserId = userData?.userId || 2
 
-        // Prepare allowedExchanges array from form values
+        // Prepare allowedExchanges array from form values - only include allowed and enabled exchanges
         const allowedExchanges = Object.entries(values.exchanges)
-          .filter(([key, exchange]) => exchange.enabled)
+          .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled)
           .map(([key, exchange]) => ({
             name: key.toUpperCase(),
             turnover: exchange.turnoverBrk,
             lot: exchange.symbolBrk,
-            groupId: null
+            groupId: exchange.group ? getGroupIdFromName(key, exchange.group) : null
           }))
 
         // Prepare highLowTradeLimit
@@ -714,14 +768,14 @@ const CreateNewUser: React.FC = () => {
         // Map userType to roleId (3 = master, 4 = client)
         const roleId = values.userType === 'master' ? 3 : 4
 
-        // Prepare allowedExchanges array from form values
+        // Prepare allowedExchanges array from form values - only include allowed and enabled exchanges
         const allowedExchanges = Object.entries(values.exchanges)
-          .filter(([key, exchange]) => exchange.enabled)
+          .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled)
           .map(([key, exchange]) => ({
             name: key.toUpperCase(),
             turnover: exchange.turnoverBrk,
             lot: exchange.symbolBrk,
-            groupId: null
+            groupId: exchange.group ? getGroupIdFromName(key, exchange.group) : null
           }))
 
         // Prepare highLowTradeLimit from High Trade Limit section (when admin account is selected)
@@ -845,7 +899,7 @@ const CreateNewUser: React.FC = () => {
         {!configLoading && userConfig && (
         <Formik
           key={isEditMode ? `edit-${editingUserId}` : 'create'}
-          enableReinitialize
+          enableReinitialize={isEditMode}
           initialValues={patchedFormInitialValues}
           validationSchema={getValidationSchema()}
           validateOnChange={true}
@@ -985,6 +1039,19 @@ const CreateNewUser: React.FC = () => {
                           onChange={(e) => {
                             const newValue = e.target.value
                             form.setFieldValue('userType', newValue)
+                            
+                            // Immediately update exchanges based on user type
+                            if (!isEditMode) {
+                              // Both master and client have the same exchange settings
+                              form.setFieldValue('exchanges', {
+                                nse: { enabled: true, turnoverBrk: true, symbolBrk: false, group: '', highLowLimit: false },
+                                mcx: { enabled: true, turnoverBrk: false, symbolBrk: true, group: '', highLowLimit: false },
+                                sgx: { enabled: true, turnoverBrk: false, symbolBrk: false, group: '', highLowLimit: false },
+                                cds: { enabled: true, turnoverBrk: false, symbolBrk: false, group: '', highLowLimit: false },
+                                callput: { enabled: true, turnoverBrk: false, symbolBrk: true, group: '', highLowLimit: false },
+                                others: { enabled: true, turnoverBrk: false, symbolBrk: false, group: '', highLowLimit: false }
+                              })
+                            }
                           }}
                           disabled={availableUserTypes.length === 0}
                           className={`w-full h-12 px-4 py-3 bg-surface-secondary border border-border-primary rounded-lg text-text-primary focus:ring-2 focus:ring-brand-primary ${
@@ -1506,10 +1573,15 @@ const CreateNewUser: React.FC = () => {
                               onChange={(e) => 
                                 setFieldValue(`exchanges.${exchange.key}.group`, e.target.value)
                               }
-                              disabled={!isExchangeAllowed(exchange.key)}
+                              disabled={!isExchangeAllowed(exchange.key) || groupsLoading}
                               className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded-lg text-text-primary text-sm focus:ring-1 focus:ring-brand-primary focus:border-transparent transition-all"
                             >
-                              <option value={exchange.defaultGroup}>{exchange.defaultGroup}</option>
+                              <option value="">{groupsLoading ? 'Loading groups...' : 'Select Group'}</option>
+                              {exchangeGroups[exchange.key]?.map((group: any) => (
+                                <option key={group.groupId} value={group.groupName}>
+                                  {group.groupName}
+                                </option>
+                              ))}
                             </select>
                           </td>
                         </tr>
@@ -1520,8 +1592,8 @@ const CreateNewUser: React.FC = () => {
                 )}
               </motion.div>
 
-              {/* High Trade Limit - Only when Admin account is selected OR Master user type is selected OR in edit mode for Master users with highLowTradeLimit */}
-              {(selectedUserRole === 2 || values.userType === 'master' || (isEditMode && editingUser?.roleId === 3 && editingUser?.highLowTradeLimit)) && (
+              {/* High Trade Limit - For Admin, Master, and Client accounts */}
+              {(selectedUserRole === 2 || values.userType === 'master' || values.userType === 'client' || (isEditMode && (editingUser?.roleId === 3 || editingUser?.roleId === 4) && editingUser?.highLowTradeLimit)) && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

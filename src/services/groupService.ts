@@ -104,6 +104,17 @@ class GroupService {
     )
     return response.data
   }
+
+  /**
+   * Fetch groups by exchange name (exchange-wise)
+   * GET endpoint returning groups organized by exchange
+   */
+  async getGroupsByExchangeWise(): Promise<any> {
+    const response = await apiClient.get<{ responseCode: string; responseMessage: string; data: any }>(
+      'user/api/quantity/group/exchange-wise'
+    )
+    return response
+  }
 }
 
 export const groupService = new GroupService()
