@@ -473,13 +473,20 @@ class UserManagementService {
   /**
    * Fetch exchanges
    */
-  async fetchExchanges(): Promise<Array<{name: string; turnover: boolean; lot: boolean; groupId: number}>> {
-    const userDataStr = localStorage.getItem('userData')
-    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
-    const userId = storedUserData?.userId || 2
+  async fetchExchanges(userId?: number | string): Promise<Array<{name: string; turnover: boolean; lot: boolean; groupId: number}>> {
+    // Use provided userId, convert to number if string, otherwise get from localStorage
+    let requestUserId: number
+    
+    if (userId) {
+      requestUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId
+    } else {
+      const userDataStr = localStorage.getItem('userData')
+      const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+      requestUserId = storedUserData?.userId || 2
+    }
 
     const request = {
-      userId,
+      userId: requestUserId,
       requestTimestamp: '',
       data: ''
     }
