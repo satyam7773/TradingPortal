@@ -125,6 +125,148 @@ class AuthService {
 
     return response.data
   }
+
+  /**
+   * Get filtered login history (OWN or ALL)
+   */
+  async fetchLoginHistoryFiltered(userFilterType: 'OWN' | 'ALL', page: number = 0, size: number = 10): Promise<any> {
+    const userDataStr = localStorage.getItem('userData')
+    const userData = userDataStr ? JSON.parse(userDataStr) : null
+    const userId = userData?.userId || 0
+
+    const requestPayload = {
+      userId,
+      requestTimestamp: Date.now().toString(),
+      data: 'login-history-request'
+    }
+
+    const response = await apiClient.post<{ data: any }>(
+      `${this.baseUrl}/login/history`,
+      requestPayload,
+      {
+        params: { userFilterType, page, size }
+      }
+    )
+
+    return response.data
+  }
+
+  /**
+   * Search login history by username
+   */
+  async searchLoginHistory(username: string, page: number = 0, size: number = 10): Promise<any> {
+    const response = await apiClient.get<{ data: any }>(
+      `${this.baseUrl}/search/login/history`,
+      {
+        params: { username, page, size }
+      }
+    )
+
+    return response.data
+  }
+
+  /**
+   * Fetch user login history by date range
+   */
+  async fetchUserLoginHistoryByDateRange(
+    fromDate: string,
+    toDate: string,
+    page: number = 0,
+    size: number = 10
+  ): Promise<any> {
+    const userDataStr = localStorage.getItem('userData')
+    const userData = userDataStr ? JSON.parse(userDataStr) : null
+    const userId = userData?.userId || 0
+
+    // Convert datetime-local format to "YYYY-MM-DD HH:MM:SS" format
+    const fromDateTime = fromDate ? new Date(fromDate).toLocaleString('en-CA', { 
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(',', '') : ''
+
+    const toDateTime = toDate ? new Date(toDate).toLocaleString('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(',', '') : ''
+
+    const requestPayload = {
+      userId,
+      requestTimestamp: Date.now().toString(),
+      data: {
+        fromDate: fromDateTime,
+        toDate: toDateTime,
+        page,
+        size
+      }
+    }
+
+    const response = await apiClient.post<{ data: any }>(
+      `${this.baseUrl}/login/history/uId`,
+      requestPayload
+    )
+
+    return response.data
+  }
+
+  /**
+   * Fetch login history for a specific user
+   */
+  async fetchUserLoginHistoryByUserId(
+    userId: number,
+    page: number = 0,
+    size: number = 10,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<any> {
+    // Convert datetime-local format to "YYYY-MM-DD HH:MM:SS" format if provided
+    const fromDateTime = fromDate ? new Date(fromDate).toLocaleString('en-CA', { 
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(',', '') : ''
+
+    const toDateTime = toDate ? new Date(toDate).toLocaleString('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(',', '') : ''
+
+    const requestPayload = {
+      userId,
+      requestTimestamp: Date.now().toString(),
+      data: {
+        ...(fromDateTime && { fromDate: fromDateTime }),
+        ...(toDateTime && { toDate: toDateTime }),
+        page,
+        size
+      }
+    }
+
+    const response = await apiClient.post<{ data: any }>(
+      `${this.baseUrl}/login/history/uId`,
+      requestPayload
+    )
+
+    return response.data
+  }
 }
 
 export const authService = new AuthService()

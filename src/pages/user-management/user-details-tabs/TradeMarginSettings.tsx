@@ -21,6 +21,7 @@ interface TradeMarginItem {
 
 const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
   const [selectedExchange, setSelectedExchange] = useState<string>('');
+  const [marginTypeFilter, setMarginTypeFilter] = useState<string>('percentage'); // percentage, amount
   const [marginInput, setMarginInput] = useState<string>('');
   const [cfMarginInput, setCfMarginInput] = useState<string>('');
   const [minVolumeInput, setMinVolumeInput] = useState<string>('');
@@ -213,10 +214,10 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
   };
 
   const toggleSelectAll = () => {
-    if (selectedItems.size === marginData.length) {
+    if (selectedItems.size === filteredMarginData.length) {
       setSelectedItems(new Set());
     } else {
-      setSelectedItems(new Set(marginData.map((_, idx) => idx)));
+      setSelectedItems(new Set(filteredMarginData.map((_, idx) => idx)));
     }
   };
 
@@ -229,6 +230,16 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     }
     setSelectedItems(newSelected);
   };
+
+  // Filter marginData based on marginTypeFilter
+  const filteredMarginData = React.useMemo(() => {
+    if (marginTypeFilter === 'percentage') {
+      return marginData.filter(item => item.marginPercentage === true);
+    } else if (marginTypeFilter === 'amount') {
+      return marginData.filter(item => item.marginPercentage === false);
+    }
+    return marginData;
+  }, [marginData, marginTypeFilter]);
 
   return (
     <FilterLayout
@@ -259,7 +270,19 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-slate-600 dark:text-slate-300 block">Margin (%) :</label>
+            <label className="text-xs text-slate-600 dark:text-slate-300 block">Margin Type :</label>
+            <select
+              value={marginTypeFilter}
+              onChange={(e) => setMarginTypeFilter(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+            >
+              <option value="percentage">Percentage (%)</option>
+              <option value="amount">Amount (Rs)</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-slate-600 dark:text-slate-300 block">Margin (Rs/%) :</label>
             <input
               type="text"
               value={marginInput}
@@ -304,7 +327,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
 
           {selectedExchange === 'CALLPUT' && (
             <div className="space-y-1">
-              <label className="text-xs text-slate-600 dark:text-slate-300 block">Callput Margin (%) :</label>
+              <label className="text-xs text-slate-600 dark:text-slate-300 block">Callput Margin (Rs/%) :</label>
               <input
                 type="text"
                 value={callputMarginInput}
@@ -352,32 +375,32 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                     <th className="px-3 py-3 min-w-[80px]">
                       <input
                         type="checkbox"
-                        checked={selectedItems.size === marginData.length && marginData.length > 0}
+                        checked={selectedItems.size === filteredMarginData.length && filteredMarginData.length > 0}
                         onChange={toggleSelectAll}
                         className="cursor-pointer"
                       />
                     </th>
                     <th className="px-3 py-3 min-w-[150px]">Script Name</th>
                     <th className="px-3 py-3 min-w-[120px]">Lot Size</th>
-                    <th className="px-3 py-3 min-w-[130px]">Margin %</th>
+                    <th className="px-3 py-3 min-w-[130px]">Margin</th>
                     <th className="px-3 py-3 min-w-[120px]">CF Margin</th>
                     <th className="px-3 py-3 min-w-[130px]">Min Volume</th>
                     <th className="px-3 py-3 min-w-[130px]">Volume Step</th>
                     {selectedExchange === 'CALLPUT' && (
-                      <th className="px-3 py-3 min-w-[150px]">Callput Margin %</th>
+                      <th className="px-3 py-3 min-w-[150px]">Callput Margin</th>
                     )}
                     <th className="px-3 py-3 min-w-[150px]">Expiry Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
-                  {marginData.length === 0 ? (
+                  {filteredMarginData.length === 0 ? (
                     <tr>
                       <td colSpan={selectedExchange === 'CALLPUT' ? 9 : 8} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                         No margin settings found for {selectedExchange}
                       </td>
                     </tr>
                   ) : (
-                    marginData.map((item, idx) => (
+                    filteredMarginData.map((item, idx) => (
                       <tr
                         key={idx}
                         className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors"
@@ -392,12 +415,12 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                         </td>
                         <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{item.scripName || '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.lotSize != null ? Number(item.lotSize) : '-'}</td>
-                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.margin != null ? Number(item.margin).toFixed(2) : '-'}%</td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.marginPercentage ? '' : 'Rs '}{item.margin != null ? Number(item.margin).toFixed(2) : '-'}{item.marginPercentage ? '%' : ''}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.cfMargin != null ? Number(item.cfMargin).toFixed(2) : '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.minVolume != null ? Number(item.minVolume) : '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.volumeStep != null ? Number(item.volumeStep) : '-'}</td>
                         {selectedExchange === 'CALLPUT' && (
-                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.callputMargin != null ? Number(item.callputMargin).toFixed(2) + '%' : '-'}</td>
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.callputMargin != null ? (item.callputMarginPercentage ? '' : 'Rs ') + Number(item.callputMargin).toFixed(2) + (item.callputMarginPercentage ? '%' : '') : '-'}</td>
                         )}
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
                           {item.expiry ? new Date(item.expiry).toLocaleDateString() : '-'}

@@ -5,7 +5,9 @@ import {
   DashboardPage,
   Markets,
   Orders,
+  Trades,
   Portfolio,
+  Positions,
   UserList,
   UserDetails,
   ApiTestPage,
@@ -37,6 +39,8 @@ const App: React.FC = () => {
           <Route path="login-history" element={<LoginHistory />} />
           <Route path="groups" element={<Groups />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="trades" element={<Trades />} />
+          <Route path="positions" element={<Positions />} />
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="user-list" element={<UserList />} />
           <Route path="user-details/:userId" element={<UserDetails />} />

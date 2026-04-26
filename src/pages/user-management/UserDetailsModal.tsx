@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { tabLoaders } from './user-details-tabs';
 import UserDetailsTab from './UserDetailsTab';
+import IntradaySquareOffModal from './IntradaySquareOffModal';
+import MarketTradeRightsModal from './MarketTradeRightsModal';
 import { createPortal } from 'react-dom';
 import { User, Edit, X, Shield, Settings, Clock, MoreHorizontal, Lock, Share2, AlertCircle } from 'lucide-react';
 import { userManagementService } from '../../services';
@@ -35,6 +37,8 @@ interface UserData {
   ipAddress: string;
   deviceId: string;
   lastLogin: string;
+  isActive: boolean;
+  isTradeLock: boolean;
 }
 
 interface UserDetailsModalProps {
@@ -108,6 +112,8 @@ interface ChildUser {
   userSettingsToggles: ToggleSetting[];
   parentName: string;
   parentUsername: string;
+  isActive: boolean;
+  isTradeLock: boolean;
 }
 
 interface UserDetailsResponse {
@@ -150,6 +156,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const [selectedChildUser, setSelectedChildUser] = useState<UserData | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
+  const [selectedUserForIntradaySquareOff, setSelectedUserForIntradaySquareOff] = useState<any>(null);
+  const [showIntradaySquareOffModal, setShowIntradaySquareOffModal] = useState(false);
   const [selectedUserForPasswordChange, setSelectedUserForPasswordChange] = useState<any>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedUserForSharingDetails, setSelectedUserForSharingDetails] = useState<any>(null);
@@ -161,6 +169,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const [creditNote, setCreditNote] = useState('');
   const [isSubmittingCredit, setIsSubmittingCredit] = useState(false);
   const [creditError, setCreditError] = useState('');
+  const [selectedUserForMarketTradeRights, setSelectedUserForMarketTradeRights] = useState<any>(null);
+  const [showMarketTradeRightsModal, setShowMarketTradeRightsModal] = useState(false);
   const actionMenuRef = React.useRef<HTMLDivElement>(null);
   const actionMenuButtonRefs = React.useRef<{ [key: string]: HTMLButtonElement | null }>({});
   // removed activeMenuName; we use activeTab for dynamic menu tabs
@@ -423,6 +433,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         } else if (showPasswordModal) {
           setShowPasswordModal(false);
           setSelectedUserForPasswordChange(null);
+        } else if (showMarketTradeRightsModal) {
+          setShowMarketTradeRightsModal(false);
+          setSelectedUserForMarketTradeRights(null);
         } else {
           onClose();
         }
@@ -431,7 +444,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
-  }, [showAddCreditsModal, showSharingModal, showPasswordModal, onClose]);
+  }, [showAddCreditsModal, showSharingModal, showPasswordModal, showMarketTradeRightsModal, onClose]);
 
   if (!user) return null;
 
@@ -491,7 +504,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       createdDate: formatDate(apiUser.createdAt),
       ipAddress: apiUser.ipAddress || 'N/A',
       deviceId: apiUser.deviceId || 'N/A',
-      lastLogin: formatDate(apiUser.lastLoginDate)
+      lastLogin: formatDate(apiUser.lastLoginDate),
+      isActive: apiUser.isActive ?? true,
+      isTradeLock: apiUser.isTradeLock ?? false
     };
   };
 
@@ -1010,73 +1025,162 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const actionMenuPortal = actionMenuPosition && actionMenuUserId && createPortal(
     <div 
       ref={actionMenuRef}
-      className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl overflow-hidden"
+      className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl overflow-auto max-h-96"
       style={{
-        left: `100px`,
-        top: `${actionMenuPosition.y + 8}px`,
+        left: `${Math.min(actionMenuPosition.x, window.innerWidth - 240)}px`,
+        top: (() => {
+          // Estimate menu height based on number of buttons (~36px per button)
+          const selectedChildUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+          const isMaster = getRoleType(selectedChildUser?.roleId || 4) === 'Master';
+          const estimatedMenuHeight = isMaster ? 220 : 480;
+          const spaceBelow = window.innerHeight - actionMenuPosition.y - 40;
+          const spaceAbove = actionMenuPosition.y;
+          
+          // If there's enough space below, position downward
+          if (spaceBelow >= estimatedMenuHeight) {
+            return `${actionMenuPosition.y + 8}px`;
+          }
+          // If there's not enough space below but enough above, position upward
+          else if (spaceAbove >= estimatedMenuHeight) {
+            return `${actionMenuPosition.y - estimatedMenuHeight - 8}px`;
+          }
+          // If not enough space either way, prioritize the direction with more space
+          else if (spaceBelow >= spaceAbove) {
+            return `${actionMenuPosition.y + 8}px`;
+          } else {
+            return `${actionMenuPosition.y - Math.min(estimatedMenuHeight, spaceAbove) - 8}px`;
+          }
+        })(),
         zIndex: 10000 + depth * 1000 + 50
       }}
     >
-      <button 
-        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
-        onClick={() => {
-          const user = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
-          if (user) {
-            setSelectedUserForPasswordChange(user);
-            setShowPasswordModal(true);
-            setActionMenuPosition(null);
-            setActionMenuUserId(null);
-          }
-        }}
-      >
-        <span>📝</span> Change Password
-      </button>
-      <button 
-        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
-        onClick={() => {
-          const user = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
-          if (user) {
-            setSelectedUserForSharingDetails(user);
-            setShowSharingModal(true);
-            setActionMenuPosition(null);
-            setActionMenuUserId(null);
-          }
-        }}
-      >
-        <span>📊</span> Share Details
-      </button>
-      <button 
-        className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
-        onClick={() => {
-          const apiUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
-          if (apiUser) {
-            const user = transformChildUser(apiUser);
-            setSelectedUserForAddCredits(user);
-            setShowAddCreditsModal(true);
-            // Clear all form values when opening modal
-            setCreditTransType('Credit');
-            setCreditAmount('');
-            setCreditNote('');
-            setCreditError('');
-            setActionMenuPosition(null);
-            setActionMenuUserId(null);
-          }
-        }}
-      >
-        <span>💰</span> Add Credit
-      </button>
-      <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-        <span>💰</span> Account Limit
-      </button>
-      <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-        <span>👤</span> Create User
-      </button>
-      <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-        <span>📈</span> Carry Forward Margin
-      </button>
-      <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-        <span>📊</span> Exchangewise Interest %
-      </button>
+      {(() => {
+        const selectedChildUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+        const isMaster = getRoleType(selectedChildUser?.roleId || 4) === 'Master';
+        return (
+          <>
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+              onClick={() => {
+                const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                if (selectedUser) {
+                  setSelectedUserForPasswordChange(selectedUser);
+                  setShowPasswordModal(true);
+                  setActionMenuPosition(null);
+                  setActionMenuUserId(null);
+                }
+              }}
+            >
+              <span>📝</span> Change Password
+            </button>
+            <button 
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
+              onClick={() => {
+                const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                if (selectedUser) {
+                  setSelectedUserForSharingDetails(selectedUser);
+                  setShowSharingModal(true);
+                  setActionMenuPosition(null);
+                  setActionMenuUserId(null);
+                }
+              }}
+            >
+              <span>📊</span> Share Details
+            </button>
+
+            {/* Master user options */}
+            {isMaster && (
+              <>
+                <button 
+                  onClick={() => {
+                    const apiUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                    if (apiUser) {
+                      const transformedUser = transformChildUser(apiUser);
+                      setSelectedUserForAddCredits(transformedUser);
+                      setShowAddCreditsModal(true);
+                      setCreditTransType('Credit');
+                      setCreditAmount('');
+                      setCreditNote('');
+                      setCreditError('');
+                      setActionMenuPosition(null);
+                      setActionMenuUserId(null);
+                    }
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
+                >
+                  <span>💰</span> Add Credit
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>💰</span> Account Limit
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📈</span> Carry Forward Margin
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📊</span> Exchangewise Interest %
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>👤</span> Admin Rights
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (selectedChildUser) {
+                      setSelectedUserForMarketTradeRights(selectedChildUser);
+                      setShowMarketTradeRightsModal(true);
+                    }
+                    setActionMenuUserId(null);
+                    setActionMenuPosition(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📊</span> Market Trade Rights
+                </button>
+              </>
+            )}
+
+            {/* Client user options */}
+            {!isMaster && (
+              <>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📊</span> % Margin Square off
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>🛑</span> Fresh StopLoss
+                </button>
+                <button 
+                  onClick={() => {
+                    const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                    if (selectedUser) {
+                      setSelectedUserForIntradaySquareOff(transformChildUser(selectedUser));
+                      setShowIntradaySquareOffModal(true);
+                    }
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
+                >
+                  <span>⏱️</span> Intraday SquareOff
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>🏢</span> Exchangewise Lot Limit
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📋</span> Carry Forward Option
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📈</span> Carry Forward Margin
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>📊</span> Trading Duration Rank
+                </button>
+                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                  <span>💹</span> Exchangewise Interest %
+                </button>
+              </>
+            )}
+          </>
+        );
+      })()}
     </div>,
     document.body
   );
@@ -1419,6 +1523,29 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       {changePasswordModal}
       {sharingDetailsModal}
       {addCreditsModal}
+      {showIntradaySquareOffModal && selectedUserForIntradaySquareOff && (
+        <IntradaySquareOffModal 
+          isOpen={showIntradaySquareOffModal}
+          user={selectedUserForIntradaySquareOff}
+          onClose={() => {
+            setShowIntradaySquareOffModal(false);
+            setSelectedUserForIntradaySquareOff(null);
+          }}
+        />
+      )}
+      {showMarketTradeRightsModal && selectedUserForMarketTradeRights && (
+        <MarketTradeRightsModal
+          isOpen={showMarketTradeRightsModal}
+          user={selectedUserForMarketTradeRights}
+          onClose={() => {
+            setShowMarketTradeRightsModal(false);
+            setSelectedUserForMarketTradeRights(null);
+          }}
+          onSave={async () => {
+            // Optionally refetch user details if needed
+          }}
+        />
+      )}
       {selectedChildUser && (
         <UserDetailsModal 
           user={selectedChildUser}

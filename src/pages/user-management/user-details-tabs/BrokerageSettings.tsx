@@ -29,6 +29,8 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [allowedExchanges, setAllowedExchanges] = useState<string[]>([]);
   const [loadingExchanges, setLoadingExchanges] = useState(false);
+  const [isForAllUsers, setIsForAllUsers] = useState(false);
+  const prevSettingTypeRef = React.useRef<string>('TURNOVER WISE SETTING');
 
   // Filter fields for Turnover Wise Setting
   const [brokeragePerLac, setBrokeragePerLac] = useState<string>('');
@@ -39,6 +41,7 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
   // Filter fields for Callput brokerage
   const [callputBrokeragePerLac, setCallputBrokeragePerLac] = useState<string>('');
   const [callputBrokerageRs, setCallputBrokerageRs] = useState<string>('');
+  const isInitializedRef = React.useRef<boolean>(false);
 
   // Fetch allowed exchanges based on datatype (TURNOVER or LOT)
   const fetchAllowedExchanges = async (datatype: string) => {
@@ -76,13 +79,15 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
         console.log(`✅ Allowed exchanges for ${datatype}:`, exchangesArray);
         setAllowedExchanges(exchangesArray);
 
-        // Set first exchange as default and fetch brokerage settings for it
-        const firstExchange = exchangesArray[0];
-        console.log(`🔄 Setting first exchange as default:`, firstExchange);
-        setSelectedExchange(firstExchange);
-
-        // Call fetchBrokerageSettings with the first exchange
-        await fetchBrokerageSettingsForExchange(firstExchange);
+        // Only set first exchange as default if no exchange is currently selected
+        // This prevents refreshing data when updating
+        if (!selectedExchange || !exchangesArray.includes(selectedExchange)) {
+          const firstExchange = exchangesArray[0];
+          console.log(`🔄 Setting first exchange as default:`, firstExchange);
+          setSelectedExchange(firstExchange);
+          // Call fetchBrokerageSettings with the first exchange
+          await fetchBrokerageSettingsForExchange(firstExchange);
+        }
       } else {
         console.warn('No exchanges found. Response was:', response);
         setAllowedExchanges([]);
@@ -98,13 +103,26 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
 
   // Fetch allowed exchanges when component mounts or setting type changes
   useEffect(() => {
-    // Clear brokerage data when switching tabs so fresh data can be loaded
-    setBrokerageData([]);
-    setSelectedItems(new Set());
+    // Only clear and reload when settingType actually changes, not on every render
+    if (prevSettingTypeRef.current !== settingType) {
+      console.log(`🔄 Setting type changed from ${prevSettingTypeRef.current} to ${settingType}, clearing data...`);
+      setBrokerageData([]);
+      setSelectedItems(new Set());
+      prevSettingTypeRef.current = settingType;
 
-    const datatype = settingType === 'TURNOVER WISE SETTING' ? 'TURNOVER' : 'PER_LOT';
-    fetchAllowedExchanges(datatype);
-  }, [settingType, user?.id]);
+      const datatype = settingType === 'TURNOVER WISE SETTING' ? 'TURNOVER' : 'PER_LOT';
+      fetchAllowedExchanges(datatype);
+    }
+  }, [settingType]);
+
+  // Initialize on component mount
+  useEffect(() => {
+    if (!isInitializedRef.current) {
+      isInitializedRef.current = true;
+      const datatype = settingType === 'TURNOVER WISE SETTING' ? 'TURNOVER' : 'PER_LOT';
+      fetchAllowedExchanges(datatype);
+    }
+  }, []);
 
   // Fetch brokerage settings for a specific exchange
   const fetchBrokerageSettingsForExchange = async (exchange: string) => {
@@ -129,7 +147,12 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
           brokeragePerLotFlag: item.brokeragePerLotFlag || false,
           brokerageTurnoverFlag: item.brokerageTurnoverFlag || false,
           turnoverWiseBrokerage: item.brokerageTurnoverFlag ? item.brokerageTurnover : null,
-          parentTurnoverWiseBrokerage: item.brokerageTurnoverFlag ? item.parentBrokerageTurnover : null
+          parentTurnoverWiseBrokerage: item.brokerageTurnoverFlag ? item.parentBrokerageTurnover : null,
+          // Add callput fields from API response
+          callputBrokeragePerLot: item.callputBrokeragePerLot || 0,
+          callputBrokeragePerLotFlag: item.callputBrokeragePerLotFlag || false,
+          callputBrokerageTurnover: item.callputBrokerageTurnover || 0,
+          callputBrokerageTurnoverFlag: item.callputBrokerageTurnoverFlag || false
         }));
         console.log(`✅ Brokerage data loaded for ${exchange}:`, mappedData);
         setBrokerageData(mappedData);
@@ -318,23 +341,13 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
 
       console.log('📤 Sending update request:', payload);
 
-      const response = await userManagementService.updateBrokerageSettings(payload);
+      const response = await userManagementService.updateBrokerageSettings(payload, isForAllUsers);
       console.log('response',response)
       if (response?.responseCode === '0') {
         toast.success(`Updated ${selectedItems.size} scripts successfully`);
 
-        // Refresh the data after successful update
-        console.log('🔄 Refreshing brokerage data...');
-        await fetchBrokerageSettingsForExchange(selectedExchange);
-
-        // Clear selection after update
+        // Clear selection after update (but keep input fields for next batch)
         setSelectedItems(new Set());
-        
-        // Clear input fields
-        setBrokeragePerLac('');
-        setBrokerageRs('');
-        setCallputBrokeragePerLac('');
-        setCallputBrokerageRs('');
       } else {
         toast.error(response?.responseMessage || 'Failed to update brokerage settings');
       }
@@ -352,7 +365,70 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
       return;
     }
 
-    toast('Update to all users functionality to be implemented');
+    try {
+      setLoading(true);
+
+      const userDataStr = localStorage.getItem('userData');
+      const storedUserData = userDataStr ? JSON.parse(userDataStr) : null;
+      const loggedInUserId = storedUserData?.userId || user?.id;
+
+      const selectedBrokerages = Array.from(selectedItems).map((idx) => {
+        const item = brokerageData[idx];
+        
+        const payload: any = {
+          instrumentId: item.instrumentId || 2,
+          brokeragePerLot: item.brokerageRs || 0,
+          brokeragePerLotFlag: item.brokeragePerLotFlag,
+          brokerageTurnoverFlag: item.brokerageTurnoverFlag,
+          brokerageTurnover: item.turnoverWiseBrokerage || 0,
+        };
+        
+        // Add callput fields if exchange is CALLPUT
+        if (selectedExchange === 'CALLPUT') {
+          payload.callputBrokeragePerLot = item.callputBrokeragePerLot || 0;
+          payload.callputBrokeragePerLotFlag = item.callputBrokeragePerLotFlag || false;
+          payload.callputBrokerageTurnover = item.callputBrokerageTurnover || 0;
+          payload.callputBrokerageTurnoverFlag = item.callputBrokerageTurnoverFlag || false;
+        }
+        
+        return payload;
+      });
+
+      // Build the request payload
+      const payload = {
+        userId: Number(loggedInUserId), // Logged-in user (parent level)
+        requestTimestamp: Date.now().toString(),
+        data: {
+          userId: Number(userDetails?.id || user?.id), // User whose settings are being updated
+          brokerages: selectedBrokerages
+        }
+      };
+
+      console.log('📤 Sending update to all users request:', payload);
+
+      const response = await userManagementService.updateBrokerageSettings(payload, true);
+      console.log('response', response);
+      
+      if (response?.responseCode === '0') {
+        toast.success(`Updated ${selectedItems.size} scripts for all users successfully`);
+
+        // Clear selection after update
+        setSelectedItems(new Set());
+        
+        // Clear input fields
+        setBrokeragePerLac('');
+        setBrokerageRs('');
+        setCallputBrokeragePerLac('');
+        setCallputBrokerageRs('');
+      } else {
+        toast.error(response?.responseMessage || 'Failed to update brokerage settings for all users');
+      }
+    } catch (error: any) {
+      console.error('❌ Error updating brokerage settings for all users:', error);
+      toast.error(error?.message || 'Failed to update brokerage settings for all users');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleSelectAll = () => {
