@@ -139,18 +139,29 @@ const AddCredits: React.FC<AddCreditsProps> = ({ user, userDetails, onClose, onT
                   return
                 }
 
-                // Prepare payload
-                const payload: { amount: number; userId: number; comments?: string; type: 'CREDIT' | 'DEBIT' } = {
+                // Get logged-in user ID from localStorage (the operator making the request)
+                const userDataStr = localStorage.getItem('userData')
+                const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+                const operatorUserId = storedUserData?.userId
+                
+                if (!operatorUserId) {
+                  toast.error('Unable to determine logged-in user')
+                  return
+                }
+
+                // Prepare inner payload data with target user's ID
+                const payloadData = {
                   amount,
-                  userId: Number(user?.id) || 0,
+                  userId: Number(user?.id) || 0, // Target user's ID (different from operator)
                   comments: creditComment || '',
                   type: creditTransType === 'Credit' ? 'CREDIT' : 'DEBIT'
                 }
 
                 try {
                   toast.loading('Submitting request...', { id: 'add-credit' })
-                  const operatorUserId = userDetails?.userProfile?.userId
-                  const res = await userManagementService.manageCredits(payload, operatorUserId)
+                  console.log('📤 Manage Credits Request:', { operatorUserId, targetUserId: user?.id, payloadData })
+                  // Service will construct full request with requestTimestamp, userId (operator), and data
+                  const res = await userManagementService.manageCredits(payloadData, operatorUserId)
                   toast.dismiss('add-credit')
 
                   // Normalize responseCode/message from various shapes that the API or axios could return

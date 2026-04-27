@@ -12,7 +12,8 @@ import {
   UserDetails,
   ApiTestPage,
   SearchUser,
-  FileUploadPage
+  FileUploadPage,
+  ProfitLoss
 } from './pages'
 import CreateNewUser from './pages/user-management/CreateNewUser'
 import MarketWatch from './pages/dashboard/MarketWatch'
@@ -38,6 +39,7 @@ const App: React.FC = () => {
           <Route path="market-watch" element={<MarketWatch />} />
           <Route path="login-history" element={<LoginHistory />} />
           <Route path="groups" element={<Groups />} />
+          <Route path="profit-loss" element={<ProfitLoss />} />
           <Route path="orders" element={<Orders />} />
           <Route path="trades" element={<Trades />} />
           <Route path="positions" element={<Positions />} />

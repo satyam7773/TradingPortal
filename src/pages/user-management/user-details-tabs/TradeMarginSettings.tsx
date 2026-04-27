@@ -68,6 +68,10 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
       console.error('Failed to fetch trade margin settings:', error);
       toast.error(error?.message || 'Failed to fetch margin settings');
       setMarginData([]);
+      // Refresh user list to show latest values
+      if (onRefresh) {
+        onRefresh();
+      }
     } finally {
       setLoading(false);
     }
@@ -193,12 +197,38 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         setMinVolumeInput('');
         setVolumeStepInput('');
         setCallputMarginInput('');
+      } else if (response?.responseCode === '1032') {
+        // Specific validation error for parent margin
+        toast.error(response?.responseMessage || 'Trade Margin cannot be less than parent trade margin');
+        console.warn('⚠️ Validation Error - Parent Margin:', response?.responseMessage);
+        // Refresh to show latest server values
+        try {
+          await fetchMarginSettings();
+        } catch (err) {
+          console.error('Failed to refresh after validation error:', err);
+        }
+        if (onRefresh) {
+          onRefresh();
+        }
       } else {
         toast.error(response?.responseMessage || 'Failed to update trade margin settings');
+        // Refresh to show latest server values on any error
+        try {
+          await fetchMarginSettings();
+        } catch (err) {
+          console.error('Failed to refresh after error:', err);
+        }
+        if (onRefresh) {
+          onRefresh();
+        }
       }
     } catch (error: any) {
       console.error('❌ Error updating trade margin settings:', error);
       toast.error(error?.message || 'Failed to update trade margin settings');
+      // Refresh user list to show latest values
+      if (onRefresh) {
+        onRefresh();
+      }
     } finally {
       setLoading(false);
     }

@@ -16,6 +16,8 @@ interface TradeData {
   lotSize: number
   netQuantity: number
   lotValue: number
+  actualLotSize?: number
+  actualLotValue?: number
   price: number
   referencePrice: number
   pnl?: number
@@ -40,7 +42,7 @@ interface TradesResponse {
 interface UserData {
   id: string
   username: string
-  name?: string
+  name: string
   type?: 'Client' | 'Master' | 'Admin'
   parent?: string
   credit?: number
@@ -302,7 +304,7 @@ const Trades: React.FC = () => {
         setSelectedUser({
           id: userData.id || userId.toString(),
           username: userData.username || username,
-          name: userData.name,
+          name: userData.name || userData.username || username || 'Unknown',
           type: userData.type,
           parent: userData.parent,
           credit: userData.credit,
@@ -585,10 +587,10 @@ const Trades: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-4 py-3.5 text-center text-sm text-slate-700 dark:text-slate-300 font-medium">
-                            {trade.netQuantity || trade.lotSize || '-'}
+                            {trade.actualLotSize || trade.netQuantity || trade.lotSize || '-'}
                           </td>
                           <td className="px-4 py-3.5 text-right text-sm text-slate-800 dark:text-slate-200 font-semibold">
-                            {trade.lotValue && trade.lotValue > 0 ? trade.lotValue.toFixed(0) : '-'}
+                            {trade.actualLotValue && trade.actualLotValue > 0 ? trade.actualLotValue.toFixed(0) : (trade.lotValue && trade.lotValue > 0 ? trade.lotValue.toFixed(0) : '-')}
                           </td>
                           <td className="px-4 py-3.5 text-right text-sm text-slate-800 dark:text-slate-200 font-semibold">
                             {trade.price && trade.price > 0 ? `${trade.price.toFixed(2)}` : '-'}
@@ -631,43 +633,6 @@ const Trades: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
-<<<<<<< HEAD
-=======
-
-                {/* Pagination Footer */}
-                <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-slate-600 dark:text-slate-400">
-                      Showing <span className="font-semibold text-slate-900 dark:text-white">{currentPage * pageSize + 1}</span> to{' '}
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {Math.min((currentPage + 1) * pageSize, totalRecords)}
-                      </span>{' '}
-                      of <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> trades
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 0}
-                        className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition inline-flex items-center gap-2 shadow-sm"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                        Previous
-                      </button>
-                      <span className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                        Page {currentPage + 1} of {totalPages}
-                      </span>
-                      <button
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage >= totalPages - 1}
-                        className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition inline-flex items-center gap-2 shadow-sm"
-                      >
-                        Next
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
->>>>>>> copilot/vscode-mofdpmlg-ev3z
               </>
             )}
           </div>

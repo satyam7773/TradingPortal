@@ -473,7 +473,7 @@ class UserManagementService {
   /**
    * Fetch exchanges
    */
-  async fetchExchanges(userId?: number | string): Promise<Array<{name: string; turnover: boolean; lot: boolean; groupId: number}>> {
+  async fetchExchanges(userId?: number | string): Promise<Array<{name: string; turnover: boolean; lot: boolean; groupId: number; intraDaySquareOff?: boolean}>> {
     // Use provided userId, convert to number if string, otherwise get from localStorage
     let requestUserId: number
     
@@ -497,6 +497,30 @@ class UserManagementService {
       data: Array<{name: string; turnover: boolean; lot: boolean; groupId: number}> 
     }>(
       `${this.baseUrl}/portal/exchanges`,
+      request
+    )
+
+    return response.data
+  }
+
+  /**
+   * Update IntraDay SquareOff settings for user exchanges
+   */
+  async updateIntraDaySquareOff(userId: number | string, exchangeData: any[]): Promise<any> {
+    const requestUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+
+    const request = {
+      userId: requestUserId,
+      requestTimestamp: '',
+      data: exchangeData
+    }
+
+    const response = await apiClient.post<{
+      responseCode: string;
+      responseMessage: string;
+      data: any;
+    }>(
+      `${this.baseUrl}/settings/updateIntraDaySquareOff`,
       request
     )
 
@@ -835,6 +859,28 @@ class UserManagementService {
       return response
     } catch (error) {
       console.error('❌ Failed to cancel multiple orders:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Fetch Profit & Loss data for user
+   * @param userId - The user ID to fetch P&L for
+   * @param userFilterType - 'ALL' for all sub-users, 'SINGLE' for specific user
+   */
+  async fetchProfitAndLoss(userId: number, userFilterType: 'ALL' | 'SINGLE' = 'ALL'): Promise<any> {
+    try {
+      const endpoint = `https://api-staging.rivoplus.live/oms/api/v1/pnl/user/${userId}?userFIlterType=${userFilterType}`
+      
+      console.log('📊 Fetching P&L data:', { userId, userFilterType, endpoint })
+      
+      const response = await apiClient.get<any>(endpoint)
+      
+      console.log('✅ P&L data received:', response)
+      
+      return response
+    } catch (error: any) {
+      console.error('❌ Failed to fetch P&L data:', error)
       throw error
     }
   }

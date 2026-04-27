@@ -18,6 +18,7 @@ const IntradaySquareOffModal: React.FC<IntradaySquareOffModalProps> = ({
   onSave 
 }) => {
   const [intradayExchanges, setIntradayExchanges] = useState<Record<string, boolean>>({});
+  const [exchangeData, setExchangeData] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,15 +31,13 @@ const IntradaySquareOffModal: React.FC<IntradaySquareOffModalProps> = ({
   const fetchExchanges = async () => {
     try {
       setIsLoading(true);
-<<<<<<< HEAD
       // Extract userId from user object (could be id or userId)
       const userId = user?.id || user?.userId;
       const response = await userManagementService.fetchExchanges(userId);
-=======
-      const response = await userManagementService.fetchExchanges();
->>>>>>> copilot/vscode-mofdpmlg-ev3z
       
       if (Array.isArray(response)) {
+        // Store full exchange data for API update
+        setExchangeData(response);
         // Transform exchange array to Record<string, boolean>
         // Initialize with the intraDaySquareOff value from API
         const exchangesMap: Record<string, boolean> = {};
@@ -60,9 +59,24 @@ const IntradaySquareOffModal: React.FC<IntradaySquareOffModalProps> = ({
   const handleSave = async () => {
     try {
       setIsSaving(true);
+      
+      // Build updated exchange data with new intraDaySquareOff values
+      const updatedExchanges = exchangeData.map((exchange) => ({
+        ...exchange,
+        intraDaySquareOff: intradayExchanges[exchange.name] || false
+      }));
+      
+      // Extract userId from user object
+      const userId = user?.id || user?.userId;
+      
+      // Call API to update settings
+      await userManagementService.updateIntraDaySquareOff(userId, updatedExchanges);
+      
+      // Call onSave callback if provided
       if (onSave) {
         await onSave(intradayExchanges);
       }
+      
       toast.success('Intraday SquareOff settings saved successfully');
       onClose();
     } catch (error: any) {
