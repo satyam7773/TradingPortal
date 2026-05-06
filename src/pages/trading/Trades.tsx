@@ -132,6 +132,15 @@ const Trades: React.FC = () => {
     loadInitialData()
   }, [])
 
+  useEffect(() => {
+  // We wait for initial metadata (users/exchanges) to finish loading
+  // and ensure we actually have exchanges to select from.
+  if (!initialLoading && exchanges.length > 0 && selectedExchange) {
+    console.log('🚀 Auto-triggering trade view for exchange:', selectedExchange);
+    handleView();
+  }
+}, [initialLoading, exchanges]);
+
   // Fetch symbols when exchange changes
   useEffect(() => {
     if (!selectedExchange) return
@@ -391,7 +400,7 @@ const Trades: React.FC = () => {
                   }}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-300/50 dark:border-slate-600/50 text-sm bg-white/80 dark:bg-slate-700/60 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all backdrop-blur-sm font-medium shadow-sm"
                 >
-                  <option value="all">All Users</option>
+                  {/* <option value="all">All Users</option> */}
                   {users.map((user) => (
                     <option key={user.userId} value={user.userId}>
                       {user.userName}
@@ -407,7 +416,7 @@ const Trades: React.FC = () => {
                   onChange={(e) => setSelectedExchange(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-300/50 dark:border-slate-600/50 text-sm bg-white/80 dark:bg-slate-700/60 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all backdrop-blur-sm font-medium shadow-sm"
                 >
-                  <option value="">All Exchanges</option>
+                  {/* <option value="">All Exchanges</option> */}
                   {exchanges.map((exchange) => (
                     <option key={exchange.name} value={exchange.name}>
                       {exchange.name}

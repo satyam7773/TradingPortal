@@ -25,6 +25,8 @@ import TradeAccount from './pages/reports/TradeAccount'
 import Settlement from './pages/reports/Settlement'
 import AppLayout from './components/layout/AppLayout'
 import ScrollToTop from './components/common/ScrollToTop'
+import M2MReport from './pages/dashboard/M2MReport'
+import RejectionLog from './pages/dashboard/RejectionLog'
 
 const App: React.FC = () => {
   return (
@@ -40,6 +42,8 @@ const App: React.FC = () => {
           <Route path="login-history" element={<LoginHistory />} />
           <Route path="groups" element={<Groups />} />
           <Route path="profit-loss" element={<ProfitLoss />} />
+          <Route path="m2mReport" element={<M2MReport />} />
+          <Route path="rejection-log" element={<RejectionLog />} />
           <Route path="orders" element={<Orders />} />
           <Route path="trades" element={<Trades />} />
           <Route path="positions" element={<Positions />} />

@@ -29,6 +29,7 @@ export interface OrderUpdate {
   instrumentName?: string
   exchange?: string
   tradeSymbol?: string
+  rejectedReason?: string
   side?: 'BUY' | 'SELL'
   lotSize?: number
   margin?: number
@@ -165,7 +166,7 @@ class OrderUpdateService {
 
       case OrderStatus.REJECTED:
         toast.error(
-          `${userName}${sideEmoji} ${side} Order Rejected\n${instrumentInfo}\nQty: ${order.lotSize || 0} lots`,
+          `${userName}${sideEmoji} ${side} Order Rejected\n${instrumentInfo}\nQty: ${order.lotSize || 0} lots \nReason: ${order.rejectedReason || 'Unknown'}`,
           {
             duration: 3000,
             icon: '❌',

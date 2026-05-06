@@ -320,7 +320,16 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
 }
 
 // Convert existing sidebar menu items to horizontal menu format
-export const createExistingMenuItems = (navigate: (path: string) => void, logout: () => void): MenuItem[] => [
+export const createExistingMenuItems = (navigate: (path: string) => void, logout: () => void): MenuItem[] => {  
+
+  // Logic to get role and check if Admin
+  const userData = localStorage.getItem('userData')
+  const user = userData ? JSON.parse(userData) : null
+  const roleId = user?.roleId
+  const isAdminUser = roleId === 1 || roleId === 2 
+
+  return [
+
   {
     label: 'Dashboard',
     subItems: [
@@ -367,7 +376,7 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
       {
         label: 'M2M Profit & Loss',
         path: '/dashboard/m2m-profit-loss',
-        action: () => navigate('/dashboard/m2m-profit-loss')
+        action: () => navigate('/dashboard/m2mReport')
       },
       {
         label: 'Intraday History',
@@ -379,16 +388,13 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
         path: '/dashboard/rejection-log',
         action: () => navigate('/dashboard/rejection-log')
       },
-      {
-        label: 'Login History',
-        path: '/dashboard/login-history',
-        action: () => navigate('/dashboard/login-history')
-      },
-      {
-        label: 'Groups',
-        path: '/dashboard/groups',
-        action: () => navigate('/dashboard/groups')
-      }
+      { label: 'Login History', path: '/dashboard/login-history', action: () => navigate('/dashboard/login-history') },
+        // Only show Groups for Admin
+        ...(isAdminUser ? [{
+          label: 'Groups',
+          path: '/dashboard/groups',
+          action: () => navigate('/dashboard/groups')
+        }] : [])
     ]
   },
   {
@@ -544,11 +550,12 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
         path: '/dashboard/configure-2fa',
         action: () => navigate('/dashboard/configure-2fa')
       },
-      {
-        label: 'File Upload',
-        path: '/dashboard/file-upload',
-        action: () => navigate('/dashboard/file-upload')
-      }
+      // Only show File Upload for Admin
+        ...(isAdminUser ? [{
+          label: 'File Upload',
+          path: '/dashboard/file-upload',
+          action: () => navigate('/dashboard/file-upload')
+        }] : [])
     ]
   },
   {
@@ -562,6 +569,7 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
       }
     ]
   }
-]
+  ]
+};
 
 export default Menu

@@ -78,14 +78,14 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
-    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS' = 'MARKET',
+    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
     deviceId: string = '1234567890'
   ): Promise<PlaceOrderResponse> {
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),
       userId: loggedInUserId,
       deviceId,
-      tradeOrderMethod: 'ANDROID',
+      tradeOrderMethod: 'WEB',
       data: {
         userId: clientUserId,
         exchange,
@@ -117,14 +117,14 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
-    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS' = 'MARKET',
+    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
     deviceId: string = '1234567890'
   ): Promise<PlaceOrderResponse> {
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),
       userId: loggedInUserId,
       deviceId,
-      tradeOrderMethod: 'ANDROID',
+      tradeOrderMethod: 'WEB',
       data: {
         userId: clientUserId,
         exchange,

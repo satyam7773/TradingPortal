@@ -54,43 +54,28 @@ const BrokerageSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
         datatype
       );
 
-      console.log(`📦 Raw response:`, response);
-      console.log(`📦 Response type:`, typeof response);
-      console.log(`📦 Response keys:`, Object.keys(response || {}));
-      console.log(`📦 Response.data:`, response?.data);
-      console.log(`📦 Response.data type:`, typeof response?.data);
-      console.log(`📦 Is response.data an array?`, Array.isArray(response?.data));
-      console.log(`📦 Response as direct array?`, Array.isArray(response));
-
-      // Check if response itself is an array (since service returns response.data)
-      let exchangesArray;
-      if (Array.isArray(response)) {
-        console.log(`✅ Response IS the array directly`);
-        exchangesArray = response;
-      } else if (Array.isArray(response?.data)) {
-        console.log(`✅ Response.data IS the array`);
-        exchangesArray = response.data;
-      } else {
-        console.log(`❌ Neither response nor response.data is an array`);
-        exchangesArray = null;
-      }
+      // Extract array from response or response.data
+      const exchangesArray = Array.isArray(response) 
+        ? response 
+        : (Array.isArray(response?.data) ? response.data : null);
 
       if (Array.isArray(exchangesArray) && exchangesArray.length > 0) {
         console.log(`✅ Allowed exchanges for ${datatype}:`, exchangesArray);
         setAllowedExchanges(exchangesArray);
 
-        // Only set first exchange as default if no exchange is currently selected
-        // This prevents refreshing data when updating
-        if (!selectedExchange || !exchangesArray.includes(selectedExchange)) {
-          const firstExchange = exchangesArray[0];
-          console.log(`🔄 Setting first exchange as default:`, firstExchange);
-          setSelectedExchange(firstExchange);
-          // Call fetchBrokerageSettings with the first exchange
-          await fetchBrokerageSettingsForExchange(firstExchange);
-        }
+        // CHANGE: Always select the first exchange from the new list 
+        // and fetch its data immediately to populate the table.
+        const firstExchange = exchangesArray[0];
+        
+        console.log(`🔄 Auto-selecting first exchange:`, firstExchange);
+        setSelectedExchange(firstExchange);
+        
+        // This triggers the second API call automatically
+        await fetchBrokerageSettingsForExchange(firstExchange);
       } else {
-        console.warn('No exchanges found. Response was:', response);
+        console.warn('No exchanges found');
         setAllowedExchanges([]);
+        setBrokerageData([]); // Clear table if no exchanges exist
       }
     } catch (error: any) {
       console.error(`❌ Failed to fetch allowed exchanges:`, error);

@@ -461,6 +461,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
   // Transform child user from API to UserData format
   const transformChildUser = (apiUser: ChildUser): UserData => {
+
     // Extract toggle values from userSettingsToggles array
     const getToggleValue = (toggleName: string): boolean => {
       const toggle = apiUser.userSettingsToggles?.find(t => t.toggle === toggleName);
@@ -1096,6 +1097,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                     const apiUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (apiUser) {
                       const transformedUser = transformChildUser(apiUser);
+                      console.log('Selected user for add credits:', transformedUser);
                       setSelectedUserForAddCredits(transformedUser);
                       setShowAddCreditsModal(true);
                       setCreditTransType('Credit');

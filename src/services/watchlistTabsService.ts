@@ -19,7 +19,7 @@ export interface WatchlistTabsResponse {
 }
 
 class WatchlistTabsService {
-  private readonly baseUrl = 'https://api-staging.rivoplus.live/user-new/watchlist'
+  private readonly baseUrl = 'https://api-staging.rivoplus.live/user/watchlist'
 
   /**
    * Fetch user's watchlist tabs
@@ -128,7 +128,7 @@ class WatchlistTabsService {
     try {
       console.log('✏️ Updating Watchlist Tab:', { tabId, tabName })
 
-      const response = await fetch(`https://api-staging.rivoplus.live/user-new/api/watchlist-tabs/tab/${tabId}`, {
+      const response = await fetch(`https://api-staging.rivoplus.live/user/api/watchlist-tabs/tab/${tabId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -736,7 +736,8 @@ const CreateNewUser: React.FC = () => {
           addMaster: values.addMaster,
           changePasswordFirstLogin: values.changePasswordOnFirstLogin,
           highLowTradeLimit,
-          allowedExchanges
+          allowedExchanges,
+          marginSquareOff: values.autoSquareOff
         }
 
         console.log('📤 Update User API Payload:', updatePayload)

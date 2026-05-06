@@ -1813,7 +1813,7 @@ const MarketWatch: React.FC = () => {
                                   className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
                                   <option value="MARKET">Market</option>
                                   <option value="LIMIT">Limit</option>
-                                  {/* <option value="STOP_LOSS">Stop Loss</option> */}
+                                  <option value="SL">Stop Loss</option>
                                 </select>
                               </div>
                               <div>
@@ -1913,7 +1913,7 @@ const MarketWatch: React.FC = () => {
                                 parseInt(buyOrderQuantity),
                                 parseFloat(buyOrderPrice || liveData?.ask.toString() || '0'),
                                 config?.lotSize || 100,
-                                buyOrderType as 'MARKET' | 'LIMIT' | 'STOP_LOSS'
+                                buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
                               )
 
                               if (response?.responseCode === '0') {
@@ -2116,7 +2116,7 @@ const MarketWatch: React.FC = () => {
                                   className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
                                   <option value="MARKET">Market</option>
                                   <option value="LIMIT">Limit</option>
-                                  <option value="STOP_LOSS">Stop Loss</option>
+                                  <option value="SL">Stop Loss</option>
                                 </select>
                               </div>
                               <div>
@@ -2216,7 +2216,7 @@ const MarketWatch: React.FC = () => {
                                 parseInt(sellOrderQuantity),
                                 parseFloat(sellOrderPrice || liveData?.bid.toString() || '0'),
                                 config?.lotSize || 100,
-                                sellOrderType as 'MARKET' | 'LIMIT' | 'STOP_LOSS'
+                                sellOrderType as 'MARKET' | 'LIMIT' | 'SL'
                               )
 
                               if (response?.responseCode === '0') {

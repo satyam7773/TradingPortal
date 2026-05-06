@@ -65,14 +65,13 @@ const Groups: React.FC = () => {
         // Map exchange names to IDs (you might want to adjust this mapping based on your backend)
         const exchangeMap: Record<string, number> = {
           'NSE': 1,
-          'BSE': 2,
-          'MCX': 3,
-          'NFO': 4,
-          'SGX': 5,
-          'CDS': 6,
-          'CALLPUT': 7,
-          'OTHERS': 8
+          'MCX': 2,
+          'SGX': 3,
+          'CDS': 4,
+          'CALLPUT': 5,
+          'OTHERS': 6
         }
+
         
         const mappedExchanges = exchangeData.map(ex => ({
           id: exchangeMap[ex.name] || 0,

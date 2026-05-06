@@ -36,8 +36,9 @@ interface PositionResponse {
 }
 
 const Positions: React.FC = () => {
+  // Around line 38
+  const [selectedUserId, setSelectedUserId] = useState<number>(0)
   const [selectedUsername, setSelectedUsername] = useState<string>('All Users')
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [selectedExchange, setSelectedExchange] = useState<string>('')
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
   const [selectedToken, setSelectedToken] = useState<number | null>(null)
@@ -57,6 +58,18 @@ const Positions: React.FC = () => {
   const isAdminUser = user?.roleId === 1 || user?.roleId === 2 || user?.roleId === 3
   const orderModal = useOrderModal(isAdminUser)
 
+  const getLoggedInUserId = (): number => {
+    const userDataStr = localStorage.getItem('userData')
+    if (userDataStr) {
+      const userData = JSON.parse(userDataStr)
+      return userData.userId || 31
+    }
+    return 31
+  }
+
+  const loggedInUserId = getLoggedInUserId()
+
+
   // Load initial data (users and exchanges)
   useEffect(() => {
     const loadInitialData = async () => {
@@ -64,7 +77,7 @@ const Positions: React.FC = () => {
         setInitialLoading(true)
 
         // Fetch users/clients for trading
-        const usersResponse = await userManagementService.fetchUserClientsForTrade()
+        const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId)
         if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
           setUsers(usersResponse.data)
         }
@@ -87,6 +100,12 @@ const Positions: React.FC = () => {
 
     loadInitialData()
   }, [])
+
+  useEffect(() => {
+    if (!initialLoading && exchanges.length > 0 && selectedExchange) {
+      handleView();
+    }
+  }, [initialLoading, exchanges]);
 
   // Fetch symbols when exchange changes
   useEffect(() => {
@@ -121,19 +140,11 @@ const Positions: React.FC = () => {
 
       let userIdsToFetch: number[] = []
 
-      if (selectedUsername === 'All Users') {
-        if (users.length === 0) {
-          toast.error('No users available')
-          return
-        }
-        userIdsToFetch = users.map(u => u.id)
+      if (selectedUserId === 0) {
+        // If "All" is selected, send all user IDs except the 0 itself
+        userIdsToFetch = users.filter(u => u.userId !== 0).map(u => u.userId)
       } else {
-        const userData = users.find(u => u.name === selectedUsername)
-        if (!userData) {
-          toast.error('User not found')
-          return
-        }
-        userIdsToFetch = [userData.id]
+        userIdsToFetch = [selectedUserId]
       }
 
       console.log('📊 Fetching positions:', {
@@ -266,23 +277,13 @@ const Positions: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Username :</label>
                   <select
-                    value={selectedUsername}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setSelectedUsername(value)
-                      if (value === 'All Users') {
-                        setSelectedUserId(null)
-                      } else {
-                        const userData = users.find(u => u.name === value)
-                        setSelectedUserId(userData?.id || null)
-                      }
-                    }}
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(parseInt(e.target.value))}
                     className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="All Users">All Users</option>
                     {users.map(user => (
-                      <option key={user.id} value={user.name}>
-                        {user.name}
+                      <option key={user.userId} value={user.userId}>
+                        {user.userName}
                       </option>
                     ))}
                   </select>
@@ -424,8 +425,8 @@ const Positions: React.FC = () => {
                     </thead>
                     <tbody>
                       {filteredPositions.map((position) => (
-                        <tr 
-                          key={position.positionId} 
+                        <tr
+                          key={position.positionId}
                           className="border-b border-slate-200/70 dark:border-slate-700/70 hover:bg-blue-50/80 dark:hover:bg-slate-700/50 transition-colors duration-150 group"
                         >
                           <td className="px-4 py-3.5 text-center text-sm">

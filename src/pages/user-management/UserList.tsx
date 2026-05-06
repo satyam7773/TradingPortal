@@ -14,6 +14,9 @@ import ChangePassword from './user-details-tabs/ChangePassword';
 import SharingDetails from './user-details-tabs/SharingDetails';
 import AddCredits from './user-details-tabs/AddCredits';
 import { navigateWithScrollToTop } from '../../utils/navigation';
+import CarryForwardMarginModal from './CarryForwardMarginModal';
+import MarginSquareOffModal from './MarginSquareOffModal';
+import TradeDurationRankModal from './TradeDurationRankModal';
 
 interface UserData {
   id: string;
@@ -44,6 +47,10 @@ interface UserData {
   lastLogin: string;
   isActive: boolean;
   isTradeLock: boolean;
+  freshStopLoss: boolean;
+  freshStopLossEnabled: boolean;
+  manualOrder: boolean;
+  manualOrderEnabled: boolean;
 }
 
 interface ToggleSetting {
@@ -107,10 +114,16 @@ const UserList: React.FC = () => {
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
   const [selectedUserForIntradaySquareOff, setSelectedUserForIntradaySquareOff] = useState<any>(null);
   const [showIntradaySquareOffModal, setShowIntradaySquareOffModal] = useState(false);
+  const [showCarryForwardMarginModal, setShowCarryForwardMarginModal] = useState(false);
+  const [selectedUserForCarryForwardMargin, setSelectedUserForCarryForwardMargin] = useState(null);
   const [selectedUserForMarketTradeRights, setSelectedUserForMarketTradeRights] = useState<any>(null);
   const [showMarketTradeRightsModal, setShowMarketTradeRightsModal] = useState(false);
   const { user: loggedInUser } = useAppSelector(state => state.auth);
+  const [showMarginModal, setShowMarginModal] = useState(false);
+  const [selectedUserForMargin, setSelectedUserForMargin] = useState<any>(null);
   const { addTab, tabs, removeTab } = useTabs();
+  const [showDurationModal, setShowDurationModal] = useState(false);
+  const [selectedUserForDuration, setSelectedUserForDuration] = useState<any>(null);
 
   const clearUserListCache = useCallback(() => {
     sessionStorage.removeItem(USER_LIST_CACHE_KEY);
@@ -190,6 +203,8 @@ const UserList: React.FC = () => {
       closeOutEnabled: getToggleEnabled('closeOnly'),
       marginEnabled: getToggleEnabled('marginSquareOff'),
       statusEnabled: getToggleEnabled('status'),
+      freshStopLoss: getToggleValue('freshStopLoss'),
+      freshStopLossEnabled: getToggleEnabled('freshStopLoss'),
       creditLimitEnabled: true, // creditLimit doesn't have toggleEnabled in API
       creditBasedMarginEnabled: getToggleEnabled('creditBasedMargin'),
       createdDate: formatDate(apiUser.createdAt),
@@ -197,7 +212,9 @@ const UserList: React.FC = () => {
       deviceId: apiUser.deviceId || 'N/A',
       lastLogin: formatDate(apiUser.lastLoginDate),
       isActive: apiUser.isActive ?? true,
-      isTradeLock: apiUser.isTradeLock ?? false
+      isTradeLock: apiUser.isTradeLock ?? false,
+      manualOrder: getToggleValue('manualOrder'),
+      manualOrderEnabled: getToggleEnabled('manualOrder'),
     };
   };
 
@@ -205,10 +222,10 @@ const UserList: React.FC = () => {
     // Clear cache when logged-in user changes (logout/login with different user)
     const storedUserId = localStorage.getItem('userId');
     const currentLoggedInUserId = loggedInUser?.userId || storedUserId;
-    
+
     // Check if we have a cached userId and it differs from current user
     const cachedUserId = sessionStorage.getItem(CACHED_USER_ID_KEY);
-    
+
     if (!currentLoggedInUserId) {
       // No user logged in (logout detected) - clear all caches
       clearUserListCache();
@@ -230,21 +247,21 @@ const UserList: React.FC = () => {
     const cacheTimestamp = sessionStorage.getItem(USER_LIST_CACHE_TIME_KEY);
     const cachedFilterType = sessionStorage.getItem(USER_LIST_CACHE_FILTER_TYPE_KEY);
     const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-    
+
     if (cachedData && cacheTimestamp && cachedFilterType === userFilterType) {
       const age = Date.now() - parseInt(cacheTimestamp);
       if (age < CACHE_DURATION) {
         const cachedUsers = JSON.parse(cachedData);
         // Validate cache structure - check if it has the correct fields including sharing from pnlSharing and parentCredits
         const isValidCache = cachedUsers.length === 0 || (
-          cachedUsers[0].hasOwnProperty('betEnabled') && 
+          cachedUsers[0].hasOwnProperty('betEnabled') &&
           cachedUsers[0].hasOwnProperty('statusEnabled') &&
           cachedUsers[0].hasOwnProperty('sharing') &&
           cachedUsers[0].hasOwnProperty('parentCredits') &&
           cachedUsers[0].hasOwnProperty('isActive') &&
           cachedUsers[0].hasOwnProperty('isTradeLock')
         );
-        
+
         if (isValidCache) {
           setUsers(cachedUsers);
           setLoading(false);
@@ -291,7 +308,7 @@ const UserList: React.FC = () => {
     return () => {
       // Check if UserList tab still exists in the tabs array
       const userListTabExists = tabs.some(tab => tab.path === '/dashboard/user-list');
-      
+
       if (!userListTabExists) {
         clearUserListCache();
       }
@@ -323,7 +340,13 @@ const UserList: React.FC = () => {
         } else if (showIntradaySquareOffModal) {
           setShowIntradaySquareOffModal(false);
           setSelectedUserForIntradaySquareOff(null);
-        } else if (showMarketTradeRightsModal) {
+
+        }
+        else if (showCarryForwardMarginModal) { // Add this block
+          setShowCarryForwardMarginModal(false);
+          setSelectedUserForCarryForwardMargin(null);
+        }
+        else if (showMarketTradeRightsModal) {
           setShowMarketTradeRightsModal(false);
           setSelectedUserForMarketTradeRights(null);
         }
@@ -376,10 +399,12 @@ const UserList: React.FC = () => {
       const fieldToApiType: Record<string, string> = {
         'bet': 'bet',
         'closeOut': 'closeOnly',
+        'freshStopLoss': 'freshStopLoss',
         'margin': 'marginSquareOff',
         'status': 'status',
         'creditLimit': 'creditLimit',
-        'creditBasedMargin': 'creditBasedMargin'
+        'creditBasedMargin': 'creditBasedMargin',
+        'manualOrder': 'manualOrder'
       };
 
       // Map field names to display names
@@ -388,8 +413,10 @@ const UserList: React.FC = () => {
         'closeOut': 'Close',
         'margin': 'Margin',
         'status': 'Status',
+        'freshStopLoss': 'Fresh Stop Loss',
         'creditLimit': 'Credit Limit',
-        'creditBasedMargin': 'CBM'
+        'creditBasedMargin': 'CBM',
+        'manualOrder': 'Manual Order'
       };
 
       const apiType = fieldToApiType[field];
@@ -419,7 +446,7 @@ const UserList: React.FC = () => {
         const statusText = newValue ? 'enabled' : 'disabled';
         const successMsg = `${user.username}: ${displayName} has been successfully ${statusText}`;
         toast.success(successMsg);
-        
+
         // Update local state
         setUsers(prevUsers =>
           prevUsers.map(u =>
@@ -428,7 +455,7 @@ const UserList: React.FC = () => {
               : u
           )
         );
-        
+
         // Refetch user list to get updated data
         await refetchUserList();
       } else {
@@ -459,22 +486,20 @@ const UserList: React.FC = () => {
   const ToggleSwitch = ({ enabled, onClick, size = 'sm', disabled = false }: { enabled: boolean; onClick: () => void; size?: 'xs' | 'sm'; disabled?: boolean }) => {
     const sizeClasses = size === 'xs' ? 'w-8 h-5' : 'w-10 h-6';
     const dotClasses = size === 'xs' ? 'w-3 h-3' : 'w-4 h-4';
-    
+
     return (
-      <div 
+      <div
         onClick={disabled ? undefined : onClick}
-        className={`${sizeClasses} ${
-          disabled
-            ? 'bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 opacity-50 cursor-not-allowed'
-            : enabled 
-            ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/25 cursor-pointer hover:scale-105' 
+        className={`${sizeClasses} ${disabled
+          ? 'bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 opacity-50 cursor-not-allowed'
+          : enabled
+            ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/25 cursor-pointer hover:scale-105'
             : 'bg-gradient-to-r from-gray-300 to-gray-400 dark:from-gray-600 dark:to-gray-700 cursor-pointer hover:scale-105'
-        } rounded-full flex items-center transition-all duration-300`}
+          } rounded-full flex items-center transition-all duration-300`}
       >
-        <div 
-          className={`${dotClasses} bg-white rounded-full transform transition-all duration-300 ml-0.5 shadow-md ${
-            enabled ? 'translate-x-3.5' : 'translate-x-0'
-          }`}
+        <div
+          className={`${dotClasses} bg-white rounded-full transform transition-all duration-300 ml-0.5 shadow-md ${enabled ? 'translate-x-3.5' : 'translate-x-0'
+            }`}
         ></div>
       </div>
     );
@@ -585,216 +610,238 @@ const UserList: React.FC = () => {
             {/* Single Table with Sticky Header */}
             <table className="min-w-[1500px] w-full table-fixed border-collapse bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-none">
               <colgroup>
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '140px'}} />
-                  <col style={{width: '140px'}} />
-                  <col style={{width: '90px'}} />
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '90px'}} />
-                  <col style={{width: '100px'}} />
-                  <col style={{width: '90px'}} />
-                  <col style={{width: '60px'}} />
-                  <col style={{width: '70px'}} />
-                  <col style={{width: '70px'}} />
-                  <col style={{width: '70px'}} />
-                  <col style={{width: '70px'}} />
-                  <col style={{width: '150px'}} />
-                  <col style={{width: '140px'}} />
-                  <col style={{width: '160px'}} />
-                  <col style={{width: '150px'}} />
-                </colgroup>
-                <thead>
-                  <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sticky top-0 z-10 border-none">
-                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">Actions</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-9">Username</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Type</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Parent</th>
-                    <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Credits</th>
-                    <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Balance</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Sharing%</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Bet</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Close</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Margin</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Status</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">CBM</th>
-                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Created</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">IP Address</th>
-                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Device ID</th>
-                    <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Last Login</th>
-                  </tr>
-                </thead>
-                <tbody className="">
-                  {displayUsers.map((user, idx) => (
-                    <tr 
-                      key={user.id} 
-                      className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
-                    >
-                      <td className="px-2 py-2 text-center sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              
-                              try {
-                                const editPath = `/dashboard/create-user?mode=edit&userId=${user.id}`;
-                                
-                                // Close all existing edit tabs first
-                                const editTabsToClose = tabs.filter(tab => tab.path.includes('/dashboard/create-user?mode=edit'));
-                                editTabsToClose.forEach(tab => removeTab(tab.id));
-                                
-                                // Fetch user details
-                                const apiResponse = await userManagementService.fetchUserDetails(Number(user.id));
-                                const apiData = apiResponse?.data || {};
-                                
-                                // Flatten API response for edit form
-                                const editingUserData = {
-                                  userId: apiData.userProfile?.userId,
-                                  username: apiData.userProfile?.username || apiData.userInfo?.username,
-                                  roleId: apiData.userProfile?.roleId,
-                                  balance: apiData.userProfile?.balance,
-                                  credit: apiData.userProfile?.credits,
-                                  name: apiData.userInfo?.name,
-                                  remark: apiData.userInfo?.remarks,
-                                  createdAt: apiData.userInfo?.createdAt,
-                                  lastLoginDate: apiData.userInfo?.lastLoginDate,
-                                  ipAddress: apiData.userInfo?.ipAddress,
-                                  exchanges: apiData.userInfo?.exchanges,
-                                  allowedExchanges: apiData.userInfo?.allowedExchanges,
-                                  highLowTradeLimit: apiData.userInfo?.highLowTradeLimit,
-                                  pnlSharing: apiData.userInfo?.pnlSharing,
-                                  brkSharing: apiData.userInfo?.brkSharing,
-                                  addMaster: apiData.userInfo?.addMaster,
-                                  settings: apiData.userSettings?.settings,
-                                  menus: apiData.userSettings?.menus,
-                                };
-                                
-                                addTab({
-                                  title: `Edit ${user.username}`,
-                                  path: editPath,
-                                  icon: Edit,
-                                  cacheData: {
-                                    formData: {
-                                      isEditing: true,
-                                      editingUserId: user.id,
-                                      editingUsername: user.username,
-                                      editingUserData
-                                    }
+                <col style={{ width: '100px' }} /> {/* Actions */}
+                <col style={{ width: '140px' }} /> {/* Username */}
+                <col style={{ width: '140px' }} /> {/* Name */}
+                <col style={{ width: '90px' }} /> {/* Type */}
+                <col style={{ width: '100px' }} /> {/* Parent */}
+                <col style={{ width: '90px' }} /> {/* Credits */}
+                <col style={{ width: '100px' }} /> {/* Balance */}
+                <col style={{ width: '90px' }} /> {/* Sharing% */}
+                <col style={{ width: '60px' }} /> {/* Bet */}
+                <col style={{ width: '60px' }} /> {/* FSL -*/}
+                <col style={{ width: '60px' }} /> {/* FSL -*/}
+                <col style={{ width: '70px' }} /> {/* margin */}
+                <col style={{ width: '70px' }} /> {/* Margin */}
+                <col style={{ width: '70px' }} /> {/* Status */}
+                <col style={{ width: '70px' }} /> {/* CBM */}
+                <col style={{ width: '150px' }} /> {/* Created */}
+                <col style={{ width: '140px' }} /> {/* IP Address */}
+                <col style={{ width: '160px' }} /> {/* Device ID */}
+                <col style={{ width: '150px' }} /> {/* Last Login */}
+              </colgroup>
+              <thead>
+                <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sticky top-0 z-10 border-none">
+                  <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-9">Username</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Type</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Parent</th>
+                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Credits</th>
+                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Balance</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Sharing%</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Bet</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">FSL</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Manual</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Close</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Margin</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Status</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">CBM</th>
+                  <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Created</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">IP Address</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Device ID</th>
+                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Last Login</th>
+                </tr>
+              </thead>
+              <tbody className="">
+                {displayUsers.map((user, idx) => (
+                  <tr
+                    key={user.id}
+                    className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
+                  >
+                    <td className="px-2 py-2 text-center sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            try {
+                              const editPath = `/dashboard/create-user?mode=edit&userId=${user.id}`;
+
+                              // Close all existing edit tabs first
+                              const editTabsToClose = tabs.filter(tab => tab.path.includes('/dashboard/create-user?mode=edit'));
+                              editTabsToClose.forEach(tab => removeTab(tab.id));
+
+                              // Fetch user details
+                              const apiResponse = await userManagementService.fetchUserDetails(Number(user.id));
+                              const apiData = apiResponse?.data || {};
+
+                              // Flatten API response for edit form
+                              const editingUserData = {
+                                userId: apiData.userProfile?.userId,
+                                username: apiData.userProfile?.username || apiData.userInfo?.username,
+                                roleId: apiData.userProfile?.roleId,
+                                balance: apiData.userProfile?.balance,
+                                credit: apiData.userProfile?.credits,
+                                name: apiData.userInfo?.name,
+                                remark: apiData.userInfo?.remarks,
+                                createdAt: apiData.userInfo?.createdAt,
+                                lastLoginDate: apiData.userInfo?.lastLoginDate,
+                                ipAddress: apiData.userInfo?.ipAddress,
+                                exchanges: apiData.userInfo?.exchanges,
+                                allowedExchanges: apiData.userInfo?.allowedExchanges,
+                                highLowTradeLimit: apiData.userInfo?.highLowTradeLimit,
+                                pnlSharing: apiData.userInfo?.pnlSharing,
+                                brkSharing: apiData.userInfo?.brkSharing,
+                                addMaster: apiData.userInfo?.addMaster,
+                                settings: apiData.userSettings?.settings,
+                                menus: apiData.userSettings?.menus,
+                              };
+
+                              addTab({
+                                title: `Edit ${user.username}`,
+                                path: editPath,
+                                icon: Edit,
+                                cacheData: {
+                                  formData: {
+                                    isEditing: true,
+                                    editingUserId: user.id,
+                                    editingUsername: user.username,
+                                    editingUserData
                                   }
-                                });
-                                
-                                navigateWithScrollToTop(navigate, editPath);
-                              } catch (err) {
-                                console.error('Error in edit handler:', err);
-                                toast.error('Error fetching user details.');
+                                }
+                              });
+
+                              navigateWithScrollToTop(navigate, editPath);
+                            } catch (err) {
+                              console.error('Error in edit handler:', err);
+                              toast.error('Error fetching user details.');
+                            }
+                          }}
+                          className="inline-flex items-center justify-center p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-200">
+                          <Edit className="w-4 h-4" />
+                        </button>
+
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              if (openActionMenu === user.id) {
+                                setOpenActionMenu(null);
+                                setActionMenuPosition(null);
+                                setActionMenuUserId(null);
+                              } else {
+                                setActionMenuUserId(user.id);
+                                setActionMenuPosition({ x: rect.right, y: rect.bottom });
+                                setOpenActionMenu(user.id);
                               }
                             }}
-                            className="inline-flex items-center justify-center p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-200">
-                            <Edit className="w-4 h-4" />
+                            className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200">
+                            <MoreHorizontal className="w-4 h-4" />
                           </button>
-                          
-                          <div className="relative">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                if (openActionMenu === user.id) {
-                                  setOpenActionMenu(null);
-                                  setActionMenuPosition(null);
-                                  setActionMenuUserId(null);
-                                } else {
-                                  setActionMenuUserId(user.id);
-                                  setActionMenuPosition({ x: rect.right, y: rect.bottom });
-                                  setOpenActionMenu(user.id);
-                                }
-                              }}
-                              className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </button>
-                          </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-2 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-8">
-                        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedUser(user)}>
-                          <span className="font-semibold text-slate-800 dark:text-white text-sm truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{user.username}</span>
-                          <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-8">
+                      <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedUser(user)}>
+                        <span className="font-semibold text-slate-800 dark:text-white text-sm truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{user.username}</span>
+                        <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="text-slate-700 dark:text-slate-300 text-sm truncate">{user.name}</span>
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <span className={`${getTypeColor(user.type)} text-xs px-2 py-1 inline-block`}>{user.type}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-center block truncate">{user.parent}</span>
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedUserForAddCredits(user);
+                          setShowAddCreditsModal(true);
+                          setCreditTransType('Credit');
+                          setCreditAmount('');
+                          setCreditNote('');
+                          setCreditError('');
+                        }}
+                        className="font-semibold text-slate-800 dark:text-white text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                      >
+                        {user.credit != null ? user.credit.toLocaleString() : '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <span className={`${getBalanceColor(user.balance)} text-sm font-semibold`}>{user.balance != null ? user.balance.toFixed(2) : '-'}</span>
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-slate-700 dark:text-slate-300 font-semibold text-sm">{user.sharing !== null && user.sharing !== undefined ? user.sharing.toFixed(1) : '0.0'}%</span>
+                        <div className="w-8 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full" style={{ width: `${user.sharing || 0}%` }}></div>
                         </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="text-slate-700 dark:text-slate-300 text-sm truncate">{user.name}</span>
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <span className={`${getTypeColor(user.type)} text-xs px-2 py-1 inline-block`}>{user.type}</span>
-                      </td>
-                      <td className="px-2 py-2">
-                        <span className="text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-center block truncate">{user.parent}</span>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <span 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedUserForAddCredits(user);
-                            setShowAddCreditsModal(true);
-                            setCreditTransType('Credit');
-                            setCreditAmount('');
-                            setCreditNote('');
-                            setCreditError('');
-                          }}
-                          className="font-semibold text-slate-800 dark:text-white text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
-                        >
-                          {user.credit != null ? user.credit.toLocaleString() : '-'}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch enabled={user.bet} onClick={() => handleToggle(user.id, 'bet')} size="xs" disabled={!user.betEnabled} />
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch
+                        enabled={user.freshStopLoss}
+                        onClick={() => handleToggle(user.id, 'freshStopLoss' as any)}
+                        size="xs"
+                        disabled={!user.freshStopLossEnabled}
+                      />
+                    </td>
+
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch
+                        enabled={user.manualOrder}
+                        onClick={() => handleToggle(user.id, 'manualOrder' as any)}
+                        size="xs"
+                        disabled={!user.manualOrderEnabled}
+                      />
+                    </td>
+
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch enabled={user.closeOut} onClick={() => handleToggle(user.id, 'closeOut')} size="xs" disabled={!user.closeOutEnabled} />
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch enabled={user.margin} onClick={() => handleToggle(user.id, 'margin')} size="xs" disabled={!user.marginEnabled} />
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch enabled={user.status} onClick={() => handleToggle(user.id, 'status')} size="xs" disabled={!user.statusEnabled} />
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch enabled={user.creditBasedMargin} onClick={() => handleToggle(user.id, 'creditBasedMargin')} size="xs" disabled={!user.creditBasedMarginEnabled} />
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{user.createdDate}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-center">
+                        <span className="text-blue-700 dark:text-blue-300 text-xs font-mono block truncate">{user.ipAddress}</span>
+                      </div>
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded text-center">
+                        <span className="text-purple-700 dark:text-purple-300 text-xs font-mono block truncate" title={user.deviceId}>
+                          {user.deviceId.length > 15 ? `${user.deviceId.substring(0, 15)}...` : user.deviceId}
                         </span>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <span className={`${getBalanceColor(user.balance)} text-sm font-semibold`}>{user.balance != null ? user.balance.toFixed(2) : '-'}</span>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-slate-700 dark:text-slate-300 font-semibold text-sm">{user.sharing !== null && user.sharing !== undefined ? user.sharing.toFixed(1) : '0.0'}%</span>
-                          <div className="w-8 h-1.5 bg-gray-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full" style={{ width: `${user.sharing || 0}%` }}></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <ToggleSwitch enabled={user.bet} onClick={() => handleToggle(user.id, 'bet')} size="xs" disabled={!user.betEnabled} />
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <ToggleSwitch enabled={user.closeOut} onClick={() => handleToggle(user.id, 'closeOut')} size="xs" disabled={!user.closeOutEnabled} />
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <ToggleSwitch enabled={user.margin} onClick={() => handleToggle(user.id, 'margin')} size="xs" disabled={!user.marginEnabled} />
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <ToggleSwitch enabled={user.status} onClick={() => handleToggle(user.id, 'status')} size="xs" disabled={!user.statusEnabled} />
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <ToggleSwitch enabled={user.creditBasedMargin} onClick={() => handleToggle(user.id, 'creditBasedMargin')} size="xs" disabled={!user.creditBasedMarginEnabled} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{user.createdDate}</span>
-                      </td>
-                      <td className="px-2 py-2">
-                        <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-center">
-                          <span className="text-blue-700 dark:text-blue-300 text-xs font-mono block truncate">{user.ipAddress}</span>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2">
-                        <div className="bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded text-center">
-                          <span className="text-purple-700 dark:text-purple-300 text-xs font-mono block truncate" title={user.deviceId}>
-                            {user.deviceId.length > 15 ? `${user.deviceId.substring(0, 15)}...` : user.deviceId}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2">
-                        <span className="text-emerald-700 dark:text-emerald-300 text-xs whitespace-nowrap">{user.lastLogin}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="text-emerald-700 dark:text-emerald-300 text-xs whitespace-nowrap">{user.lastLogin}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </FilterLayout>
@@ -806,7 +853,7 @@ const UserList: React.FC = () => {
         {renderUserListContent()}
       </div>
 
-      <UserDetailsModal 
+      <UserDetailsModal
         user={selectedUser}
         onClose={() => setSelectedUser(null)}
         onToggle={handleToggle}
@@ -814,16 +861,16 @@ const UserList: React.FC = () => {
 
       {/* Change Password Modal */}
       {showPasswordModal && selectedUserForPasswordChange && createPortal(
-        <div 
-          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn" 
-          style={{ zIndex: 99999 }} 
+        <div
+          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
+          style={{ zIndex: 99999 }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setShowPasswordModal(false);
             }
           }}
         >
-          <div 
+          <div
             className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
             style={{ width: '98vw', height: '96vh', maxWidth: '600px' }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -851,7 +898,7 @@ const UserList: React.FC = () => {
 
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-purple-50/30 to-pink-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-              <ChangePassword 
+              <ChangePassword
                 user={selectedUserForPasswordChange}
                 userDetails={selectedUserForPasswordChange}
                 onClose={() => setShowPasswordModal(false)}
@@ -868,16 +915,16 @@ const UserList: React.FC = () => {
 
       {/* Sharing Details Modal */}
       {showSharingModal && selectedUserForSharingDetails && createPortal(
-        <div 
-          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn" 
-          style={{ zIndex: 99999 }} 
+        <div
+          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
+          style={{ zIndex: 99999 }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setShowSharingModal(false);
             }
           }}
         >
-          <div 
+          <div
             className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
             style={{ width: '98vw', height: '96vh', maxWidth: '900px' }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -905,7 +952,7 @@ const UserList: React.FC = () => {
 
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-              <SharingDetails 
+              <SharingDetails
                 user={selectedUserForSharingDetails}
                 userDetails={selectedUserForSharingDetails}
                 onClose={() => setShowSharingModal(false)}
@@ -922,16 +969,16 @@ const UserList: React.FC = () => {
 
       {/* Add Credits Modal */}
       {showAddCreditsModal && selectedUserForAddCredits && createPortal(
-        <div 
-          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn" 
-          style={{ zIndex: 99999 }} 
+        <div
+          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
+          style={{ zIndex: 99999 }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setShowAddCreditsModal(false);
             }
           }}
         >
-          <div 
+          <div
             className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/50 dark:from-slate-800 dark:via-slate-800/95 dark:to-slate-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
             style={{ width: '90vw', height: 'auto', maxWidth: '550px', maxHeight: '85vh' }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -981,7 +1028,7 @@ const UserList: React.FC = () => {
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">Debit (Withdrawal)</span>
                   </label>
                 </div>
-                
+
                 {/* Amount Input */}
                 <div className="bg-white/80 dark:bg-slate-700/50 p-4 rounded-xl">
                   <label className="block text-center text-sm font-bold mb-3 text-gray-700 dark:text-gray-200">Amount</label>
@@ -1007,7 +1054,7 @@ const UserList: React.FC = () => {
                     <p className="text-center text-red-500 dark:text-red-400 text-xs mt-2 font-medium">Please enter Amount</p>
                   )}
                 </div>
-                
+
                 {/* User Info */}
                 <div className="bg-white/80 dark:bg-slate-700/50 p-4 rounded-xl space-y-4">
                   <div>
@@ -1021,12 +1068,12 @@ const UserList: React.FC = () => {
                       <div className="text-center">
                         <p className="text-xs font-semibold mb-1 text-gray-500 dark:text-gray-400">New</p>
                         <p className={`text-base font-bold ${(
-                          creditTransType === 'Credit' 
+                          creditTransType === 'Credit'
                             ? (selectedUserForAddCredits?.credit || 0) + (Number(creditAmount) || 0)
                             : (selectedUserForAddCredits?.credit || 0) - (Number(creditAmount) || 0)
                         ) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                           {(
-                            creditTransType === 'Credit' 
+                            creditTransType === 'Credit'
                               ? (selectedUserForAddCredits?.credit || 0) + (Number(creditAmount) || 0)
                               : (selectedUserForAddCredits?.credit || 0) - (Number(creditAmount) || 0)
                           ).toLocaleString('en-US', { minimumFractionDigits: 2 })}
@@ -1034,7 +1081,7 @@ const UserList: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Parent User Info */}
                   <div className="border-t border-gray-200 dark:border-slate-600 pt-3">
                     <p className="text-xs font-bold mb-2 text-gray-600 dark:text-gray-300 text-center">Parent User</p>
@@ -1058,7 +1105,7 @@ const UserList: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Submit Button */}
                 <button
                   onClick={async () => {
@@ -1067,7 +1114,7 @@ const UserList: React.FC = () => {
                       setCreditError('Please enter Amount');
                       return;
                     }
-                    
+
                     setIsSubmittingCredit(true);
                     setCreditError('');
                     try {
@@ -1077,17 +1124,17 @@ const UserList: React.FC = () => {
                         comments: creditNote || '',
                         type: creditTransType === 'Credit' ? 'CREDIT' as const : 'DEBIT' as const
                       };
-                      
+
                       const res = await userManagementService.manageCredits(payload);
                       const code = String(res?.responseCode ?? res?.data?.responseCode ?? '');
                       const message = res?.responseMessage ?? res?.data?.responseMessage ?? 'Operation completed';
-                      
+
                       if (code === '0' || code === '1000') {
                         toast.success(message);
-                        
+
                         // Refetch user list to get latest data from server
                         await refetchUserList();
-                        
+
                         // Clear form and close modal
                         setCreditAmount('');
                         setCreditNote('');
@@ -1111,7 +1158,7 @@ const UserList: React.FC = () => {
                 >
                   {isSubmittingCredit ? 'Submitting...' : 'Submit'}
                 </button>
-                
+
                 {/* Error Message */}
                 {creditError && (
                   <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 -mt-2">
@@ -1137,6 +1184,18 @@ const UserList: React.FC = () => {
         />
       )}
 
+      {/* Carry Forward Margin Modal */}
+      {showCarryForwardMarginModal && selectedUserForCarryForwardMargin && (
+        <CarryForwardMarginModal
+          isOpen={showCarryForwardMarginModal}
+          user={selectedUserForCarryForwardMargin}
+          onClose={() => {
+            setShowCarryForwardMarginModal(false);
+            setSelectedUserForCarryForwardMargin(null);
+          }}
+        />
+      )}
+
       {/* Market Trade Rights Modal */}
       {showMarketTradeRightsModal && selectedUserForMarketTradeRights && (
         <MarketTradeRightsModal
@@ -1152,9 +1211,34 @@ const UserList: React.FC = () => {
         />
       )}
 
+      {/* Margin square off Modal */}
+      {showMarginModal && selectedUserForMargin && (
+        <MarginSquareOffModal
+          isOpen={showMarginModal}
+          user={selectedUserForMargin}
+          onClose={() => {
+            setShowMarginModal(false);
+            setSelectedUserForMargin(null);
+          }}
+        />
+      )}
+
+      {/* Trade Duration Rank Modal */}
+
+      {showDurationModal && selectedUserForDuration && (
+        <TradeDurationRankModal
+          isOpen={showDurationModal}
+          user={selectedUserForDuration}
+          onClose={() => {
+            setShowDurationModal(false);
+            setSelectedUserForDuration(null);
+          }}
+        />
+      )}
+
       {/* Action Menu Portal */}
       {openActionMenu && actionMenuPosition && actionMenuUserId && createPortal(
-        <div 
+        <div
           className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl z-[99999] overflow-auto max-h-96"
           style={{
             left: `${Math.min(actionMenuPosition.x, window.innerWidth - 240)}px`,
@@ -1166,7 +1250,7 @@ const UserList: React.FC = () => {
               const estimatedMenuHeight = isMaster ? 220 : 480;
               const spaceBelow = window.innerHeight - actionMenuPosition.y - 40;
               const spaceAbove = actionMenuPosition.y;
-              
+
               // If there's enough space below, position downward
               if (spaceBelow >= estimatedMenuHeight) {
                 return `${actionMenuPosition.y + 8}px`;
@@ -1188,11 +1272,11 @@ const UserList: React.FC = () => {
           {(() => {
             const currentUser = users.find(u => u.id === actionMenuUserId);
             const isMaster = currentUser?.type === 'Master';
-            
+
             return (
               <>
                 {/* Common options for all user types */}
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     const user = users.find(u => u.id === actionMenuUserId);
@@ -1207,7 +1291,7 @@ const UserList: React.FC = () => {
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2">
                   <span>📝</span> Change Password
                 </button>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     const user = users.find(u => u.id === actionMenuUserId);
@@ -1226,7 +1310,7 @@ const UserList: React.FC = () => {
                 {/* Master user options */}
                 {isMaster && (
                   <>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         const user = users.find(u => u.id === actionMenuUserId);
@@ -1257,7 +1341,7 @@ const UserList: React.FC = () => {
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>👤</span> Admin Rights
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         const user = users.find(u => u.id === actionMenuUserId);
@@ -1278,13 +1362,23 @@ const UserList: React.FC = () => {
                 {/* Client user options */}
                 {!isMaster && (
                   <>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForMargin(user);
+                          setShowMarginModal(true);
+                        }
+                        setOpenActionMenu(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📊</span> % Margin Square off
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    {/* <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>🛑</span> Fresh StopLoss
-                    </button>
-                    <button 
+                    </button> */}
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         const user = users.find(u => u.id === actionMenuUserId);
@@ -1305,10 +1399,32 @@ const UserList: React.FC = () => {
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📋</span> Carry Forward Option
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForCarryForwardMargin(user);
+                          setShowCarryForwardMarginModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📈</span> Carry Forward Margin
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForDuration(user);
+                          setShowDurationModal(true);
+                        }
+                        setOpenActionMenu(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📊</span> Trading Duration Rank
                     </button>
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">

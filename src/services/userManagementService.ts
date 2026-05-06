@@ -86,7 +86,7 @@ class UserManagementService {
     }
 
     console.log('🔧 Creating User:', {
-      endpoint: `https://api-staging.rivoplus.live/user-new/createUser`,
+      endpoint: `https://api-staging.rivoplus.live/user/createUser`,
       payload: request
     })
 
@@ -96,7 +96,7 @@ class UserManagementService {
     // )
 
     const response = await apiClient.post<any>(
-      `https://api-staging.rivoplus.live/user-new/createUser`,
+      `https://api-staging.rivoplus.live/user/createUser`,
       request
     )
 
@@ -680,6 +680,33 @@ class UserManagementService {
     }
   }
 
+
+  /**
+   * Fetch Trade Symbols for Reports (Orders & Rejection Logs)
+   * GET /oms/tradeSymbols?userFIlterType={type}&exchange={exchange}
+   */
+  async fetchTradeSymbolsReport(userFilterType: 'ALL' | 'SINGLE' = 'ALL', exchange?: string): Promise<any> {
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('userFIlterType', userFilterType);
+      
+      if (userFilterType === 'SINGLE' && exchange) {
+        params.append('exchange', exchange);
+      }
+
+      const endpoint = `https://api-staging.rivoplus.live/oms/tradeSymbols?${params.toString()}`;
+      
+      console.log('🔄 Fetching Report Symbols:', endpoint);
+      
+      // Using apiClient.get
+      const response = await apiClient.get<any>(endpoint);
+      return response;
+    } catch (error: any) {
+      console.error('❌ Failed to fetch report symbols:', error);
+      throw error;
+    }
+  }
   /**
    * Fetch user positions for specific exchange, token and user IDs
    */
@@ -844,7 +871,7 @@ class UserManagementService {
       requestTimestamp: Date.now().toString(),
       userId,
       deviceId: '',
-      tradeOrderMethod: 'ANDROID',
+      tradeOrderMethod: 'WEB',
       data: {
         userId,
         orderIds
@@ -884,6 +911,100 @@ class UserManagementService {
       throw error
     }
   }
+
+ /**
+ * Fetch M2M Sharing data (GET API)
+ * Path: /m2m/user/{userId}?userFilterType={type}
+ */
+
+async fetchM2MReport(userId: number | string, userFilterType: 'ALL' | 'SINGLE'): Promise<any> {
+  try {
+    // FIX: Changed 'userFIlterType' to 'userFilterType'
+    const endpoint = `https://api-staging.rivoplus.live/oms/api/v1/m2m/user/${userId}?userFIlterType=${userFilterType}`;
+    
+    console.log('📡 Requesting M2M:', endpoint);
+    
+    const response = await apiClient.get<any>(endpoint);
+    return response;
+  } catch (error: any) {
+    console.error('❌ M2M API Error:', error.response?.status, error.response?.data);
+    throw error;
+  }
+}
+
+/**
+ * Fetch Rejection Order Logs
+ * URL: /oms/rejected/orders/log
+ */
+async fetchRejectionLogs(payload: any): Promise<any> {
+  try {
+    const response = await apiClient.post<any>(
+      'https://api-staging.rivoplus.live/oms/rejected/orders/log',
+      { data: payload }
+    );
+    return response;
+  } catch (error: any) {
+    console.error('❌ Rejection Log Error:', error);
+    throw error;
+  }
+}
+
+
+async updateCarryForwardMargin(userId: number, exchanges: any[]): Promise<any> {
+  const payload = {
+    userId: userId,
+    requestTimestamp: Date.now(),
+     // Or keep as "" if required by backend
+    data: exchanges
+  };
+
+  try {
+    const response = await apiClient.post(
+      'https://api-staging.rivoplus.live/user/settings/updateCfMargin',
+      payload
+    );
+    return response;
+  } catch (error) {
+    console.error('❌ Failed to update CF Margin:', error);
+    throw error;
+  }
+}
+
+// services/userManagementService.ts
+
+async fetchAutoSquareOff(userId: number): Promise<any> {
+  return await apiClient.post('https://api-staging.rivoplus.live/user/portal/fetchAutoSquareOff', {
+    userId,
+    requestTimestamp: "",
+    data: ""
+  });
+}
+
+async updateAutoSquareOff(userId: number, percentage: number): Promise<any> {
+  return await apiClient.post('https://api-staging.rivoplus.live/user/portal/updateAutoSquareOff', {
+    userId,
+    requestTimestamp: "",
+    data: {
+      autoSquareOffPercent: percentage
+    }
+  });
+}
+
+
+async fetchTradeDurationRank(userId: number): Promise<any> {
+  try {
+    const response = await apiClient.post('https://api-staging.rivoplus.live/oms/tradeDurationRank', {
+      userId: userId,
+      requestTimestamp: "",
+      data: ""
+    });
+    return response.data; // Ensure you return data wrapper
+  } catch (error) {
+    console.error('❌ Failed to fetch Trade Duration Rank:', error);
+    throw error;
+  }
+}
+
 }
 
 export const userManagementService = new UserManagementService()
