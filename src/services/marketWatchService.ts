@@ -27,6 +27,7 @@ class MarketWatchService {
   private healthCheckInterval: NodeJS.Timeout | null = null
   private healthCheckThreshold = 5000 // 5 seconds - if no data received, mark as disconnected
   private isHealthCheckRunning = false
+  private isConnecting = false;
 
   /**
    * Connect to WebSocket for market data
@@ -40,9 +41,19 @@ class MarketWatchService {
         return
       }
 
+      // 2. PREVENT MULTIPLE CALLS: If currently connecting, wait or return
+      if (this.isConnecting) {
+        console.log('⏳ Connection already in progress, skipping duplicate call')
+        return; 
+      }
+
+      this.isConnecting = true;
+
       // Store callbacks to call after STOMP connection
       this.onConnectedCallback = onConnected || null
       this.connectPromiseResolve = resolve
+
+      
 
       const wsUrl = 'wss://quotes.rivoplus.live/ws/market'
       
@@ -83,12 +94,14 @@ class MarketWatchService {
 
         this.socket.onerror = (error: Event) => {
           console.error('❌ WebSocket error:', error)
+          this.isConnecting = false;
           clearTimeout(connectionTimeout)
           reject(new Error('WebSocket connection failed'))
         }
 
         this.socket.onclose = () => {
           console.log('⚠️  WebSocket closed')
+          this.isConnecting = false;
           clearTimeout(connectionTimeout)
           this.stompConnected = false
           this._stopHeartbeat()
@@ -409,24 +422,28 @@ class MarketWatchService {
    * Subscribe to instruments queue with userId
    * Follows Flutter pattern: unsubscribe first to prevent duplicates, then resubscribe
    */
-  subscribeToInstruments(userId: string): void {
+ subscribeToInstruments(userId: string): void {
     const subscriptionKey = `instruments-${userId}`
     
-    // Step 1: Always unsubscribe first (prevent duplicates - Flutter pattern)
-    if (this.subscribedUsers.has(subscriptionKey)) {
-      console.log(`🔄 Clearing previous instruments subscription for user: ${userId}`)
-      this._unsubscribeFromInstrumentsInternal(userId)
-    }
-
-    // Step 2: Now subscribe
+    // Explicitly send the SUBSCRIBE frame to ensure the server sees it, 
+    // even if we think we are already subscribed.
     if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
-      console.log(`🔌 Subscribing to instruments for user: ${userId}`)
+      console.log(`🔌 Refreshing subscription for positions/instruments: ${userId}`)
+      
+      // We don't use a check here, we just fire the frame to be safe.
       this.subscribedUsers.add(subscriptionKey)
       this.lastReceivedTimePerQueue.set(`/queue/instruments/${userId}`, Date.now())
+      
+      // Create the frame for positions (adjust destination if needed)
       const frame = `SUBSCRIBE\nid:sub-queue-instruments\ndestination:/queue/instruments/${userId}\nack:auto\n\n\0`
       this.socket.send(frame)
+      
+      // If your positions are on a different queue, send that too:
+      const posFrame = `SUBSCRIBE\nid:sub-orders-${userId}\ndestination:/queue/positions/${userId}\nack:auto\n\n\0`
+      this.socket.send(posFrame)
+      
     } else {
-      console.warn(`⚠️  Cannot subscribe to instruments - WebSocket not connected. isConnected: ${this.isConnected()}, stompConnected: ${this.stompConnected}`)
+      console.warn(`⚠️ Socket not ready for subscription.`)
     }
   }
 
@@ -462,6 +479,27 @@ class MarketWatchService {
    * Send instruments polling request with userId and instrumentTokens
    */
   sendInstrumentsRequest(userId: string, instrumentTokens: string[]): void {
+    console.log('📤 sendInstrumentsRequest called with:', { userId, tokenCount: instrumentTokens.length, tokens: instrumentTokens })
+    console.log('🔍 Socket state:', this.socket?.readyState, 'STOMP connected:', this.stompConnected)
+    
+    if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+      const payload = JSON.stringify({ userId, instrumentTokens })
+      const frame = `SEND\ndestination:/app/subscribe\ncontent-type:application/json\ncontent-length:${payload.length}\n\n${payload}\0`
+      console.log('✅ Sending instruments request frame')
+      this.socket.send(frame)
+    } else {
+      console.error('❌ Cannot send instruments request - WebSocket not connected or STOMP not ready')
+      console.error('   Socket exists:', !!this.socket)
+      console.error('   Socket readyState:', this.socket?.readyState, '(1 = OPEN)')
+      console.error('   STOMP connected:', this.stompConnected)
+    }
+  }
+
+
+   /**
+   * Send instruments polling request with userId and instrumentTokens
+   */
+  sendInstrumentsRequestduplicate(userId: string, instrumentTokens: string[]): void {
     console.log('📤 sendInstrumentsRequest called with:', { userId, tokenCount: instrumentTokens.length, tokens: instrumentTokens })
     console.log('🔍 Socket state:', this.socket?.readyState, 'STOMP connected:', this.stompConnected)
     
@@ -539,6 +577,7 @@ class MarketWatchService {
         case 'CONNECTED':
           console.log('✅ STOMP CONNECTED frame received!')
           this.stompConnected = true
+          this.isConnecting = false;
           // Start health check on connection (Flutter pattern)
           this._startHealthCheck()
           // Subscribe to feed after STOMP connection established

@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import toast from 'react-hot-toast'
+import { getDeviceId } from '../utils/device'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'
 
@@ -34,6 +35,8 @@ class OrderService {
   private baseURL = BASE_URL
   private endpoint = '/oms/placeOrder'
 
+
+  
   /**
    * Place a new order (Buy or Sell)
    */
@@ -63,6 +66,8 @@ class OrderService {
     }
   }
 
+  
+
   /**
    * Place a buy order
    * @param loggedInUserId The ID of the logged-in user (admin/broker)
@@ -79,7 +84,8 @@ class OrderService {
     price: number,
     lotValue: number,
     orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
-    deviceId: string = '1234567890'
+    // deviceId: string = '1234567890'
+    deviceId: string = getDeviceId()
   ): Promise<PlaceOrderResponse> {
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),
@@ -118,7 +124,8 @@ class OrderService {
     price: number,
     lotValue: number,
     orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
-    deviceId: string = '1234567890'
+    // deviceId: string = '1234567890'
+    deviceId: string = getDeviceId()
   ): Promise<PlaceOrderResponse> {
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),

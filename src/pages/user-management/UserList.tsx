@@ -632,7 +632,10 @@ const UserList: React.FC = () => {
               </colgroup>
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sticky top-0 z-10 border-none">
-                  <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">Actions</th>
+                  {/* <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">Actions</th> */}
+                  <th className="pl-12 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
+                    Actions
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-9">Username</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Type</th>
@@ -660,7 +663,8 @@ const UserList: React.FC = () => {
                     className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
                   >
                     <td className="px-2 py-2 text-center sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
-                      <div className="flex items-center justify-center gap-1">
+                      {/* <div className="flex items-center justify-center gap-1"> */}
+                        <div className="flex items-center justify-start gap-3">
                         <button
                           onClick={async (e) => {
                             e.preventDefault();

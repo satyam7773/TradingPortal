@@ -496,7 +496,7 @@ class UserManagementService {
       responseMessage: string; 
       data: Array<{name: string; turnover: boolean; lot: boolean; groupId: number}> 
     }>(
-      `${this.baseUrl}/portal/exchanges`,
+      `${this.baseUrl}/portal/exchanges/v2`,
       request
     )
 
@@ -891,20 +891,23 @@ class UserManagementService {
   }
 
   /**
-   * Fetch Profit & Loss data for user
-   * @param userId - The user ID to fetch P&L for
-   * @param userFilterType - 'ALL' for all sub-users, 'SINGLE' for specific user
+   * Fetch Profit & Loss data for user (POST)
+   * URL: /oms/pnl
    */
-  async fetchProfitAndLoss(userId: number, userFilterType: 'ALL' | 'SINGLE' = 'ALL'): Promise<any> {
+  async fetchProfitAndLoss(userId: number): Promise<any> {
+    const request = {
+      userId: userId,
+      requestTimestamp: new Date().toISOString(),
+      data: "" // Keeping consistent with sample curl
+    }
+
     try {
-      const endpoint = `https://api-staging.rivoplus.live/oms/api/v1/pnl/user/${userId}?userFIlterType=${userFilterType}`
-      
-      console.log('📊 Fetching P&L data:', { userId, userFilterType, endpoint })
-      
-      const response = await apiClient.get<any>(endpoint)
-      
+      console.log('📊 Fetching P&L data (POST):', request)
+      const response = await apiClient.post<any>(
+        'https://api-staging.rivoplus.live/oms/pnl',
+        request
+      )
       console.log('✅ P&L data received:', response)
-      
       return response
     } catch (error: any) {
       console.error('❌ Failed to fetch P&L data:', error)

@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { 
-  ChevronDown, 
-  File, 
-  BarChart3, 
-  Eye, 
-  FileText, 
+import {
+  ChevronDown,
+  File,
+  BarChart3,
+  Eye,
+  FileText,
   Settings,
   User,
   Info,
@@ -47,7 +47,7 @@ interface MenuProps {
 // Shortcuts Menu Component
 const ShortcutsMenu: React.FC<{ items: MenuItem[], addTab: (tab: any) => void }> = ({ items, addTab }) => {
   const navigate = useNavigate()
-  
+
   const shortcuts = [
     { label: 'Market Watch', icon: Eye, path: '/dashboard/market-watch', color: 'bg-blue-500/20 text-blue-600' },
     { label: 'Trade', icon: TrendingUp, path: '/dashboard/trades', color: 'bg-purple-500/20 text-purple-600' },
@@ -136,7 +136,9 @@ const dashboardTabConfigs = {
   '/dashboard/messages': { title: 'Messages', icon: FileText },
   '/dashboard/exchange-schedule': { title: 'Exchange Time Schedule', icon: FileText },
   '/dashboard/configure-2fa': { title: 'Configure 2FA', icon: Lock },
-  '/dashboard/file-upload': { title: 'File Upload', icon: Upload }
+  '/dashboard/file-upload': { title: 'File Upload', icon: Upload },
+  '/dashboard/change-password': { title: 'Change Password', icon: Lock }
+
 }
 
 export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
@@ -174,39 +176,46 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
     setHoveredMenu(menuLabel)
   }
 
-  const handleSubItemClick = (subItem: SubMenuItem, isDashboardItem?: boolean, isUsersItem?: boolean, isReportsItem?: boolean, isViewItem?: boolean, isSettingsItem?: boolean, isToolsItem?: boolean) => {
-    const { action, path } = subItem
-    
-    if (action) {
-      // If it's a menu item that should create tabs, create a tab AND navigate
-      if (isDashboardItem || isUsersItem || isReportsItem || isViewItem || isSettingsItem || isToolsItem) {
-        if (path) {
-          console.log('🔍 Attempting to navigate to:', path)
-          const tabConfig = dashboardTabConfigs[path as keyof typeof dashboardTabConfigs]
-          
-          if (tabConfig) {
-            console.log('✅ Tab config found:', tabConfig)
-            addTab({
-              title: tabConfig.title,
-              path: path,
-              icon: tabConfig.icon
-            })
-            // Also execute the original navigation action
-            action()
-            console.log('✅ Navigation executed')
-          } else {
-            console.error('❌ No tab config found for path:', path)
-          }
-        } else {
-          console.error('❌ No path provided in menu item')
-        }
+  const handleSubItemClick = (
+  subItem: SubMenuItem, 
+  isDashboardItem?: boolean, 
+  isUsersItem?: boolean, 
+  isReportsItem?: boolean, 
+  isViewItem?: boolean, 
+  isSettingsItem?: boolean, 
+  isToolsItem?: boolean,
+  isAccountItem?: boolean
+) => {
+  const { action, path } = subItem
+
+  if (action) {
+    // 1. Check if this is a functional menu item that should open a tab
+    const shouldOpenTab = isDashboardItem || isUsersItem || isReportsItem || 
+                         isViewItem || isSettingsItem || isToolsItem || isAccountItem;
+
+    // 2. Only attempt tab logic if it's a tab-type item AND has a path
+    // This allows "Logout" (which has no path) to skip this block
+    if (shouldOpenTab && path) {
+      const tabConfig = dashboardTabConfigs[path as keyof typeof dashboardTabConfigs]
+
+      if (tabConfig) {
+        addTab({
+          title: tabConfig.title,
+          path: path,
+          icon: tabConfig.icon
+        })
       } else {
-        action()
+        console.warn(`⚠️ No tab config found for path: ${path}`)
       }
     }
-    setActiveMenu(null)
-    setHoveredMenu(null)
+
+    // 3. Always execute the action (this triggers navigate() or logout())
+    action()
   }
+
+  setActiveMenu(null)
+  setHoveredMenu(null)
+}
 
   // Check if any submenu item matches current path
   const getActiveMenuItem = () => {
@@ -239,76 +248,72 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
     <div ref={menuRef} className="flex flex-col">
       {/* Main Menu */}
       <div className="flex items-center">
-          {items.map((item, itemIndex) => {
-            const isItemActive = activeMenu === item.label
-            const isItemHovered = hoveredMenu === item.label
-            const isCurrentPage = activeParent === item.label
-            
-            return (
-              <div key={item.label} className="relative">
-                <button
-                  onClick={() => item.subItems ? handleMenuClick(item.label) : item.action?.()}
-                  onMouseEnter={() => handleMenuHover(item.label)}
-                  onMouseLeave={() => !activeMenu && setHoveredMenu(null)}
-                  className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                    isCurrentPage
-                      ? 'text-brand-primary border-b-2 border-brand-primary'
-                      : isItemActive
-                      ? 'text-brand-primary bg-brand-primary/5 rounded-md'
-                      : isItemHovered
+        {items.map((item, itemIndex) => {
+          const isItemActive = activeMenu === item.label
+          const isItemHovered = hoveredMenu === item.label
+          const isCurrentPage = activeParent === item.label
+
+          return (
+            <div key={item.label} className="relative">
+              <button
+                onClick={() => item.subItems ? handleMenuClick(item.label) : item.action?.()}
+                onMouseEnter={() => handleMenuHover(item.label)}
+                onMouseLeave={() => !activeMenu && setHoveredMenu(null)}
+                className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 ${isCurrentPage
+                  ? 'text-brand-primary border-b-2 border-brand-primary'
+                  : isItemActive
+                    ? 'text-brand-primary bg-brand-primary/5 rounded-md'
+                    : isItemHovered
                       ? 'text-brand-primary bg-brand-primary/5 rounded-md'
                       : 'text-text-primary hover:text-brand-primary hover:bg-surface-hover rounded-md'
                   }`}
-                >
-                  <span className="select-none whitespace-nowrap font-medium">{item.label}</span>
-                  {item.subItems && (
-                    <ChevronDown 
-                      className={`w-3 h-3 transition-transform duration-200 ${
-                        isItemActive ? 'rotate-180' : ''
-                      }`} 
-                    />
-                  )}
-                </button>
-
-                {item.subItems && (isItemActive || (activeMenu && isItemHovered)) && (
-                  <div className="absolute top-full left-0 z-[200] mt-1 bg-surface-primary border border-border-primary shadow-2xl min-w-56 rounded-lg overflow-hidden">
-                    {item.subItems.map((subItem, index) => {
-                      if (subItem.separator) {
-                        return (
-                          <div 
-                            key={index} 
-                            className="h-px bg-border-primary my-1 mx-3"
-                          />
-                        )
-                      }
-                      
-                      const IconComponent = subItem.icon
-                      const isSubItemActive = activeSub === subItem.label
-                      
-                      return (
-                        <button
-                          key={index}
-                          onClick={() => handleSubItemClick(subItem, item.label === 'Dashboard', item.label === 'Users', item.label === 'Reports', item.label === 'View', item.label === 'Settings', item.label === 'Tools')}
-                          className={`relative w-full text-left px-4 py-2.5 text-sm transition-all duration-200 flex items-center gap-3 ${
-                            isSubItemActive
-                              ? 'bg-brand-primary text-white'
-                              : 'text-text-primary hover:bg-brand-primary/10 hover:text-brand-primary'
-                          }`}
-                        >
-                          {IconComponent && (
-                            <IconComponent className={`w-4 h-4 ${
-                              isSubItemActive ? 'text-white' : 'text-text-secondary'
-                            }`} />
-                          )}
-                          <span className="select-none font-medium">{subItem.label || ''}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+              >
+                <span className="select-none whitespace-nowrap font-medium">{item.label}</span>
+                {item.subItems && (
+                  <ChevronDown
+                    className={`w-3 h-3 transition-transform duration-200 ${isItemActive ? 'rotate-180' : ''
+                      }`}
+                  />
                 )}
-              </div>
-            )
-          })}
+              </button>
+
+              {item.subItems && (isItemActive || (activeMenu && isItemHovered)) && (
+                <div className="absolute top-full left-0 z-[200] mt-1 bg-surface-primary border border-border-primary shadow-2xl min-w-56 rounded-lg overflow-hidden">
+                  {item.subItems.map((subItem, index) => {
+                    if (subItem.separator) {
+                      return (
+                        <div
+                          key={index}
+                          className="h-px bg-border-primary my-1 mx-3"
+                        />
+                      )
+                    }
+
+                    const IconComponent = subItem.icon
+                    const isSubItemActive = activeSub === subItem.label
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => handleSubItemClick(subItem, item.label === 'Dashboard', item.label === 'Users', item.label === 'Reports', item.label === 'View', item.label === 'Settings', item.label === 'Tools', item.label === 'Account')}
+                        className={`relative w-full text-left px-4 py-2.5 text-sm transition-all duration-200 flex items-center gap-3 ${isSubItemActive
+                          ? 'bg-brand-primary text-white'
+                          : 'text-text-primary hover:bg-brand-primary/10 hover:text-brand-primary'
+                          }`}
+                      >
+                        {IconComponent && (
+                          <IconComponent className={`w-4 h-4 ${isSubItemActive ? 'text-white' : 'text-text-secondary'
+                            }`} />
+                        )}
+                        <span className="select-none font-medium">{subItem.label || ''}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Shortcuts Menu */}
@@ -320,255 +325,100 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
 }
 
 // Convert existing sidebar menu items to horizontal menu format
-export const createExistingMenuItems = (navigate: (path: string) => void, logout: () => void): MenuItem[] => {  
-
-  // Logic to get role and check if Admin
+export const createExistingMenuItems = (navigate: (path: string) => void, logout: () => void): MenuItem[] => {
   const userData = localStorage.getItem('userData')
   const user = userData ? JSON.parse(userData) : null
   const roleId = user?.roleId
-  const isAdminUser = roleId === 1 || roleId === 2 
+  
+  // ROLE DEFINITIONS
+  const isAdminOnly = roleId === 1 || roleId === 2 // Strict Admin
+  const isAdminOrMaster = roleId === 1 || roleId === 2 || roleId === 3 // Admin + Master
+  const isClient = roleId === 4 
 
   return [
+    {
+      label: 'Dashboard',
+      subItems: [{ label: 'Dashboard', path: '/dashboard', action: () => navigate('/dashboard') }]
+    },
+    {
+      label: 'View',
+      subItems: [
+        { label: 'Market Watch', path: '/dashboard/market-watch', action: () => navigate('/dashboard/market-watch') },
+        { label: 'Option Chain', path: '/dashboard/option-chain', action: () => navigate('/dashboard/option-chain') },
+        { label: 'Trades', path: '/dashboard/trades', action: () => navigate('/dashboard/trades') },
+        { label: 'Orders', path: '/dashboard/orders', action: () => navigate('/dashboard/orders') },
+        { label: 'Positions', path: '/dashboard/positions', action: () => navigate('/dashboard/positions') },
+        { label: 'Profit & Loss', path: '/dashboard/profit-loss', action: () => navigate('/dashboard/profit-loss') },
+        { label: 'Intraday History', path: '/dashboard/intraday-history', action: () => navigate('/dashboard/intraday-history') },
+        { label: 'Rejection Log', path: '/dashboard/rejection-log', action: () => navigate('/dashboard/rejection-log') },
+        { label: 'Login History', path: '/dashboard/login-history', action: () => navigate('/dashboard/login-history') },
+        
+        ...(isAdminOrMaster ? [
+          { label: 'Cf Margin On Users', path: '/dashboard/cf-margin-users', action: () => navigate('/dashboard/cf-margin-users') },
+          { label: 'M2M Profit & Loss', path: '/dashboard/m2m-profit-loss', action: () => navigate('/dashboard/m2mReport') },
+          // GROUPS: Restricted to Admin Only
+          ...(isAdminOnly ? [{ label: 'Groups', path: '/dashboard/groups', action: () => navigate('/dashboard/groups') }] : [])
+        ] : [])
+      ]
+    },
+    ...(isAdminOrMaster ? [{
+      label: 'Users',
+      subItems: [
+        { label: 'Create User', path: '/dashboard/create-user', action: () => navigate('/dashboard/create-user') },
+        { label: 'User List', path: '/dashboard/user-list', action: () => navigate('/dashboard/user-list') },
+        { label: 'Search User', path: '/dashboard/search-user', action: () => navigate('/dashboard/search-user') }
+      ]
+    }] : []),
+    {
+      label: 'Reports',
+      subItems: [
+        { label: 'User Wise Position', path: '/dashboard/user-position', action: () => navigate('/dashboard/user-position') },
+        { label: 'Manage Trades', path: '/dashboard/manage-traders', action: () => navigate('/dashboard/manage-traders') },
+        { label: 'Trade Account', path: '/dashboard/trade-account', action: () => navigate('/dashboard/trade-account') },
+        { label: 'Settlement', path: '/dashboard/settlement', action: () => navigate('/dashboard/settlement') },
+        { label: 'Account Summary', path: '/dashboard/account-summary', action: () => navigate('/dashboard/account-summary') },
+        { label: 'Bill Generate', path: '/dashboard/bill-generate', action: () => navigate('/dashboard/bill-generate') },
+        { label: 'Deleted Trades', path: '/dashboard/deleted-trades', action: () => navigate('/dashboard/deleted-trades') },
+        { label: 'User Script Position Track', path: '/dashboard/user-script-position-track', action: () => navigate('/dashboard/user-script-position-track') },
+        { label: 'User Script Position PL', path: '/dashboard/user-script-position-pl', action: () => navigate('/dashboard/user-script-position-pl') },
+        { label: 'Script Quantity', path: '/dashboard/script-quantity', action: () => navigate('/dashboard/script-quantity') },
+        { label: 'User Credit', path: '/dashboard/user-credit', action: () => navigate('/dashboard/user-credit') },
 
-  {
-    label: 'Dashboard',
-    subItems: [
-      {
-        label: 'Dashboard',
-        path: '/dashboard',
-        action: () => navigate('/dashboard')
-      }
-    ]
-  },
-  {
-    label: 'View',
-    subItems: [
-      {
-        label: 'Market Watch',
-        path: '/dashboard/market-watch',
-        action: () => navigate('/dashboard/market-watch')
-      },
-      {
-        label: 'Trades',
-        path: '/dashboard/trades',
-        action: () => navigate('/dashboard/trades')
-      },
-      {
-        label: 'Orders',
-        path: '/dashboard/orders',
-        action: () => navigate('/dashboard/orders')
-      },
-      {
-        label: 'Positions',
-        path: '/dashboard/positions',
-        action: () => navigate('/dashboard/positions')
-      },
-      {
-        label: 'Cf Margin On Users',
-        path: '/dashboard/cf-margin-users',
-        action: () => navigate('/dashboard/cf-margin-users')
-      },
-      {
-        label: 'Profit & Loss',
-        path: '/dashboard/profit-loss',
-        action: () => navigate('/dashboard/profit-loss')
-      },
-      {
-        label: 'M2M Profit & Loss',
-        path: '/dashboard/m2m-profit-loss',
-        action: () => navigate('/dashboard/m2mReport')
-      },
-      {
-        label: 'Intraday History',
-        path: '/dashboard/intraday-history',
-        action: () => navigate('/dashboard/intraday-history')
-      },
-      {
-        label: 'Rejection Log',
-        path: '/dashboard/rejection-log',
-        action: () => navigate('/dashboard/rejection-log')
-      },
-      { label: 'Login History', path: '/dashboard/login-history', action: () => navigate('/dashboard/login-history') },
-        // Only show Groups for Admin
-        ...(isAdminUser ? [{
-          label: 'Groups',
-          path: '/dashboard/groups',
-          action: () => navigate('/dashboard/groups')
-        }] : [])
-    ]
-  },
-  {
-    label: 'Users',
-    subItems: [
-      {
-        label: 'Create User',
-        path: '/dashboard/create-user',
-        action: () => navigate('/dashboard/create-user')
-      },
-      {
-        label: 'User List',
-        path: '/dashboard/user-list',
-        action: () => navigate('/dashboard/user-list')
-      },
-      {
-        label: 'Search User',
-        path: '/dashboard/search-user',
-        action: () => navigate('/dashboard/search-user')
-      }
-    ]
-  },
-  {
-    label: 'Reports',
-    subItems: [
-      {
-        label: 'User Wise Position',
-        path: '/dashboard/user-position',
-        action: () => navigate('/dashboard/user-position')
-      },
-      {
-        label: 'Manage Traders',
-        path: '/dashboard/manage-traders',
-        action: () => navigate('/dashboard/manage-traders')
-      },
-      {
-        label: 'Trade Account',
-        path: '/dashboard/trade-account',
-        action: () => navigate('/dashboard/trade-account')
-      },
-      {
-        label: 'Settlement',
-        path: '/dashboard/settlement',
-        action: () => navigate('/dashboard/settlement')
-      },
-      {
-        label: 'Account Summary',
-        path: '/dashboard/account-summary',
-        action: () => navigate('/dashboard/account-summary')
-      },
-      {
-        label: 'Bill Generate',
-        path: '/dashboard/bill-generate',
-        action: () => navigate('/dashboard/bill-generate')
-      },
-      {
-        label: 'Deleted Trades',
-        path: '/dashboard/deleted-trades',
-        action: () => navigate('/dashboard/deleted-trades')
-      },
-      {
-        label: '% Open Position',
-        path: '/dashboard/open-position',
-        action: () => navigate('/dashboard/open-position')
-      },
-      {
-        label: 'Weekly Admin',
-        path: '/dashboard/weekly-admin',
-        action: () => navigate('/dashboard/weekly-admin')
-      },
-      {
-        label: 'Trade Margin',
-        path: '/dashboard/trade-margin',
-        action: () => navigate('/dashboard/trade-margin')
-      },
-      {
-        label: 'Script Master',
-        path: '/dashboard/script-master',
-        action: () => navigate('/dashboard/script-master')
-      },
-      {
-        label: 'Script P&L Summary',
-        path: '/dashboard/script-pl-summary',
-        action: () => navigate('/dashboard/script-pl-summary')
-      },
-      {
-        label: 'Analytics',
-        path: '/dashboard/analytics',
-        action: () => navigate('/dashboard/analytics')
-      },
-      {
-        label: 'User Logs New',
-        path: '/dashboard/user-logs-new',
-        action: () => navigate('/dashboard/user-logs-new')
-      },
-      {
-        label: 'Userwise P&L Summary',
-        path: '/dashboard/userwise-pl-summary',
-        action: () => navigate('/dashboard/userwise-pl-summary')
-      },
-      {
-        label: 'User Script Position Track',
-        path: '/dashboard/user-script-position-track',
-        action: () => navigate('/dashboard/user-script-position-track')
-      },
-      {
-        label: 'User Script Position PL',
-        path: '/dashboard/user-script-position-pl',
-        action: () => navigate('/dashboard/user-script-position-pl')
-      },
-      {
-        label: 'Script Buffer Limit',
-        path: '/dashboard/script-buffer-limit',
-        action: () => navigate('/dashboard/script-buffer-limit')
-      }
-    ]
-  },
-  {
-    label: 'Settings',
-    subItems: [
-      {
-        label: 'Notification Alert',
-        path: '/dashboard/notification-alert',
-        action: () => navigate('/dashboard/notification-alert')
-      }
-    ]
-  },
-  {
-    label: 'Tools',
-    subItems: [
-      {
-        label: 'Status Bar',
-        path: '/dashboard/status-bar',
-        action: () => navigate('/dashboard/status-bar')
-      },
-      {
-        label: 'Tool Bar',
-        path: '/dashboard/toolbar',
-        action: () => navigate('/dashboard/toolbar')
-      },
-      {
-        label: 'Messages',
-        path: '/dashboard/messages',
-        action: () => navigate('/dashboard/messages')
-      },
-      {
-        label: 'Exchange Time Schedule',
-        path: '/dashboard/exchange-schedule',
-        action: () => navigate('/dashboard/exchange-schedule')
-      },
-      {
-        label: 'Configure 2FA',
-        path: '/dashboard/configure-2fa',
-        action: () => navigate('/dashboard/configure-2fa')
-      },
-      // Only show File Upload for Admin
-        ...(isAdminUser ? [{
-          label: 'File Upload',
-          path: '/dashboard/file-upload',
-          action: () => navigate('/dashboard/file-upload')
-        }] : [])
-    ]
-  },
-  {
-    label: 'Account',
-    subItems: [
-      {
-        label: 'Logout',
-        icon: LogOut,
-        separator: false,
-        action: () => logout()
-      }
-    ]
-  }
+        ...(isAdminOrMaster ? [
+          { label: '% Open Position', path: '/dashboard/open-position', action: () => navigate('/dashboard/open-position') },
+          { label: 'Weekly Admin', path: '/dashboard/weekly-admin', action: () => navigate('/dashboard/weekly-admin') },
+          { label: 'Trade Margin', path: '/dashboard/trade-margin', action: () => navigate('/dashboard/trade-margin') },
+          { label: 'Script Master', path: '/dashboard/script-master', action: () => navigate('/dashboard/script-master') },
+          { label: 'Script P&L Summary', path: '/dashboard/script-pl-summary', action: () => navigate('/dashboard/script-pl-summary') },
+          { label: 'Analytics', path: '/dashboard/analytics', action: () => navigate('/dashboard/analytics') },
+          { label: 'User Logs New', path: '/dashboard/user-logs-new', action: () => navigate('/dashboard/user-logs-new') },
+          { label: 'Userwise P&L Summary', path: '/dashboard/userwise-pl-summary', action: () => navigate('/dashboard/userwise-pl-summary') },
+          { label: 'Script Buffer Limit', path: '/dashboard/script-buffer-limit', action: () => navigate('/dashboard/script-buffer-limit') }
+        ] : [])
+      ]
+    },
+    {
+      label: 'Tools',
+      subItems: [
+        { label: 'Messages', path: '/dashboard/messages', action: () => navigate('/dashboard/messages') },
+        { label: 'Configure 2FA', path: '/dashboard/configure-2fa', action: () => navigate('/dashboard/configure-2fa') },
+
+        ...(isAdminOrMaster ? [
+          { label: 'Status Bar', path: '/dashboard/status-bar', action: () => navigate('/dashboard/status-bar') },
+          { label: 'Tool Bar', path: '/dashboard/toolbar', action: () => navigate('/dashboard/toolbar') },
+          { label: 'Exchange Time Schedule', path: '/dashboard/exchange-schedule', action: () => navigate('/dashboard/exchange-schedule') },
+          // FILE UPLOAD: Restricted to Admin Only
+          ...(isAdminOnly ? [{ label: 'File Upload', path: '/dashboard/file-upload', action: () => navigate('/dashboard/file-upload') }] : [])
+        ] : [])
+      ]
+    },
+    {
+      label: 'Account',
+      subItems: [
+        { label: 'Change Password', path: '/dashboard/change-password', action: () => navigate('/dashboard/change-password') },
+        { label: 'Logout', icon: LogOut, action: () => logout() },
+      ]
+    }
   ]
 };
 

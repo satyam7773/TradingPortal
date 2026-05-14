@@ -497,7 +497,7 @@ const UserWisePosition: React.FC = () => {
         // Send polling request immediately, then every 1 second (Flutter pattern)
         const sendPollingRequest = () => {
           try {
-            marketWatchService.sendInstrumentsRequest(userIdStr, instrumentTokens)
+            marketWatchService.sendInstrumentsRequestduplicate(userIdStr, instrumentTokens)
           } catch (error) {
             console.warn('⚠️ Error sending instruments polling request:', error)
           }

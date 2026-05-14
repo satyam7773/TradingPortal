@@ -68,11 +68,11 @@ const dateFormatterCache = new Map<number, string>()
 
 const formatTimestamp = (timestamp: number | undefined): string => {
   if (!timestamp) return '-'
-  
+
   if (dateFormatterCache.has(timestamp)) {
     return dateFormatterCache.get(timestamp)!
   }
-  
+
   const formatted = new Date(timestamp).toLocaleString('en-GB', {
     day: '2-digit',
     month: '2-digit',
@@ -81,7 +81,7 @@ const formatTimestamp = (timestamp: number | undefined): string => {
     minute: '2-digit',
     second: '2-digit'
   }).replace(/\//g, '-')
-  
+
   dateFormatterCache.set(timestamp, formatted)
   return formatted
 }
@@ -98,14 +98,14 @@ const formatExpiry = (expiry: string | undefined): string => {
 }
 
 // Memoized Table Row Component
-const TableRow = memo(({ 
-  instrument, 
-  index, 
+const TableRow = memo(({
+  instrument,
+  index,
   config,
   changes,
   onActionMenuOpen,
   deletingToken
-}: { 
+}: {
   instrument: FeedInstrument
   index: number
   config: InstrumentConfig | undefined
@@ -115,29 +115,36 @@ const TableRow = memo(({
 }) => {
   const change = instrument.ltp - instrument.close
   const isPositive = change >= 0
-  
-  // Check if bid price is going up or down (for Exchange triangle)
   const isBidPositive = isPositive
-  
-  const instrumentName = config?.tradeSymbol || config?.instrumentName || config?.script || `Token ${instrument.insToken}`
-  const exchangeName = config?.exchange || ''
-  const instrumentScript = config?.script || config?.instrumentName || ''
+
+  // --- CONDITIONAL FORMATTING LOGIC ---
+  const isCallPut = config?.exchange === 'CALLPUT';
+
+  let displayName = "";
+
+  if (isCallPut) {
+    // Format specifically for CALLPUT: BANKNIFTY 53500 CE
+    const name = config?.instrumentName || config?.script || '';
+    const strike = config?.strikePrice ? (config.strikePrice % 1 === 0 ? config.strikePrice : config.strikePrice.toFixed(2)) : '';
+    const type = config?.tradeSymbol?.toUpperCase().endsWith('CE') ? 'CE' : config?.tradeSymbol?.toUpperCase().endsWith('PE') ? 'PE' : '';
+    displayName = `${name} ${strike} ${type}`.toUpperCase();
+  } else {
+    // Standard format for NSE, MCX, etc: NIFTY, GOLD, etc.
+    displayName = config?.script || config?.instrumentName || config?.tradeSymbol || `Token ${instrument.insToken}`;
+  }
+
+  const exchangeName = config?.exchange || 'N/A'
   const expiry = formatExpiry(config?.expiry)
   const lastTradedTime = formatTimestamp(instrument.lastTradedTime)
-  
-  // Use token for stable alternating pattern (won't change on deletion)
   const isEvenRow = instrument.insToken % 2 === 0
-  
+
+
+
+
   return (
-    <tr
-      className={`hover:bg-slate-700 transition-colors ${
-        isEvenRow ? 'bg-slate-800' : 'bg-slate-850'
-      }`}
-    >
+    <tr className={`hover:bg-slate-700 transition-colors ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}>
       {/* Actions */}
-      <td className={`px-3 py-2 text-center sticky left-0 ${
-        isEvenRow ? 'bg-slate-800' : 'bg-slate-850'
-      }`}>
+      <td className={`px-3 py-2 text-center sticky left-0 z-10 ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}>
         <button
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -149,178 +156,40 @@ const TableRow = memo(({
         </button>
       </td>
 
-      {/* Exchange with Triangle */}
+      {/* Exchange */}
       <td className="px-4 py-2 text-left">
         <div className="inline-flex items-center gap-1.5">
-          {isBidPositive ? (
-            <span className="text-green-400 text-base">▲</span>
-          ) : (
-            <span className="text-red-400 text-base">▼</span>
-          )}
-          <span className="text-slate-300 font-semibold text-base">
-            {exchangeName || 'N/A'}
-          </span>
+          {isBidPositive ? <span className="text-green-400 text-base">▲</span> : <span className="text-red-400 text-base">▼</span>}
+          <span className="text-slate-300 font-semibold text-base uppercase">{exchangeName}</span>
         </div>
       </td>
 
-      {/* Symbol */}
-      <td className="px-4 py-2 text-left">
-        <div 
-          className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base transition-all hover:scale-105 cursor-pointer text-white ${
-            isPositive
-              ? 'bg-blue-700 hover:bg-blue-800'
-              : 'bg-red-700 hover:bg-red-800'
-          }`}
+      {/* Symbol Column - Formatting depends on displayName logic above */}
+      <td className="px-4 py-2 text-left whitespace-nowrap">
+        <div
+          className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base transition-all hover:scale-105 cursor-pointer text-white uppercase ${isPositive ? 'bg-blue-700 hover:bg-blue-800' : 'bg-red-700 hover:bg-red-800'
+            }`}
         >
-          {instrumentScript || instrumentName}
+          {displayName}
         </div>
       </td>
 
-      {/* Expiry */}
-      <td className="px-4 py-2 text-right">
-        <span className="text-slate-300 text-base font-medium">{expiry}</span>
-      </td>
-
-      {/* Buy Qty */}
-      <td className="px-4 py-2 text-right">
-        <span 
-          className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base transition-all hover:scale-105 cursor-pointer ${
-            changes.buyQty 
-              ? (changes.buyQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white')
-              : 'text-slate-200 hover:bg-slate-700'
-          }`}
-          onMouseEnter={(e) => { if (!changes.buyQty) e.currentTarget.style.color = 'white' }}
-          onMouseLeave={(e) => { if (!changes.buyQty) e.currentTarget.style.color = '' }}
-        >
-          {instrument.bids?.[0]?.qty || '-'}
-        </span>
-      </td>
-
-      {/* Buy Price (Bid) */}
-      <td className="px-4 py-2 text-right">
-        <span 
-          className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base transition-all hover:scale-105 cursor-pointer ${
-            changes.bid 
-              ? (changes.bid === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white')
-              : 'text-slate-200 hover:bg-slate-700'
-          }`}
-          onMouseEnter={(e) => { if (!changes.bid) e.currentTarget.style.color = 'white' }}
-          onMouseLeave={(e) => { if (!changes.bid) e.currentTarget.style.color = '' }}
-        >
-          {instrument.bid.toFixed(2)}
-        </span>
-      </td>
-
-      {/* Sell Price (Ask) */}
-      <td className="px-4 py-2 text-right">
-        <span 
-          className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base transition-all hover:scale-105 cursor-pointer ${
-            changes.ask 
-              ? (changes.ask === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white')
-              : 'text-slate-200 hover:bg-slate-700'
-          }`}
-          onMouseEnter={(e) => { if (!changes.ask) e.currentTarget.style.color = 'white' }}
-          onMouseLeave={(e) => { if (!changes.ask) e.currentTarget.style.color = '' }}
-        >
-          {instrument.ask.toFixed(2)}
-        </span>
-      </td>
-
-      {/* Sell Qty */}
-      <td className="px-4 py-2 text-right">
-        <span 
-          className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base transition-all hover:scale-105 cursor-pointer ${
-            changes.sellQty 
-              ? (changes.sellQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white')
-              : 'text-slate-200 hover:bg-slate-700'
-          }`}
-          onMouseEnter={(e) => { if (!changes.sellQty) e.currentTarget.style.color = 'white' }}
-          onMouseLeave={(e) => { if (!changes.sellQty) e.currentTarget.style.color = '' }}
-        >
-          {instrument.asks?.[0]?.qty || '-'}
-        </span>
-      </td>
-
-      {/* LTP */}
-      <td className="px-4 py-2 text-right">
-        <span 
-          className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base transition-all hover:scale-105 cursor-pointer ${
-            changes.ltp 
-              ? (changes.ltp === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white')
-              : 'text-slate-200 hover:bg-slate-700'
-          }`}
-          onMouseEnter={(e) => { if (!changes.ltp) e.currentTarget.style.color = 'white' }}
-          onMouseLeave={(e) => { if (!changes.ltp) e.currentTarget.style.color = '' }}
-        >
-          {instrument.ltp.toFixed(2)}
-        </span>
-      </td>
-
-      {/* Net Change */}
-      <td className="px-4 py-2 text-right">
-        <span 
-          className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base transition-all hover:scale-105 cursor-pointer ${
-            changes.ltp
-              ? (changes.ltp === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white')
-              : (isPositive ? 'text-slate-200 hover:bg-slate-700' : 'text-slate-200 hover:bg-slate-700')
-          }`}
-          onMouseEnter={(e) => { if (!changes.ltp) e.currentTarget.style.color = 'white' }}
-          onMouseLeave={(e) => { if (!changes.ltp) e.currentTarget.style.color = '' }}
-        >
-          {isPositive ? '+' : ''}{change.toFixed(2)}
-        </span>
-      </td>
-
-      {/* Open */}
-      <td className="px-4 py-2 text-right">
-        <span className="inline-block px-3 py-1.5 rounded-lg font-medium text-base text-slate-300 hover:bg-slate-700 hover:!text-white cursor-pointer transition-all">
-          {instrument.open.toFixed(2)}
-        </span>
-      </td>
-
-      {/* High */}
-      <td className="px-4 py-2 text-right">
-        <span className="inline-block px-3 py-1.5 rounded-lg font-medium text-base text-slate-300 hover:bg-slate-700 hover:!text-white cursor-pointer transition-all">
-          {instrument.high.toFixed(2)}
-        </span>
-      </td>
-
-      {/* Low */}
-      <td className="px-4 py-2 text-right">
-        <span className="inline-block px-3 py-1.5 rounded-lg font-medium text-base text-slate-300 hover:bg-slate-700 hover:!text-white cursor-pointer transition-all">
-          {instrument.low.toFixed(2)}
-        </span>
-      </td>
-
-      {/* Close */}
-      <td className="px-4 py-2 text-right">
-        <span className="inline-block px-3 py-1.5 rounded-lg font-medium text-base transition-all hover:scale-105 cursor-pointer text-slate-300 hover:bg-slate-700 hover:!text-white">
-          {instrument.close.toFixed(2)}
-        </span>
-      </td>
-
-      {/* LTT - Last Traded Time */}
-      <td className="px-4 py-2 text-right">
-        <span className="text-slate-400 text-xs font-mono whitespace-nowrap">
-          {lastTradedTime}
-        </span>
-      </td>
+      {/* ... rest of the columns (Expiry, Qty, LTP, etc.) remain the same ... */}
+      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{expiry}</span></td>
+      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.buyQty ? (changes.buyQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bids?.[0]?.qty || '-'}</span></td>
+      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.bid ? (changes.bid === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bid.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.ask ? (changes.ask === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.ask.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.sellQty ? (changes.sellQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.asks?.[0]?.qty || '-'}</span></td>
+      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base ${changes.ltp ? (changes.ltp === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.ltp.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base text-slate-200`}>{isPositive ? '+' : ''}{change.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.open.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.high.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.low.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.close.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-400 text-xs font-mono whitespace-nowrap">{lastTradedTime}</span></td>
     </tr>
   )
-}, (prevProps, nextProps) => {
-  // Custom comparison for better performance
-  return (
-    prevProps.instrument.insToken === nextProps.instrument.insToken &&
-    prevProps.instrument.ltp === nextProps.instrument.ltp &&
-    prevProps.instrument.bid === nextProps.instrument.bid &&
-    prevProps.instrument.ask === nextProps.instrument.ask &&
-    prevProps.instrument.buyQty === nextProps.instrument.buyQty &&
-    prevProps.instrument.sellQty === nextProps.instrument.sellQty &&
-    prevProps.deletingToken === nextProps.deletingToken &&
-    JSON.stringify(prevProps.changes) === JSON.stringify(nextProps.changes)
-  )
 })
-
 const MarketWatch: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -346,43 +215,43 @@ const MarketWatch: React.FC = () => {
   const [showBuyOrderModal, setShowBuyOrderModal] = useState(false)
   const [showSellOrderModal, setShowSellOrderModal] = useState(false)
   const [selectedOrderInstrument, setSelectedOrderInstrument] = useState<{ token: number; config: InstrumentConfig | undefined } | null>(null)
-  const [clients, setClients] = useState<Array<{userId: number; name: string; username: string; parentId: number; roleId: number}>>([])
-  const [selectedClient, setSelectedClient] = useState<{userId: number; name: string; username: string} | null>(null)
+  const [clients, setClients] = useState<Array<{ userId: number; name: string; username: string; parentId: number; roleId: number }>>([])
+  const [selectedClient, setSelectedClient] = useState<{ userId: number; name: string; username: string } | null>(null)
   const [showClientListModal, setShowClientListModal] = useState(false)
   const [clientSearchTerm, setClientSearchTerm] = useState('')
-  
+
   // Order form state
   const [buyOrderQuantity, setBuyOrderQuantity] = useState('1')
   const [buyOrderPrice, setBuyOrderPrice] = useState('0')
   const [buyOrderType, setBuyOrderType] = useState('MARKET')
   const [buyOrderRemark, setBuyOrderRemark] = useState('')
   const [isBuyOrderSubmitting, setIsBuyOrderSubmitting] = useState(false)
-  
+
   const [sellOrderQuantity, setSellOrderQuantity] = useState('1')
   const [sellOrderPrice, setSellOrderPrice] = useState('0')
   const [sellOrderType, setSellOrderType] = useState('MARKET')
   const [sellOrderRemark, setSellOrderRemark] = useState('')
   const [isSellOrderSubmitting, setIsSellOrderSubmitting] = useState(false)
-  
+
   // Watchlist Tabs state
   const [watchlistTabs, setWatchlistTabs] = useState<WatchlistTab[]>([])
   const [selectedTabId, setSelectedTabId] = useState<number | null>(null)
   const [isLoadingTabs, setIsLoadingTabs] = useState(false)
   const [editingTabId, setEditingTabId] = useState<number | null>(null)
   const [editingTabName, setEditingTabName] = useState('')
-  
+
   // Draggable modal state
   const [buyModalPosition, setBuyModalPosition] = useState({ x: 0, y: 0 })
   const [sellModalPosition, setSellModalPosition] = useState({ x: 0, y: 0 })
   const [isDraggingBuy, setIsDraggingBuy] = useState(false)
   const [isDraggingSell, setIsDraggingSell] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  
+
   // Column resize state
   const [columnWidths, setColumnWidths] = useState({
     actions: 100,
     exchange: 120,
-    symbol: 180,
+    symbol: 240,
     expiry: 130,
     buyQty: 110,
     buyPrice: 120,
@@ -399,7 +268,7 @@ const MarketWatch: React.FC = () => {
   const [resizingColumn, setResizingColumn] = useState<string | null>(null)
   const [resizeStartX, setResizeStartX] = useState(0)
   const [resizeStartWidth, setResizeStartWidth] = useState(0)
-  
+
   const feedUnsubscribeRef = useRef<(() => void) | null>(null)
   const instrumentConfigRef = useRef<Record<number, any>>({})
   const previousPricesRef = useRef<Record<number, FeedInstrument>>({})
@@ -411,6 +280,36 @@ const MarketWatch: React.FC = () => {
     setResizeStartX(e.clientX)
     setResizeStartWidth(columnWidths[column as keyof typeof columnWidths])
   }
+
+  // --- NEW: CENTRALIZED RESET FUNCTIONS ---
+  const resetBuyForm = useCallback(() => {
+    setShowBuyOrderModal(false);
+    setBuyOrderQuantity('1');
+    setBuyOrderPrice('0');
+    setBuyOrderType('MARKET');
+    setBuyOrderRemark('');
+    setSelectedClient(null);
+    setClientSearchTerm('');
+  }, []);
+
+  const resetSellForm = useCallback(() => {
+    setShowSellOrderModal(false);
+    setSellOrderQuantity('1');
+    setSellOrderPrice('0');
+    setSellOrderType('MARKET');
+    setSellOrderRemark('');
+    setSelectedClient(null);
+    setClientSearchTerm('');
+  }, []);
+
+
+  useEffect(() => {
+    if (!showBuyOrderModal) resetBuyForm();
+  }, [showBuyOrderModal, resetBuyForm]);
+
+  useEffect(() => {
+    if (!showSellOrderModal) resetSellForm();
+  }, [showSellOrderModal, resetSellForm]);
 
   useEffect(() => {
     const handleResizeMove = (e: MouseEvent) => {
@@ -441,7 +340,7 @@ const MarketWatch: React.FC = () => {
   }, [resizingColumn, resizeStartX, resizeStartWidth])
 
   // Memoize watchlist token Set for O(1) lookup
-  const watchlistTokens = useMemo(() => 
+  const watchlistTokens = useMemo(() =>
     new Set(watchlist.map(item => item.token)),
     [watchlist]
   )
@@ -474,19 +373,19 @@ const MarketWatch: React.FC = () => {
     console.log('🔍 Filtered feed data:', filtered.length, 'instruments from', feedData.length, 'total feed items for tab', selectedTabId)
     return filtered
   }, [feedData, selectedTabTokens, deletingToken, selectedTabId])
-  
+
   // Throttle price change updates
   const [throttledPriceChanges, setThrottledPriceChanges] = useState<Record<number, PriceChange>>({})
   const priceChangeTimeoutRef = useRef<number | null>(null)
-  
+
   useEffect(() => {
     if (Object.keys(priceChanges).length > 0) {
       setThrottledPriceChanges(priceChanges)
-      
+
       if (priceChangeTimeoutRef.current) {
         clearTimeout(priceChangeTimeoutRef.current)
       }
-      
+
       priceChangeTimeoutRef.current = setTimeout(() => {
         setPriceChanges({})
         setThrottledPriceChanges({})
@@ -518,7 +417,7 @@ const MarketWatch: React.FC = () => {
         const userId = user.userId
         const watchlistData = await watchlistService.getWatchlist(userId)
         setWatchlist(watchlistData)
-        
+
         // Send watchlist request (will be sent after WebSocket connects)
         // No need to subscribe to tokens separately anymore
       }
@@ -539,7 +438,7 @@ const MarketWatch: React.FC = () => {
         const tabsData = await watchlistTabsService.getWatchlistTabs(userId)
         console.log('📑 Received tabs:', tabsData)
         setWatchlistTabs(tabsData)
-        
+
         // Auto-select first tab if not selected
         if (tabsData.length > 0 && !selectedTabId) {
           setSelectedTabId(tabsData[0].tabId)
@@ -577,7 +476,7 @@ const MarketWatch: React.FC = () => {
       setEditingTabId(null)
       setEditingTabName('')
       toast.success('Tab updated successfully')
-      
+
       // Refresh all tabs
       await fetchWatchlistTabs()
     } catch (error: any) {
@@ -592,7 +491,7 @@ const MarketWatch: React.FC = () => {
     const fetchExchanges = async () => {
       try {
         const exchangesData = await userManagementService.fetchExchanges()
-        
+
         if (exchangesData && Array.isArray(exchangesData)) {
           // Convert API response to ExchangeConfig format
           const exchangeList = exchangesData.map((exchange) => ({
@@ -612,12 +511,12 @@ const MarketWatch: React.FC = () => {
         // Fallback to config if API fails
         let configIndex = ConfigManager.getConfigIndex()
         let exchangesData = configIndex?.exchanges
-        
+
         if (!exchangesData) {
           const fullConfig = ConfigManager.getFullConfig()
           exchangesData = fullConfig?.exchanges
         }
-        
+
         if (exchangesData) {
           const exchangeList = Object.entries(exchangesData).map(([key, value]: any) => ({
             key: key,
@@ -637,7 +536,7 @@ const MarketWatch: React.FC = () => {
     const user = userData ? JSON.parse(userData) : null
     const roleId = user?.roleId
     const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-    
+
     if (isAdminUser) {
       const fetchClients = async () => {
         try {
@@ -656,7 +555,7 @@ const MarketWatch: React.FC = () => {
     // Build instrument config cache
     const fullConfig = ConfigManager.getFullConfig()
     const configIndex = ConfigManager.getConfigIndex()
-    
+
     if (fullConfig && fullConfig.instruments) {
       // Iterate through all exchanges and their instruments
       Object.entries(fullConfig.instruments).forEach(([exchangeKey, instrumentsList]: [string, any]) => {
@@ -691,22 +590,22 @@ const MarketWatch: React.FC = () => {
       if (userData) {
         const user = JSON.parse(userData)
         const userId = user.userId
-        
+
         // Check if no tab selected
         if (!selectedTabId) {
           toast.error('Please select a watchlist tab first')
           return
         }
-        
+
         // Allow same token across different tabs, but prevent duplicate in selected tab
         if (selectedTabTokens.has(token)) {
           toast.error('Token already exists in selected tab')
           return
         }
-        
+
         await watchlistTabsService.addToWatchlist(userId, token, selectedTabId)
         toast.success('Added to watchlist')
-        
+
         // Refresh watchlist tabs
         await fetchWatchlistTabs()
       }
@@ -750,77 +649,100 @@ const MarketWatch: React.FC = () => {
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Monitor socket connection status and subscribe when ready
+  // 1. Corrected Connection Effect
   useEffect(() => {
     const checkAndSubscribe = async () => {
-      // If socket is not connected, try to connect it
+      const usrData = localStorage.getItem('userData');
+      if (!usrData) return;
+      const userr = JSON.parse(usrData);
+      const userIdd = userr.userId.toString();
+
       if (!marketWatchService.isConnected()) {
-        console.log('⏳ Socket not connected, attempting to connect...')
         try {
-          // Try to connect the socket
           await marketWatchService.connect(() => {
-            console.log('🔌 Socket connected from MarketWatch page')
-          })
-          console.log('✅ Socket connection successful')
+            console.log('🔌 Socket connected from MarketWatch page');
+            // FIX: Must update local state so the other effects trigger
+            setIsConnected(true);
+            forceResubscribe(userIdd);
+          });
         } catch (error) {
-          console.warn('⚠️  Failed to connect socket from MarketWatch, will retry in 500ms:', error)
-          setTimeout(checkAndSubscribe, 500)
-          return
+          setTimeout(checkAndSubscribe, 500);
+          return;
+        }
+      } else {
+        // If already connected, ensure state is true
+        setIsConnected(true);
+        if (!subscriptionRef.current.subscribed || subscriptionRef.current.userId !== userIdd) {
+          forceResubscribe(userIdd);
         }
       }
 
-      const userData = localStorage.getItem('userData')
-      if (!userData) {
-        console.warn('⚠️  No user data found, cannot subscribe')
-        return
-      }
+      const userData = localStorage.getItem('userData');
+      if (!userData) return;
 
-      const user = JSON.parse(userData)
-      const userId = user.userId.toString()
+      const user = JSON.parse(userData);
+      const userId = user.userId.toString();
 
-      // Guard: check if already subscribed for this user
       if (subscriptionRef.current.subscribed && subscriptionRef.current.userId === userId) {
-        console.log('✅ Already subscribed to watchlist and instruments for user:', userId)
-        return
+        return;
       }
 
-      console.log('✅ Socket ready! Subscribing to watchlist, instruments, and order updates for user:', userId)
-      
-      // Mark as subscribed
-      subscriptionRef.current = { subscribed: true, userId }
+      subscriptionRef.current = { subscribed: true, userId };
+      marketWatchService.subscribeToWatchlist(userId);
+      marketWatchService.subscribeToInstruments(userId);
+    };
 
-      // Subscribe to watchlist and instruments queues
-      marketWatchService.subscribeToWatchlist(userId)
-      marketWatchService.subscribeToInstruments(userId)
-    }
+    const forceResubscribe = (userId: string) => {
+      console.log('🔄 Triggering explicit re-subscription for user:', userId);
 
-    checkAndSubscribe()
-  }, [])
+      // 1. Unsubscribe first to clear any ghost subscriptions
+      marketWatchService.unsubscribeFromWatchlist(userId);
+      marketWatchService.unsubscribeFromInstruments(userId);
 
-  // Send instruments request only when watchlist tokens change
+      // 2. Fresh Subscriptions
+      subscriptionRef.current = { subscribed: true, userId };
+      marketWatchService.subscribeToWatchlist(userId);
+      marketWatchService.subscribeToInstruments(userId);
+
+      // 3. IMPORTANT: Re-request current instruments to kickstart the feed
+      if (watchlist.length > 0) {
+        const tokens = watchlist.map(item => item.token.toString());
+        marketWatchService.sendInstrumentsRequest(userId, tokens);
+      }
+    };
+
+    checkAndSubscribe();
+  }, [watchlist.length]);
+
+  // 2. Corrected Request Effect
   useEffect(() => {
-    if (!isConnected || watchlist.length === 0) return
-
-    const userData = localStorage.getItem('userData')
-    if (!userData) return
-
-    const user = JSON.parse(userData)
-    const userId = user.userId.toString()
-
-    // Guard: check if watchlist tokens have actually changed using hash
-    const currentHash = watchlist.map(item => item.token.toString()).join(',')
-    if (currentHash === watchlistHashRef.current) {
-      console.log('✅ Watchlist tokens unchanged, skipping instruments request')
-      return
+    // Now isConnected will actually be true
+    if (!isConnected || watchlist.length === 0) {
+      console.log('⏳ Skipping request: isConnected:', isConnected, 'Watchlist Size:', watchlist.length);
+      return;
     }
 
-    console.log('🔄 Watchlist tokens changed:', currentHash)
-    watchlistHashRef.current = currentHash
+    const userData = localStorage.getItem('userData');
+    if (!userData) return;
 
-    // Request instrument feed data for the watchlist tokens
-    const tokens = watchlist.map(item => item.token.toString())
-    console.log('📤 Requesting feed data for tokens:', tokens)
-    marketWatchService.sendInstrumentsRequest(userId, tokens)
-  }, [isConnected, watchlist])
+    const user = JSON.parse(userData);
+    const userId = user.userId.toString();
+
+    const currentHash = watchlist.map(item => item.token.toString()).join(',');
+    if (currentHash === watchlistHashRef.current) return;
+
+    watchlistHashRef.current = currentHash;
+
+    // FIX: Ensure tokens are explicitly mapped to strings and filtered
+    const tokens = watchlist
+      .filter(item => item.token !== undefined && item.token !== null)
+      .map(item => item.token.toString());
+
+    if (tokens.length > 0) {
+      console.log('📤 Sending instruments request for:', tokens);
+      marketWatchService.sendInstrumentsRequest(userId, tokens);
+    }
+  }, [isConnected, watchlist]); // This will now fire correctly when isConnected becomes true
 
   // Setup feed subscription - Keep subscription logic only
   useEffect(() => {
@@ -848,14 +770,27 @@ const MarketWatch: React.FC = () => {
       let lastUpdate = 0
       const UPDATE_THROTTLE = 75 // Update at most every 50ms (~20 times per second)
       let dataReceivedCount = 0
-      
+
+      // ... your existing retry logic ...
+
+      console.log('🔌 Setting up new feed subscription...');
+
+      // Every time the feed starts, we ensure the STOMP destination is active
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        const userId = JSON.parse(userData).userId.toString();
+        // This ensures that if the 'market' call happens 2-3 times, 
+        // we are always listening to the latest channel
+        marketWatchService.subscribeToInstruments(userId);
+      }
+
       feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
-        console.log('data received',data)
+        console.log('data received', data)
         dataReceivedCount++
         if (dataReceivedCount === 1 || dataReceivedCount % 50 === 0) {
           console.log('📊 Market Watch Response [' + dataReceivedCount + ']:', data?.length || 0, 'instruments')
         }
-        
+
         // IMPORTANT: Continue processing even if tab is hidden (but throttle more)
         // This keeps the data current in background
         const now = Date.now()
@@ -863,23 +798,23 @@ const MarketWatch: React.FC = () => {
           return // Skip this update
         }
         lastUpdate = now
-        
+
         // Handle both array of instruments and single instrument
         if (Array.isArray(data)) {
           // Optimize: Only update changed instruments
           setFeedData(prevData => {
             // Create a map for fast lookup
             const dataMap = new Map(data.map(item => [item.insToken, item]))
-            
+
             // Track price changes for animations
             const changes: Record<number, PriceChange> = {}
-            
+
             // Update existing instruments or add new ones
             const updated = prevData.map(prevItem => {
               const newItem = dataMap.get(prevItem.insToken)
               if (newItem) {
                 dataMap.delete(prevItem.insToken)
-                
+
                 // Track changes for animation (only for significant changes)
                 const change: PriceChange = {}
                 const ltpDiff = Math.abs(newItem.ltp - prevItem.ltp)
@@ -887,7 +822,7 @@ const MarketWatch: React.FC = () => {
                 const askDiff = Math.abs(newItem.ask - prevItem.ask)
                 const buyQtyDiff = Math.abs((newItem.buyQty || 0) - (prevItem.buyQty || 0))
                 const sellQtyDiff = Math.abs((newItem.sellQty || 0) - (prevItem.sellQty || 0))
-                
+
                 if (ltpDiff > 0.01) {
                   change.ltp = newItem.ltp > prevItem.ltp ? 'up' : 'down'
                 }
@@ -906,30 +841,30 @@ const MarketWatch: React.FC = () => {
                 if (Object.keys(change).length > 0) {
                   changes[newItem.insToken] = change
                 }
-                
+
                 previousPricesRef.current[newItem.insToken] = newItem
                 return newItem
               }
               return prevItem
             })
-            
+
             // Add any new instruments not in previous data
             const newInstruments = Array.from(dataMap.values())
             newInstruments.forEach(item => {
               previousPricesRef.current[item.insToken] = item
             })
-            
+
             // Update price changes if any
             if (Object.keys(changes).length > 0) {
               setPriceChanges(prev => ({ ...prev, ...changes }))
             }
-            
+
             return [...updated, ...newInstruments]
           })
-          
+
           return
         }
-        
+
         // Fallback: Handle other data formats
         if (data && typeof data === 'object') {
           if (Array.isArray(data.raw)) {
@@ -965,11 +900,11 @@ const MarketWatch: React.FC = () => {
         console.log('⏸️  Tab is hidden')
       } else {
         console.log('▶️  Tab is visible - re-establishing subscription')
-        
+
         // When tab becomes visible, reset subscription guards to force re-subscription
         subscriptionRef.current = { subscribed: false, userId: null }
         watchlistHashRef.current = ''
-        
+
         // Re-setup feed subscription if socket is still connected
         if (marketWatchService.isConnected()) {
           setupFeedSubscription()
@@ -987,17 +922,17 @@ const MarketWatch: React.FC = () => {
       // Cleanup on unmount
       window.removeEventListener('beforeunload', handlePageClose)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      
+
       // Clear any pending retry timeout
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current)
         retryTimeoutRef.current = null
       }
-      
+
       if (feedUnsubscribeRef.current) {
         feedUnsubscribeRef.current()
       }
-      
+
       // Unsubscribe from STOMP queues when component unmounts
       const userData = localStorage.getItem('userData')
       if (userData) {
@@ -1009,11 +944,11 @@ const MarketWatch: React.FC = () => {
           marketWatchService.unsubscribeFromInstruments(userId)
         }
       }
-      
+
       // Reset subscription guards on unmount
       subscriptionRef.current = { subscribed: false, userId: null }
       watchlistHashRef.current = ''
-      
+
       // Don't disconnect socket on unmount - it's managed globally from login
     }
   }, [])
@@ -1049,17 +984,17 @@ const MarketWatch: React.FC = () => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
-      
+
       // Close exchange dropdown
       if (showExchangeDropdown && !target.closest('.exchange-dropdown-container')) {
         setShowExchangeDropdown(false)
       }
-      
+
       // Close script dropdown
       if (showScriptDropdown && !target.closest('.script-dropdown-container')) {
         setShowScriptDropdown(false)
       }
-      
+
       // Close all scripts dropdown
       if (showAllScriptsDropdown && !target.closest('.all-scripts-dropdown-container')) {
         setShowAllScriptsDropdown(false)
@@ -1103,25 +1038,53 @@ const MarketWatch: React.FC = () => {
     }
   }, [isDraggingBuy, isDraggingSell, dragOffset])
 
-  // Auto-patch live market prices into buy/sell order forms
+  // Updated Effect for Buy Modal
   useEffect(() => {
-    if (showBuyOrderModal && selectedOrderInstrument) {
-      const liveData = feedData.find(item => item.insToken === selectedOrderInstrument.token)
-      if (liveData && buyOrderPrice === '0') {
-        setBuyOrderPrice(liveData.ask.toFixed(2))
+    // Only track live price if the order type is MARKET
+    if (showBuyOrderModal && selectedOrderInstrument && buyOrderType === 'MARKET') {
+      const liveData = feedData.find(item => item.insToken === selectedOrderInstrument.token);
+      if (liveData) {
+        setBuyOrderPrice(liveData.ask.toFixed(2));
       }
     }
-  }, [showBuyOrderModal, selectedOrderInstrument, feedData])
+    // When switching AWAY from MARKET to LIMIT, we don't clear the price, 
+    // we just stop updating it, so it "freezes" at the last known price.
+  }, [feedData, buyOrderType, showBuyOrderModal, selectedOrderInstrument]);
 
+  // Updated Effect for Sell Modal
+  // Auto-patch live market prices for Sell Modal
   useEffect(() => {
-    if (showSellOrderModal && selectedOrderInstrument) {
-      const liveData = feedData.find(item => item.insToken === selectedOrderInstrument.token)
-      if (liveData && sellOrderPrice === '0') {
-        setSellOrderPrice(liveData.bid.toFixed(2))
+    // Logic: Only update the state if the modal is open AND the type is MARKET
+    if (showSellOrderModal && selectedOrderInstrument && sellOrderType === 'MARKET') {
+      const liveData = feedData.find(item => item.insToken === selectedOrderInstrument.token);
+      if (liveData) {
+        // For Sell orders, we usually track the BID price (what buyers are offering)
+        setSellOrderPrice(liveData.bid.toFixed(2));
       }
     }
-  }, [showSellOrderModal, selectedOrderInstrument, feedData])
+    // If type is LIMIT or SL, this effect does nothing, 
+    // so the user's manual changes stay in the input.
+  }, [showSellOrderModal, selectedOrderInstrument, feedData, sellOrderType]);
 
+  const extractTokens = (input: string): string[] => {
+    // Matches Flutter: normalize and split into words/numbers
+    return input.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(' ').filter(t => t.length > 0);
+  };
+
+  const getExpirySearchFormat = (timestamp: any): string => {
+    if (!timestamp || timestamp === 0) return "";
+    const date = new Date(parseInt(timestamp));
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = date.toLocaleString('en-GB', { month: 'short' }); // "May"
+    const year = date.getFullYear();
+    // Returns "26May2026"
+    return `${day}${month}${year}`.toLowerCase();
+  };
+
+  const formatStrike = (value: any): string => {
+    if (value === null || value === undefined) return "";
+    return value % 1 === 0 ? value.toString() : value.toFixed(2);
+  };
 
 
   return (
@@ -1154,11 +1117,10 @@ const MarketWatch: React.FC = () => {
                       setEditingTabId(tab.tabId)
                       setEditingTabName(tab.tabName)
                     }}
-                    className={`px-4 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                      selectedTabId === tab.tabId
-                        ? 'bg-blue-600 text-white shadow-lg'
-                        : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-                    }`}
+                    className={`px-4 py-1.5 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer ${selectedTabId === tab.tabId
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                      }`}
                     title="Double-click to edit tab name"
                   >
                     {tab.tabName}
@@ -1194,26 +1156,25 @@ const MarketWatch: React.FC = () => {
                 <div className="absolute top-full left-0 right-0 mt-2 bg-surface-primary border border-border-primary rounded-lg shadow-lg z-50">
                   <div className="max-h-48 overflow-y-auto">
                     {exchanges.map((exchange) => (
-                        <button
-                          key={exchange.key}
-                          onClick={() => {
-                            setSelectedExchange(exchange.key)
-                            setSelectedExchangeName(exchange.name)
-                            setShowExchangeDropdown(false)
-                          }}
-                          className={`w-full text-left px-4 py-3 hover:bg-surface-hover transition-colors ${
-                            selectedExchange === exchange.key
-                              ? 'bg-blue-500/20 text-blue-500'
-                              : 'text-text-primary'
+                      <button
+                        key={exchange.key}
+                        onClick={() => {
+                          setSelectedExchange(exchange.key)
+                          setSelectedExchangeName(exchange.name)
+                          setShowExchangeDropdown(false)
+                        }}
+                        className={`w-full text-left px-4 py-3 hover:bg-surface-hover transition-colors ${selectedExchange === exchange.key
+                          ? 'bg-blue-500/20 text-blue-500'
+                          : 'text-text-primary'
                           }`}
-                        >
-                          {exchange.name}
-                        </button>
-                      ))}
+                      >
+                        {exchange.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
-              
+
               {/* Show message if no exchanges */}
               {showExchangeDropdown && exchanges.length === 0 && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-surface-primary border border-border-primary rounded-lg shadow-lg z-50 p-4">
@@ -1222,7 +1183,7 @@ const MarketWatch: React.FC = () => {
               )}
             </div>
 
-            {/* Script/Instrument Dropdown */}
+            {/* Script/Instrument Dropdown (filtered by Selected Exchange) */}
             <div className="relative script-dropdown-container">
               <label className="block text-sm font-semibold text-text-primary mb-2">Select Script</label>
               <button
@@ -1232,7 +1193,12 @@ const MarketWatch: React.FC = () => {
               >
                 <span className="flex items-center gap-2">
                   <Search className="w-4 h-4" />
-                  {selectedScript?.instrumentName || (selectedExchange ? 'Choose a script...' : 'Select exchange first')}
+                  {/* IMPROVED BUTTON LABEL */}
+                  {selectedScript ? (
+                    `${selectedScript.instrumentName} ${formatStrike(selectedScript.strikePrice)} ${selectedScript.tradeSymbol?.endsWith('CE') ? 'CALL' : selectedScript.tradeSymbol?.endsWith('PE') ? 'PUT' : ''}`
+                  ) : (
+                    selectedExchange ? 'Choose a script...' : 'Select exchange first'
+                  )}
                 </span>
                 <span className={`transform transition-transform ${showScriptDropdown ? 'rotate-180' : ''}`}>
                   ▼
@@ -1245,51 +1211,93 @@ const MarketWatch: React.FC = () => {
                   <div className="p-3 border-b border-border-primary">
                     <input
                       type="text"
-                      placeholder="Search scripts..."
+                      placeholder="Search within exchange (e.g. 1240 put)..."
                       value={scriptSearchTerm}
                       onChange={(e) => setScriptSearchTerm(e.target.value)}
                       className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded text-text-primary placeholder-text-secondary focus:outline-none focus:border-blue-500"
                     />
                   </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {scripts
-                      .filter((script) =>
-                        (script.tradeSymbol?.toLowerCase().includes(scriptSearchTerm.toLowerCase()) ||
-                         script.instrumentName?.toLowerCase().includes(scriptSearchTerm.toLowerCase()) ||
-                         script.script?.toLowerCase().includes(scriptSearchTerm.toLowerCase()))
-                      )
-                      .map((script) => (
-                        <button
-                          key={script.instrumentToken}
-                          onClick={async () => {
-                            setSelectedScript(script)
-                            setShowScriptDropdown(false)
-                            setScriptSearchTerm('')
-                            // Add to watchlist
-                            await handleAddToWatchlist(script.instrumentToken)
-                          }}
-                          disabled={isAddingToWatchlist}
-                          className={`w-full text-left px-4 py-3 hover:bg-surface-hover transition-colors disabled:opacity-50 ${
-                            selectedScript?.instrumentToken === script.instrumentToken
-                              ? 'bg-blue-500/20 text-blue-500'
-                              : 'text-text-primary'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
+                  <div className="max-h-60 overflow-y-auto">
+                    {(() => {
+                      const queryTokens = extractTokens(scriptSearchTerm);
+
+                      const filtered = scripts.filter((script) => {
+                        const query = (allScriptsSearchTerm || scriptSearchTerm).toLowerCase().trim();
+                        if (!query) return true;
+
+                        // 1. Prepare data pieces
+                        const name = (script.instrumentName || '').toLowerCase();
+                        const strike = (script.strikePrice || '').toString().toLowerCase();
+                        const tradeSymbol = (script.tradeSymbol || '').toLowerCase();
+                        const expiry = getExpirySearchFormat(script.expiry);
+                        const opType = tradeSymbol.endsWith('ce') ? 'call' : tradeSymbol.endsWith('pe') ? 'put' : '';
+
+                        // 2. Construct strings
+                        // Normal string with spaces for "banknifty 55000"
+                        const dataString = `${name} ${strike} ${opType} ${expiry} ${tradeSymbol}`;
+
+                        // Collapsed string with NO spaces for "banknifty55000"
+                        // We explicitly join without spaces to ensure direct adjacency
+                        const collapsedData = `${name}${strike}${opType}${expiry}${tradeSymbol}`.replace(/\s+/g, '');
+                        const collapsedQuery = query.replace(/\s+/g, '');
+
+                        // 3. Token Match (Order independent: "55000 banknifty")
+                        const searchTokens = query.split(' ').filter(t => t.length > 0);
+                        const isTokenMatch = searchTokens.every(token => dataString.includes(token));
+
+                        // 4. Collapsed Match (Continuous string: "banknifty55000")
+                        const isCollapsedMatch = collapsedData.includes(collapsedQuery);
+
+                        return isTokenMatch || isCollapsedMatch;
+                      });
+
+                      if (filtered.length === 0) {
+                        return <div className="p-4 text-center text-text-secondary">No matching scripts</div>;
+                      }
+
+                      return filtered.slice(0, 100).map((script) => {
+                        // Construct readable label matching the image
+                        const name = script.instrumentName || script.script || '';
+                        const strike = formatStrike(script.strikePrice);
+                        const type = script.tradeSymbol?.endsWith('CE') ? 'CALL' : script.tradeSymbol?.endsWith('PE') ? 'PUT' : '';
+                        const expiryDate = script.expiry ? new Date(parseInt(script.expiry)).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        }) : '';
+
+                        return (
+                          <button
+                            key={script.instrumentToken}
+                            onClick={async () => {
+                              setSelectedScript(script);
+                              setShowScriptDropdown(false);
+                              setScriptSearchTerm('');
+                              await handleAddToWatchlist(script.instrumentToken);
+                            }}
+                            disabled={isAddingToWatchlist}
+                            className={`w-full text-left px-4 py-3 hover:bg-surface-hover border-b border-border-primary last:border-0 transition-colors ${selectedScript?.instrumentToken === script.instrumentToken ? 'bg-blue-500/20 text-blue-500' : 'text-text-primary'
+                              }`}
+                          >
                             <div className="flex flex-col">
-                              <span className="font-medium">{script.tradeSymbol || script.instrumentName || script.script}</span>
-                              {script.exchange && (
-                                <span className="text-xs text-text-secondary">{script.exchange}</span>
-                              )}
+                              <span className="font-bold text-slate-900 dark:text-slate-200 text-sm">
+                                {name} {strike} {type} {expiryDate}
+                              </span>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-[10px] text-text-secondary uppercase font-semibold">{script.exchange}</span>
+                                <span className="text-[10px] text-text-secondary font-mono">#{script.instrumentToken}</span>
+                              </div>
                             </div>
-                            <span className="text-xs text-text-secondary">#{script.instrumentToken}</span>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               )}
             </div>
+
+
             {/* All Scripts Dropdown */}
             <div className="relative all-scripts-dropdown-container">
               <label className="block text-sm font-semibold text-text-primary mb-2">All Scripts</label>
@@ -1312,65 +1320,94 @@ const MarketWatch: React.FC = () => {
                   <div className="p-3 border-b border-border-primary">
                     <input
                       type="text"
-                      placeholder="Search all scripts..."
+                      placeholder="Search all (e.g. adaniports1260)..."
                       value={allScriptsSearchTerm}
                       onChange={(e) => setAllScriptsSearchTerm(e.target.value)}
                       className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded text-text-primary placeholder-text-secondary focus:outline-none focus:border-blue-500"
                     />
                   </div>
-                  <div className="max-h-48 overflow-y-auto">
+                  <div className="max-h-80 overflow-y-auto">
                     {(() => {
-                      const fullConfig = ConfigManager.getFullConfig()
-                      const allScripts: InstrumentConfig[] = []
-                      
-                      // Collect all scripts from all exchanges
-                      if (fullConfig && fullConfig.instruments) {
-                        Object.values(fullConfig.instruments).forEach((instrumentsList: any) => {
-                          if (Array.isArray(instrumentsList)) {
-                            allScripts.push(...instrumentsList)
-                          }
-                        })
+                      const fullConfig = ConfigManager.getFullConfig();
+                      const allScripts: InstrumentConfig[] = [];
+
+                      // Collect all scripts from every exchange
+                      if (fullConfig?.instruments) {
+                        Object.values(fullConfig.instruments).forEach((list: any) => {
+                          if (Array.isArray(list)) allScripts.push(...list);
+                        });
                       }
-                      
-                      return allScripts
-                        .filter((script) =>
-                          allScriptsSearchTerm === '' ||
-                          (script.tradeSymbol?.toLowerCase().includes(allScriptsSearchTerm.toLowerCase()) ||
-                           script.instrumentName?.toLowerCase().includes(allScriptsSearchTerm.toLowerCase()) ||
-                           script.script?.toLowerCase().includes(allScriptsSearchTerm.toLowerCase()))
-                        )
-                        .map((script) => (
+
+                      const query = allScriptsSearchTerm.toLowerCase().trim();
+                      const collapsedQuery = query.replace(/\s+/g, '');
+
+                      const filtered = allScripts.filter((script) => {
+                        if (!query) return true;
+
+                        const name = (script.instrumentName || '').toLowerCase();
+                        const strike = (script.strikePrice || '').toString().toLowerCase();
+                        const tradeSymbol = (script.tradeSymbol || '').toLowerCase();
+                        const expiry = getExpirySearchFormat(script.expiry);
+                        const opType = tradeSymbol.endsWith('ce') ? 'call' : tradeSymbol.endsWith('pe') ? 'put' : '';
+
+                        // Construct searchable strings
+                        const dataString = `${name} ${strike} ${opType} ${expiry} ${tradeSymbol}`;
+                        const collapsedData = dataString.replace(/\s+/g, '');
+
+                        // Check A: Token Match (adaniports 1260)
+                        const searchTokens = query.split(' ').filter(t => t.length > 0);
+                        const isTokenMatch = searchTokens.every(token => dataString.includes(token));
+
+                        // Check B: Collapsed Match (adaniports1260)
+                        const isCollapsedMatch = collapsedData.includes(collapsedQuery);
+
+                        return isTokenMatch || isCollapsedMatch;
+                      });
+
+                      if (filtered.length === 0) {
+                        return <div className="p-4 text-center text-text-secondary text-sm">No matching scripts</div>;
+                      }
+
+                      // Slice to 50 for performance as All Scripts is a huge list
+                      return filtered.slice(0, 50).map((script) => {
+                        const name = script.instrumentName || script.script || '';
+                        const strike = script.strikePrice ? (script.strikePrice % 1 === 0 ? script.strikePrice : script.strikePrice.toFixed(2)) : '';
+                        const type = script.tradeSymbol?.endsWith('CE') ? 'CALL' : script.tradeSymbol?.endsWith('PE') ? 'PUT' : '';
+                        const expiryDate = script.expiry ? new Date(parseInt(script.expiry)).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        }) : '';
+
+                        return (
                           <button
                             key={script.instrumentToken}
                             onClick={async () => {
-                              setSelectedScript(script)
-                              setShowAllScriptsDropdown(false)
-                              setAllScriptsSearchTerm('')
-                              // Add to watchlist
-                              await handleAddToWatchlist(script.instrumentToken)
+                              setSelectedScript(script);
+                              setShowAllScriptsDropdown(false);
+                              setAllScriptsSearchTerm('');
+                              await handleAddToWatchlist(script.instrumentToken);
                             }}
-                            disabled={isAddingToWatchlist}
-                            className={`w-full text-left px-4 py-3 hover:bg-surface-hover transition-colors disabled:opacity-50 ${
-                              selectedScript?.instrumentToken === script.instrumentToken
-                                ? 'bg-blue-500/20 text-blue-500'
-                                : 'text-text-primary'
-                            }`}
+                            className={`w-full text-left px-4 py-3 hover:bg-surface-hover border-b border-border-primary last:border-0 transition-colors ${selectedScript?.instrumentToken === script.instrumentToken ? 'bg-blue-500/10' : ''
+                              }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <span className="font-medium">{script.tradeSymbol || script.instrumentName || script.script}</span>
-                                {script.exchange && (
-                                  <span className="text-xs text-text-secondary">{script.exchange}</span>
-                                )}
+                            <div className="flex flex-col">
+                            <span className="font-bold text-slate-900 dark:text-slate-200 text-sm">
+  {name} {strike} {type} {expiryDate}
+</span>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="text-[10px] text-text-secondary uppercase font-semibold">{script.exchange}</span>
+                                <span className="text-[10px] text-text-secondary font-mono">#{script.instrumentToken}</span>
                               </div>
-                              <span className="text-xs text-text-secondary">#{script.instrumentToken}</span>
                             </div>
                           </button>
-                        ))
+                        );
+                      });
                     })()}
                   </div>
                 </div>
               )}
+
             </div>
           </div>
 
@@ -1382,7 +1419,7 @@ const MarketWatch: React.FC = () => {
               className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg hidden"
             >
               <p className="text-sm text-text-primary">
-                <span className="font-semibold">Selected:</span> {selectedScript.tradeSymbol || selectedScript.instrumentName || selectedScript.script} 
+                <span className="font-semibold">Selected:</span> {selectedScript.tradeSymbol || selectedScript.instrumentName || selectedScript.script}
                 <span className="text-text-secondary ml-2">({selectedScript.exchange} • Token: {selectedScript.instrumentToken})</span>
               </p>
             </motion.div>
@@ -1419,132 +1456,132 @@ const MarketWatch: React.FC = () => {
                   <p className="text-sm text-blue-50 mt-0.5">Real-time price updates • {new Date().toLocaleTimeString()}</p>
                 </div>
               </div>
-            
+
             </div>
             {/* Single Scrollable Table Container with Sticky Header */}
-            <div className="flex-1 overflow-auto min-h-0" style={{maxHeight: 'calc(100vh - 350px)'}}>
+            <div className="flex-1 overflow-auto min-h-0" style={{ maxHeight: 'calc(100vh - 350px)' }}>
               {/* Fixed Table Header */}
               <table className="w-full table-fixed border-collapse">
                 <colgroup>
-                  <col style={{width: `${columnWidths.actions}px`}} />
-                  <col style={{width: `${columnWidths.exchange}px`}} />
-                  <col style={{width: `${columnWidths.symbol}px`}} />
-                  <col style={{width: `${columnWidths.expiry}px`}} />
-                  <col style={{width: `${columnWidths.buyQty}px`}} />
-                  <col style={{width: `${columnWidths.buyPrice}px`}} />
-                  <col style={{width: `${columnWidths.sellPrice}px`}} />
-                  <col style={{width: `${columnWidths.sellQty}px`}} />
-                  <col style={{width: `${columnWidths.ltp}px`}} />
-                  <col style={{width: `${columnWidths.netChange}px`}} />
-                  <col style={{width: `${columnWidths.open}px`}} />
-                  <col style={{width: `${columnWidths.high}px`}} />
-                  <col style={{width: `${columnWidths.low}px`}} />
-                  <col style={{width: `${columnWidths.close}px`}} />
-                  <col style={{width: `${columnWidths.ltt}px`}} />
+                  <col style={{ width: `${columnWidths.actions}px` }} />
+                  <col style={{ width: `${columnWidths.exchange}px` }} />
+                  <col style={{ width: `${columnWidths.symbol}px` }} />
+                  <col style={{ width: `${columnWidths.expiry}px` }} />
+                  <col style={{ width: `${columnWidths.buyQty}px` }} />
+                  <col style={{ width: `${columnWidths.buyPrice}px` }} />
+                  <col style={{ width: `${columnWidths.sellPrice}px` }} />
+                  <col style={{ width: `${columnWidths.sellQty}px` }} />
+                  <col style={{ width: `${columnWidths.ltp}px` }} />
+                  <col style={{ width: `${columnWidths.netChange}px` }} />
+                  <col style={{ width: `${columnWidths.open}px` }} />
+                  <col style={{ width: `${columnWidths.high}px` }} />
+                  <col style={{ width: `${columnWidths.low}px` }} />
+                  <col style={{ width: `${columnWidths.close}px` }} />
+                  <col style={{ width: `${columnWidths.ltt}px` }} />
                 </colgroup>
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600 sticky top-0 z-10">
                     <th className="px-3 py-3 text-center text-xs font-bold text-white uppercase tracking-wider sticky left-0 bg-slate-800 z-10 relative">
                       Actions
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'actions')}
                       />
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
                       Exchange
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'exchange')}
                       />
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
                       Symbol
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'symbol')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Expiry
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'expiry')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Buy Qty
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'buyQty')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Buy Price
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'buyPrice')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Sell Price
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'sellPrice')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Sell Qty
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'sellQty')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       LTP
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'ltp')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Net Change
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'netChange')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Open
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'open')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       High
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'high')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Low
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'low')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       Close
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'close')}
                       />
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
                       LTT
-                      <div 
+                      <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'ltt')}
                       />
@@ -1552,20 +1589,20 @@ const MarketWatch: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700 bg-slate-900">
-                    {filteredFeedData.map((instrument, index) => (
-                      <TableRow
-                        key={instrument.insToken}
-                        instrument={instrument}
-                        index={index}
-                        config={instrumentConfigRef.current[instrument.insToken]}
-                        changes={throttledPriceChanges[instrument.insToken] || {}}
-                        onActionMenuOpen={(token, position) => {
-                          setActionMenuToken(token)
-                          setActionMenuPosition(position)
-                        }}
-                        deletingToken={deletingToken}
-                      />
-                    ))}
+                  {filteredFeedData.map((instrument, index) => (
+                    <TableRow
+                      key={instrument.insToken}
+                      instrument={instrument}
+                      index={index}
+                      config={instrumentConfigRef.current[instrument.insToken]}
+                      changes={throttledPriceChanges[instrument.insToken] || {}}
+                      onActionMenuOpen={(token, position) => {
+                        setActionMenuToken(token)
+                        setActionMenuPosition(position)
+                      }}
+                      deletingToken={deletingToken}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1587,7 +1624,7 @@ const MarketWatch: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button 
+            <button
               onClick={() => {
                 const config = instrumentConfigRef.current[actionMenuToken]
                 setSelectedOrderInstrument({ token: actionMenuToken, config })
@@ -1600,20 +1637,22 @@ const MarketWatch: React.FC = () => {
               <TrendingUp className="w-4 h-4" />
               Buy
             </button>
-            <button 
-              onClick={() => {
-                const config = instrumentConfigRef.current[actionMenuToken]
-                setSelectedOrderInstrument({ token: actionMenuToken, config })
-                setShowSellOrderModal(true)
-                setActionMenuPosition(null)
-                setActionMenuToken(null)
-              }}
-              className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center gap-3 border-t border-gray-200 dark:border-slate-700"
-            >
-              <TrendingDown className="w-4 h-4" />
-              Sell
-            </button>
-            <button 
+            {/* Sell Button - HIDE FOR CALLPUT */}
+            {instrumentConfigRef.current[actionMenuToken]?.exchange !== 'CALLPUT' && (
+              <button
+                onClick={() => {
+                  const config = instrumentConfigRef.current[actionMenuToken]
+                  setSelectedOrderInstrument({ token: actionMenuToken, config })
+                  setShowSellOrderModal(true)
+                  setActionMenuPosition(null)
+                  setActionMenuToken(null)
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center gap-3 border-t border-gray-200 dark:border-slate-700"
+              >
+                <TrendingDown className="w-4 h-4" /> Sell
+              </button>
+            )}
+            <button
               onClick={() => {
                 toast.success('View Chart clicked')
                 setActionMenuPosition(null)
@@ -1623,7 +1662,7 @@ const MarketWatch: React.FC = () => {
             >
               📈 View Chart
             </button>
-            <button 
+            <button
               onClick={() => {
                 const config = instrumentConfigRef.current[actionMenuToken]
                 setSelectedScripInfo({ token: actionMenuToken, config })
@@ -1635,25 +1674,25 @@ const MarketWatch: React.FC = () => {
             >
               ℹ️ Scrip Info <span className="ml-auto text-xs text-gray-500">Ctrl+I</span>
             </button>
-            
+
             {/* Delete with Trash Animation */}
-            <button 
+            <button
               onClick={async () => {
                 try {
                   // Capture token before clearing state
                   const tokenToDelete = actionMenuToken
-                  
+
                   // Start delete animation
                   setDeletingToken(tokenToDelete)
                   setActionMenuPosition(null)
                   setActionMenuToken(null)
-                  
+
                   // Show deleting toast
                   const deleteToast = toast.loading('Removing from watchlist...')
-                  
+
                   // Wait for animation to complete
                   await new Promise(resolve => setTimeout(resolve, 500))
-                  
+
                   const userData = localStorage.getItem('userData')
                   if (userData && tokenToDelete && selectedTabId) {
                     const user = JSON.parse(userData)
@@ -1683,12 +1722,13 @@ const MarketWatch: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-[100000] p-4"
-            onClick={() => setShowBuyOrderModal(false)}
+            // onClick={() => setShowBuyOrderModal(false)}
+            onClick={resetBuyForm}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ 
-                opacity: 1, 
+              animate={{
+                opacity: 1,
                 scale: 1
               }}
               exit={{ opacity: 0, scale: 0.9 }}
@@ -1705,7 +1745,7 @@ const MarketWatch: React.FC = () => {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div 
+              <div
                 className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between cursor-grab active:cursor-grabbing"
                 onMouseDown={(e) => {
                   const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect()
@@ -1723,7 +1763,8 @@ const MarketWatch: React.FC = () => {
                   <h2 className="text-xl font-bold text-white">Buy Order</h2>
                 </div>
                 <button
-                  onClick={() => setShowBuyOrderModal(false)}
+                  // onClick={() => setShowBuyOrderModal(false)}
+                  onClick={resetBuyForm}
                   className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
                 >
                   <X className="w-6 h-6" />
@@ -1745,11 +1786,11 @@ const MarketWatch: React.FC = () => {
                         const user = userData ? JSON.parse(userData) : null
                         const roleId = user?.roleId
                         const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-                        
+
                         return (
                           <>
                             {/* Row 1: Client Name (if admin) | Order Type | Quantity | Price */}
-                            <div className="grid gap-4" style={{gridTemplateColumns: isAdminUser ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr'}}>
+                            <div className="grid gap-4" style={{ gridTemplateColumns: isAdminUser ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr' }}>
                               {isAdminUser && (
                                 <div className="relative client-dropdown-container">
                                   <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Client Name</label>
@@ -1765,7 +1806,7 @@ const MarketWatch: React.FC = () => {
                                     {showClientListModal && (
                                       <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                                         {clients
-                                          .filter(client => 
+                                          .filter(client =>
                                             client.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
                                             client.username.toLowerCase().includes(clientSearchTerm.toLowerCase())
                                           )
@@ -1792,14 +1833,14 @@ const MarketWatch: React.FC = () => {
                                               </div>
                                             </button>
                                           ))}
-                                        {clients.filter(client => 
+                                        {clients.filter(client =>
                                           client.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
                                           client.username.toLowerCase().includes(clientSearchTerm.toLowerCase())
                                         ).length === 0 && (
-                                          <div className="px-3 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">
-                                            No clients found
-                                          </div>
-                                        )}
+                                            <div className="px-3 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                              No clients found
+                                            </div>
+                                          )}
                                       </div>
                                     )}
                                   </div>
@@ -1807,7 +1848,7 @@ const MarketWatch: React.FC = () => {
                               )}
                               <div>
                                 <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Order Type</label>
-                                <select 
+                                <select
                                   value={buyOrderType}
                                   onChange={(e) => setBuyOrderType(e.target.value)}
                                   className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
@@ -1826,147 +1867,181 @@ const MarketWatch: React.FC = () => {
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Sell Price (ASK)</label>
+                                <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Sell Price (ASK) </label>
                                 <input
                                   type="number"
                                   value={buyOrderPrice}
                                   onChange={(e) => setBuyOrderPrice(e.target.value)}
-                                  placeholder={liveData?.ask?.toFixed(2) || '0'}
-                                  className="w-full px-3 py-3 bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-blue-500"
+                                  // Disable ONLY if it's market
+                                  disabled={buyOrderType === 'MARKET'}
+                                  className={`w-full px-3 py-3 border-2 rounded-lg font-semibold transition-all ${buyOrderType === 'MARKET'
+                                    ? 'bg-slate-100 dark:bg-slate-700 cursor-not-allowed opacity-70' // Market style
+                                    : 'bg-white dark:bg-slate-800 border-blue-500' // Limit/SL style (User in control)
+                                    }`}
                                 />
                               </div>
                             </div>
 
-                      {/* Row 2: Exchange | Symbol | LotSize | Remark */}
-                      <div className="grid grid-cols-4 gap-4">
-                        <div>
-                          <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Exchange</label>
-                          <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
-                            <option>{config?.exchange || 'MCX'}</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Symbol</label>
-                          <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
-                            <option>{config?.tradeSymbol || config?.instrumentName || config?.script || 'GOLD 05 Feb 2026'}</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">LotSize</label>
-                          <input
-                            type="number"
-                            defaultValue={config?.lotSize || '100'}
-                            disabled
-                            className="w-full px-3 py-3 bg-gray-200 dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none cursor-not-allowed"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Remark</label>
-                          <input
-                            type="text"
-                            value={buyOrderRemark}
-                            onChange={(e) => setBuyOrderRemark(e.target.value)}
-                            placeholder="Optional note..."
-                            className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500"
-                          />
-                        </div>
-                      </div>
+                            {/* Row 2: Exchange | Symbol | LotSize | Remark */}
+                            <div className="grid grid-cols-4 gap-4">
+                              <div>
+                                <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Exchange</label>
+                                <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
+                                  <option>{config?.exchange || 'MCX'}</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Symbol</label>
+                                <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500">
+                                  <option>{config?.tradeSymbol || config?.instrumentName || config?.script || 'GOLD 05 Feb 2026'}</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">LotSize</label>
+                                <input
+                                  type="number"
+                                  defaultValue={config?.lotSize || '100'}
+                                  disabled
+                                  className="w-full px-3 py-3 bg-gray-200 dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none cursor-not-allowed"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Remark</label>
+                                <input
+                                  type="text"
+                                  value={buyOrderRemark}
+                                  onChange={(e) => setBuyOrderRemark(e.target.value)}
+                                  placeholder="Optional note..."
+                                  className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500"
+                                />
+                              </div>
+                            </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-4 pt-4">
-                        <button
-                          onClick={async () => {
-                            try {
-                              setIsBuyOrderSubmitting(true)
-                              
-                              const userData = localStorage.getItem('userData')
-                              const user = userData ? JSON.parse(userData) : null
-                              const roleId = user?.roleId
-                              const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-                              
-                              if (isAdminUser && !selectedClient) {
-                                toast.error('Please select a client')
-                                return
-                              }
-                              
-                              if (!buyOrderQuantity || parseFloat(buyOrderQuantity) <= 0) {
-                                toast.error('Please enter a valid quantity')
-                                return
-                              }
+                            {/* Action Buttons */}
+                            <div className="flex gap-4 pt-4">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    setIsBuyOrderSubmitting(true)
 
-                              if (buyOrderType === 'LIMIT' && (!buyOrderPrice || parseFloat(buyOrderPrice) <= 0)) {
-                                toast.error('Please enter a valid price for limit order')
-                                return
-                              }
+                                    const userData = localStorage.getItem('userData')
+                                    const user = userData ? JSON.parse(userData) : null
+                                    const roleId = user?.roleId
+                                    const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
 
-                              const submitToast = toast.loading('Placing buy order...')
-                              
-                              const loggedInUserId = userData ? JSON.parse(userData).userId : null
-                              const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
-                              
-                              const response = await orderService.placeBuyOrder(
-                                loggedInUserId,
-                                recipientUserId,
-                                config?.exchange || 'MCX',
-                                config?.tradeSymbol || config?.instrumentName || config?.script || '',
-                                selectedOrderInstrument?.token || 0,
-                                parseInt(buyOrderQuantity),
-                                parseFloat(buyOrderPrice || liveData?.ask.toString() || '0'),
-                                config?.lotSize || 100,
-                                buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
-                              )
+                                    if (isAdminUser && !selectedClient) {
+                                      toast.error('Please select a client')
+                                      return
+                                    }
 
-                              if (response?.responseCode === '0') {
-                                toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
-                                
-                                // Reset form
-                                setBuyOrderQuantity('1')
-                                setBuyOrderPrice('0')
-                                setBuyOrderType('MARKET')
-                                setBuyOrderRemark('')
-                                if (isAdminUser) {
-                                  setSelectedClient(null)
-                                  setClientSearchTerm('')
-                                }
-                                
-                                setShowBuyOrderModal(false)
-                              } else {
-                                toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
-                              }
-                            } catch (error: any) {
-                              toast.error(error.message || 'Error placing buy order')
-                            } finally {
-                              setIsBuyOrderSubmitting(false)
-                            }
-                          }}
-                          disabled={isBuyOrderSubmitting}
-                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isBuyOrderSubmitting ? 'Submitting...' : 'Submit'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            const userData = localStorage.getItem('userData')
-                            const user = userData ? JSON.parse(userData) : null
-                            const roleId = user?.roleId
-                            const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-                            
-                            setShowBuyOrderModal(false)
-                            setBuyOrderQuantity('1')
-                            setBuyOrderPrice('0')
-                            setBuyOrderType('MARKET')
-                            setBuyOrderRemark('')
-                            if (isAdminUser) {
-                              setSelectedClient(null)
-                              setClientSearchTerm('')
-                            }
-                          }}
-                          disabled={isBuyOrderSubmitting}
-                          className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                                    if (!buyOrderQuantity || parseFloat(buyOrderQuantity) <= 0) {
+                                      toast.error('Please enter a valid quantity')
+                                      return
+                                    }
+
+                                    if (buyOrderType === 'LIMIT' && (!buyOrderPrice || parseFloat(buyOrderPrice) <= 0)) {
+                                      toast.error('Please enter a valid price for limit order')
+                                      return
+                                    }
+
+                                    const submitToast = toast.loading('Placing buy order...')
+
+                                    const loggedInUserId = userData ? JSON.parse(userData).userId : null
+                                    const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
+
+                                    const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(config?.exchange ?? '');
+
+                                    // 1. User Inputs
+                                    const userTypedQuantity = parseInt(buyOrderQuantity); // From "Quantity" box (e.g., 3)
+                                    const contractMultiplier = config?.lotSize || 1; // From "LotSize" box (e.g., 10)
+
+                                    // 2. Determine Price
+                                    // const finalPrice = isSpecialExchange
+                                    //   ? 1
+                                    //   : parseFloat(buyOrderPrice || liveData?.ask.toString() || '0');
+
+
+
+                                    // // 3. Determine JSON lotSize (quantity parameter in service)
+                                    // // NSE -> Forced to 1 | Others -> User Input (e.g., 3)
+                                    // const finalQuantity = isSpecialExchange ? 1 : userTypedQuantity;
+
+                                    // // 4. Determine JSON lotValue (lotValue parameter in service)
+                                    // // NSE -> User Input (e.g., 7) | Others -> Contract Multiplier (e.g., 10)
+                                    // const finalLotValue = isSpecialExchange ? userTypedQuantity : contractMultiplier;
+
+                                    const finalPrice = parseFloat(buyOrderPrice);
+
+                                    // Determine JSON lotSize (quantity)
+                                    const finalQuantity = isSpecialExchange ? 1 : parseInt(buyOrderQuantity);
+
+                                    // Determine JSON lotValue
+                                    const finalLotValue = isSpecialExchange ? parseInt(buyOrderQuantity) : (config?.lotSize || 1);
+
+                                    // 5. Fire the service call
+                                    const response = await orderService.placeBuyOrder(
+                                      loggedInUserId,
+                                      recipientUserId,
+                                      config?.exchange || 'MCX',
+                                      config?.tradeSymbol || config?.instrumentName || config?.script || '',
+                                      selectedOrderInstrument?.token || 0,
+                                      finalQuantity,   // Becomes JSON "lotSize"
+                                      finalPrice,      // Becomes JSON "price"
+                                      finalLotValue,   // Becomes JSON "lotValue"
+                                      buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
+                                    );
+                                    if (response?.responseCode === '0') {
+                                      toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+
+                                      // Reset form
+                                      setBuyOrderQuantity('1')
+                                      setBuyOrderPrice('0')
+                                      setBuyOrderType('MARKET')
+                                      setBuyOrderRemark('')
+                                      if (isAdminUser) {
+                                        setSelectedClient(null)
+                                        setClientSearchTerm('')
+                                      }
+
+                                      setShowBuyOrderModal(false)
+                                    } else {
+                                      toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+                                    }
+                                  } catch (error: any) {
+                                    toast.error(error.message || 'Error placing buy order')
+                                  } finally {
+                                    setIsBuyOrderSubmitting(false)
+                                  }
+                                }}
+                                disabled={isBuyOrderSubmitting}
+                                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isBuyOrderSubmitting ? 'Submitting...' : 'Submit'}
+                              </button>
+                              <button
+                                // onClick={() => {
+                                //   const userData = localStorage.getItem('userData')
+                                //   const user = userData ? JSON.parse(userData) : null
+                                //   const roleId = user?.roleId
+                                //   const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
+
+                                //   setShowBuyOrderModal(false)
+                                //   setBuyOrderQuantity('1')
+                                //   setBuyOrderPrice('0')
+                                //   setBuyOrderType('MARKET')
+                                //   setBuyOrderRemark('')
+                                //   if (isAdminUser) {
+                                //     setSelectedClient(null)
+                                //     setClientSearchTerm('')
+                                //   }
+                                // }}
+                                disabled={isBuyOrderSubmitting}
+                                onClick={resetBuyForm}
+                                className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </>
                         )
                       })()}
@@ -1986,12 +2061,14 @@ const MarketWatch: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-[100000] p-4"
-            onClick={() => setShowSellOrderModal(false)}
+            // onClick={() => setShowSellOrderModal(false)}
+            onClick={resetSellForm}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ 
-                opacity: 1, 
+              onClick={(e) => e.stopPropagation()}
+              animate={{
+                opacity: 1,
                 scale: 1
               }}
               exit={{ opacity: 0, scale: 0.9 }}
@@ -2005,10 +2082,10 @@ const MarketWatch: React.FC = () => {
                 cursor: isDraggingSell ? 'grabbing' : 'auto',
                 zIndex: 100001
               }}
-              onClick={(e) => e.stopPropagation()}
+            // onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div 
+              <div
                 className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between cursor-grab active:cursor-grabbing"
                 onMouseDown={(e) => {
                   const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect()
@@ -2026,7 +2103,8 @@ const MarketWatch: React.FC = () => {
                   <h2 className="text-xl font-bold text-white">Sell Order</h2>
                 </div>
                 <button
-                  onClick={() => setShowSellOrderModal(false)}
+                  // onClick={() => setShowSellOrderModal(false)}
+                  onClick={resetSellForm}
                   className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
                 >
                   <X className="w-6 h-6" />
@@ -2048,11 +2126,11 @@ const MarketWatch: React.FC = () => {
                         const user = userData ? JSON.parse(userData) : null
                         const roleId = user?.roleId
                         const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-                        
+
                         return (
                           <>
                             {/* Row 1: Client Name (if admin) | Order Type | Quantity | Price */}
-                            <div className="grid gap-4" style={{gridTemplateColumns: isAdminUser ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr'}}>
+                            <div className="grid gap-4" style={{ gridTemplateColumns: isAdminUser ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr' }}>
                               {isAdminUser && (
                                 <div className="relative client-dropdown-container">
                                   <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Client Name</label>
@@ -2068,7 +2146,7 @@ const MarketWatch: React.FC = () => {
                                     {showClientListModal && (
                                       <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                                         {clients
-                                          .filter(client => 
+                                          .filter(client =>
                                             client.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
                                             client.username.toLowerCase().includes(clientSearchTerm.toLowerCase())
                                           )
@@ -2095,14 +2173,14 @@ const MarketWatch: React.FC = () => {
                                               </div>
                                             </button>
                                           ))}
-                                        {clients.filter(client => 
+                                        {clients.filter(client =>
                                           client.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
                                           client.username.toLowerCase().includes(clientSearchTerm.toLowerCase())
                                         ).length === 0 && (
-                                          <div className="px-3 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">
-                                            No clients found
-                                          </div>
-                                        )}
+                                            <div className="px-3 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                              No clients found
+                                            </div>
+                                          )}
                                       </div>
                                     )}
                                   </div>
@@ -2110,7 +2188,7 @@ const MarketWatch: React.FC = () => {
                               )}
                               <div>
                                 <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Order Type</label>
-                                <select 
+                                <select
                                   value={sellOrderType}
                                   onChange={(e) => setSellOrderType(e.target.value)}
                                   className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
@@ -2129,147 +2207,169 @@ const MarketWatch: React.FC = () => {
                                 />
                               </div>
                               <div>
-                                <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Buy Price (BID)</label>
+                                <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">
+                                  Buy Price (BID)
+                                </label>
                                 <input
                                   type="number"
                                   value={sellOrderPrice}
                                   onChange={(e) => setSellOrderPrice(e.target.value)}
-                                  placeholder={liveData?.bid?.toFixed(2) || '0'}
-                                  className="w-full px-3 py-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none focus:border-red-500"
+                                  disabled={sellOrderType === 'MARKET'} // Disables input during Market mode
+                                  className={`w-full px-3 py-3 border-2 rounded-lg font-semibold transition-all duration-200 ${sellOrderType === 'MARKET'
+                                    ? 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-500 cursor-not-allowed opacity-80'
+                                    : 'bg-white dark:bg-slate-800 border-red-500 text-gray-900 dark:text-white'
+                                    }`}
                                 />
                               </div>
                             </div>
 
-                      {/* Row 2: Exchange | Symbol | LotSize | Remark */}
-                      <div className="grid grid-cols-4 gap-4">
-                        <div>
-                          <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Exchange</label>
-                          <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
-                            <option>{config?.exchange || 'MCX'}</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Symbol</label>
-                          <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
-                            <option>{config?.tradeSymbol || config?.instrumentName || config?.script || 'GOLD 05 Feb 2026'}</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">LotSize</label>
-                          <input
-                            type="number"
-                            defaultValue={config?.lotSize || '100'}
-                            disabled
-                            className="w-full px-3 py-3 bg-gray-200 dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none cursor-not-allowed"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Remark</label>
-                          <input
-                            type="text"
-                            value={sellOrderRemark}
-                            onChange={(e) => setSellOrderRemark(e.target.value)}
-                            placeholder="Optional note..."
-                            className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500"
-                          />
-                        </div>
-                      </div>
+                            {/* Row 2: Exchange | Symbol | LotSize | Remark */}
+                            <div className="grid grid-cols-4 gap-4">
+                              <div>
+                                <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Exchange</label>
+                                <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
+                                  <option>{config?.exchange || 'MCX'}</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Symbol</label>
+                                <select className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500">
+                                  <option>{config?.tradeSymbol || config?.instrumentName || config?.script || 'GOLD 05 Feb 2026'}</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">LotSize</label>
+                                <input
+                                  type="number"
+                                  defaultValue={config?.lotSize || '100'}
+                                  disabled
+                                  className="w-full px-3 py-3 bg-gray-200 dark:bg-slate-700 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-semibold focus:outline-none cursor-not-allowed"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-red-600 dark:text-red-400 mb-2">Remark</label>
+                                <input
+                                  type="text"
+                                  value={sellOrderRemark}
+                                  onChange={(e) => setSellOrderRemark(e.target.value)}
+                                  placeholder="Optional note..."
+                                  className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-red-500"
+                                />
+                              </div>
+                            </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-4 pt-4">
-                        <button
-                          onClick={async () => {
-                            try {
-                              setIsSellOrderSubmitting(true)
-                              
-                              const userData = localStorage.getItem('userData')
-                              const user = userData ? JSON.parse(userData) : null
-                              const roleId = user?.roleId
-                              const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-                              
-                              if (isAdminUser && !selectedClient) {
-                                toast.error('Please select a client')
-                                return
-                              }
-                              
-                              if (!sellOrderQuantity || parseFloat(sellOrderQuantity) <= 0) {
-                                toast.error('Please enter a valid quantity')
-                                return
-                              }
+                            {/* Action Buttons */}
+                            <div className="flex gap-4 pt-4">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    setIsSellOrderSubmitting(true)
 
-                              if (sellOrderType === 'LIMIT' && (!sellOrderPrice || parseFloat(sellOrderPrice) <= 0)) {
-                                toast.error('Please enter a valid price for limit order')
-                                return
-                              }
+                                    const userData = localStorage.getItem('userData')
+                                    const user = userData ? JSON.parse(userData) : null
+                                    const roleId = user?.roleId
+                                    const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
 
-                              const submitToast = toast.loading('Placing sell order...')
-                              
-                              const loggedInUserId = userData ? JSON.parse(userData).userId : null
-                              const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
-                              
-                              const response = await orderService.placeSellOrder(
-                                loggedInUserId,
-                                recipientUserId,
-                                config?.exchange || 'MCX',
-                                config?.tradeSymbol || config?.instrumentName || config?.script || '',
-                                selectedOrderInstrument?.token || 0,
-                                parseInt(sellOrderQuantity),
-                                parseFloat(sellOrderPrice || liveData?.bid.toString() || '0'),
-                                config?.lotSize || 100,
-                                sellOrderType as 'MARKET' | 'LIMIT' | 'SL'
-                              )
+                                    if (isAdminUser && !selectedClient) {
+                                      toast.error('Please select a client')
+                                      return
+                                    }
 
-                              if (response?.responseCode === '0') {
-                                toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
-                                
-                                // Reset form
-                                setSellOrderQuantity('1')
-                                setSellOrderPrice('0')
-                                setSellOrderType('MARKET')
-                                setSellOrderRemark('')
-                                if (isAdminUser) {
-                                  setSelectedClient(null)
-                                  setClientSearchTerm('')
-                                }
-                                
-                                setShowSellOrderModal(false)
-                              } else {
-                                toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
-                              }
-                            } catch (error: any) {
-                              toast.error(error.message || 'Error placing sell order')
-                            } finally {
-                              setIsSellOrderSubmitting(false)
-                            }
-                          }}
-                          disabled={isSellOrderSubmitting}
-                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isSellOrderSubmitting ? 'Submitting...' : 'Submit'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            const userData = localStorage.getItem('userData')
-                            const user = userData ? JSON.parse(userData) : null
-                            const roleId = user?.roleId
-                            const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
-                            
-                            setShowSellOrderModal(false)
-                            setSellOrderQuantity('1')
-                            setSellOrderPrice('0')
-                            setSellOrderType('MARKET')
-                            setSellOrderRemark('')
-                            if (isAdminUser) {
-                              setSelectedClient(null)
-                              setClientSearchTerm('')
-                            }
-                          }}
-                          disabled={isSellOrderSubmitting}
-                          className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                                    if (!sellOrderQuantity || parseFloat(sellOrderQuantity) <= 0) {
+                                      toast.error('Please enter a valid quantity')
+                                      return
+                                    }
+
+                                    if (sellOrderType === 'LIMIT' && (!sellOrderPrice || parseFloat(sellOrderPrice) <= 0)) {
+                                      toast.error('Please enter a valid price for limit order')
+                                      return
+                                    }
+
+                                    const submitToast = toast.loading('Placing sell order...')
+
+                                    const loggedInUserId = userData ? JSON.parse(userData).userId : null
+                                    const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
+
+                                    const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(config?.exchange ?? '');
+
+                                    // User Inputs
+                                    // const userTypedQuantity = parseInt(sellOrderQuantity) || 0;
+                                    const contractMultiplier = config?.lotSize || 1;
+
+                                    const finalPrice = parseFloat(sellOrderPrice);
+
+                                    // 2. Quantity Logic for Special Exchanges
+                                    const userTypedQuantity = parseInt(sellOrderQuantity) || 0;
+                                    const finalQuantity = isSpecialExchange ? 1 : userTypedQuantity;
+
+                                    // 3. LotValue Logic (Contract Multiplier)
+                                    const finalLotValue = isSpecialExchange ? userTypedQuantity : (config?.lotSize || 1);
+
+                                    const response = await orderService.placeSellOrder(
+                                      loggedInUserId,
+                                      recipientUserId,
+                                      config?.exchange || 'MCX',
+                                      config?.tradeSymbol || config?.instrumentName || config?.script || '',
+                                      selectedOrderInstrument?.token || 0,
+                                      finalQuantity,   // Maps to JSON "lotSize"
+                                      finalPrice,      // Maps to JSON "price"
+                                      finalLotValue,   // Maps to JSON "lotValue"
+                                      sellOrderType as 'MARKET' | 'LIMIT' | 'SL'
+                                    )
+
+                                    if (response?.responseCode === '0') {
+                                      toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+
+                                      // Reset form
+                                      setSellOrderQuantity('1')
+                                      setSellOrderPrice('0')
+                                      setSellOrderType('MARKET')
+                                      setSellOrderRemark('')
+                                      if (isAdminUser) {
+                                        setSelectedClient(null)
+                                        setClientSearchTerm('')
+                                      }
+
+
+                                      setShowSellOrderModal(false)
+                                    } else {
+                                      toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+                                    }
+                                  } catch (error: any) {
+                                    toast.error(error.message || 'Error placing sell order')
+                                  } finally {
+                                    setIsSellOrderSubmitting(false)
+                                  }
+                                }}
+                                disabled={isSellOrderSubmitting}
+                                className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isSellOrderSubmitting ? 'Submitting...' : 'Submit'}
+                              </button>
+                              <button
+                                // onClick={() => {
+                                //   const userData = localStorage.getItem('userData')
+                                //   const user = userData ? JSON.parse(userData) : null
+                                //   const roleId = user?.roleId
+                                //   const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
+
+                                //   setShowSellOrderModal(false)
+                                //   setSellOrderQuantity('1')
+                                //   setSellOrderPrice('0')
+                                //   setSellOrderType('MARKET')
+                                //   setSellOrderRemark('')
+                                //   if (isAdminUser) {
+                                //     setSelectedClient(null)
+                                //     setClientSearchTerm('')
+                                //   }
+                                // }}
+                                onClick={resetSellForm}
+                                disabled={isSellOrderSubmitting}
+                                className="flex-1 px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </>
                         )
                       })()}
@@ -2323,7 +2423,7 @@ const MarketWatch: React.FC = () => {
                 {(() => {
                   const liveData = feedData.find(item => item.insToken === selectedScripInfo.token)
                   const config = selectedScripInfo.config
-                  
+
                   if (!liveData) {
                     return (
                       <div className="text-center py-12">
@@ -2342,7 +2442,7 @@ const MarketWatch: React.FC = () => {
                         <div>
                           <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Exchange</label>
                           <div className="relative">
-                            <select 
+                            <select
                               value={config?.exchange || ''}
                               onChange={(e) => {
                                 // Find instruments in the selected exchange
