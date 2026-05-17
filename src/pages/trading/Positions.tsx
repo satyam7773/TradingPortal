@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { ArrowUpRight, ArrowDownLeft, BarChart3, X, Eye, Briefcase } from 'lucide-react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { ArrowUpRight, ArrowDownLeft, Briefcase, Eye, TrendingUp, TrendingDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
+import marketWatchService from '../../services/marketWatchService'
 import FilterLayout from '../../components/FilterLayout'
 import { useOrderModal } from '../../hooks/useOrderModal'
 import OrderModal from '../../components/modals/OrderModal'
@@ -35,7 +36,7 @@ interface PositionResponse {
 
 const Positions: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<number>(0)
-  const [selectedExchange, setSelectedExchange] = useState<string>('')
+  const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges')
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
   const [selectedToken, setSelectedToken] = useState<number | null>(null)
 
@@ -46,7 +47,10 @@ const Positions: React.FC = () => {
   const [users, setUsers] = useState<any[]>([])
   const [exchanges, setExchanges] = useState<any[]>([])
   const [symbols, setSymbols] = useState<any[]>([])
-  const [filteredSymbols, setFilteredSymbols] = useState<any[]>([])
+
+  const feedUnsubscribeRef = useRef<(() => void) | null>(null)
+  const subscriptionRef = useRef({ subscribed: false, userId: null as string | null })
+  const lastUpdateRef = useRef<number>(0)
 
   const userDataStr = localStorage.getItem('userData')
   const userData = userDataStr ? JSON.parse(userDataStr) : null
@@ -54,113 +58,166 @@ const Positions: React.FC = () => {
   const isAdminUser = userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3
   const orderModal = useOrderModal(isAdminUser)
 
-  // Function to fetch symbols (extracted to be callable from multiple places)
-  const fetchSymbolsForExchange = async (exchangeName: string) => {
+  // Cache for raw live tick values to pass down directly into the OrderModals
+  const [liveTicks, setLiveTicks] = useState<Record<number, any>>({})
+
+  const stats = useMemo(() => ({
+    total: filteredPositions.length,
+    buy: filteredPositions.filter(p => p.position === 'BUY').length,
+    sell: filteredPositions.filter(p => p.position === 'SELL').length,
+    totalPnL: filteredPositions.reduce((sum, p) => sum + (p.pnl || 0), 0),
+  }), [filteredPositions])
+
+  const unsubscribeCurrentFeed = useCallback(() => {
+    if (feedUnsubscribeRef.current) {
+      feedUnsubscribeRef.current()
+      feedUnsubscribeRef.current = null
+    }
+    if (subscriptionRef.current.subscribed && subscriptionRef.current.userId) {
+      const uid = subscriptionRef.current.userId
+      marketWatchService.unsubscribeFromInstruments(uid)
+      marketWatchService.unsubscribeFromWatchlist(uid)
+      subscriptionRef.current = { subscribed: false, userId: null }
+    }
+  }, [])
+
+  const establishStompSubscription = useCallback((userId: string, tokens: string[]) => {
+    unsubscribeCurrentFeed()
+    
+    marketWatchService.subscribeToInstruments(userId)
+    marketWatchService.subscribeToWatchlist(userId)
+    subscriptionRef.current = { subscribed: true, userId }
+    marketWatchService.sendInstrumentsRequest(userId, tokens)
+
+    feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
+      if (!data) return
+
+      const incomingFeedArray = Array.isArray(data) ? data : [data]
+      
+      // Save raw feeds to state so modals have immediate access to live data objects
+      setLiveTicks(prev => {
+        const nextTicks = { ...prev }
+        incomingFeedArray.forEach(item => {
+          nextTicks[Number(item.insToken)] = item
+        })
+        return nextTicks
+      })
+
+      const now = Date.now()
+      if (now - lastUpdateRef.current < 100) return
+      lastUpdateRef.current = now
+
+      const feedMap = new Map(incomingFeedArray.map(item => [Number(item.insToken), item]))
+
+      setFilteredPositions(prevPositions => {
+        let hasChanges = false
+        const newPositions = prevPositions.map(pos => {
+          const currentToken = Number(pos.token)
+          if (!currentToken || !feedMap.has(currentToken)) return pos
+          
+          const tick = feedMap.get(currentToken)!
+          if (pos.ltp === tick.ltp) return pos
+
+          hasChanges = true
+          const price = tick.ltp
+          const priceChange = pos.position === 'BUY' ? (price - pos.averagePrice) : (pos.averagePrice - price)
+          const unrealisedPnl = priceChange * Math.abs(pos.quantity)
+          const amount = pos.averagePrice * Math.abs(pos.quantity)
+          const unrealisedPnlPercentage = amount !== 0 ? (unrealisedPnl * 100) / amount : 0
+
+          return {
+            ...pos,
+            ltp: price,
+            pnl: unrealisedPnl,
+            pnlPercentage: unrealisedPnlPercentage,
+          }
+        })
+        return hasChanges ? newPositions : prevPositions
+      })
+    })
+  }, [unsubscribeCurrentFeed])
+
+  const setupLivePositionFeed = useCallback(async (positionsList: PositionData[]) => {
+    if (!userData) return
+    const userIdStr = userData.userId.toString()
+    const tokens = positionsList.filter(p => p.token).map(p => p.token!.toString())
+    if (tokens.length === 0) return
+
+    if (!marketWatchService.isConnected()) {
+      await marketWatchService.connect(() => establishStompSubscription(userIdStr, tokens))
+    } else {
+      establishStompSubscription(userIdStr, tokens)
+    }
+  }, [establishStompSubscription, userData])
+
+  const handleView = async (targetExchange?: string, targetUserIds?: number[]) => {
+    const exchange = targetExchange || selectedExchange
+    if (!exchange) return
+    setLoading(true)
+    unsubscribeCurrentFeed()
+
     try {
-      console.log('🔄 Fetching symbols for exchange:', exchangeName)
-      const symbolsResponse = await userManagementService.fetchSymbols(exchangeName)
-      if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
-        setSymbols(symbolsResponse.data)
-        setFilteredSymbols(symbolsResponse.data)
-        setSelectedSymbol('')
-        setSelectedToken(null)
+      let uids: number[] = []
+      if (targetUserIds) {
+        uids = targetUserIds
+      } else if (selectedUserId !== 0) {
+        uids = [selectedUserId]
+      } else {
+        uids = users.filter(u => u.id !== 0).map(u => u.id)
+        if (uids.length === 0) uids = [loggedInUserId]
       }
-    } catch (error) {
-      console.error('❌ Error fetching symbols:', error)
+
+      const response = await userManagementService.fetchUserPositionsForExchange(exchange, selectedToken || 0, uids)
+      
+      if (response?.responseCode === '0' && response.data) {
+        setPositionData(response.data)
+        let positions = response.data.positions || []
+        if (selectedSymbol) {
+          positions = positions.filter((p: PositionData) => p.tradeSymbol === selectedSymbol)
+        }
+        setFilteredPositions(positions)
+        if (positions.length > 0) setupLivePositionFeed(positions)
+      } else {
+        setFilteredPositions([])
+      }
+    } catch (error) { 
+      setFilteredPositions([]) 
+    } finally { 
+      setLoading(false) 
     }
   }
 
   useEffect(() => {
     const loadInitialData = async () => {
+      unsubscribeCurrentFeed()
       try {
         setInitialLoading(true)
-        
-        // 1. Fetch Users
         const usersResponse = await userManagementService.fetchUserClientsForTrade()
+        let initialUserIds = [loggedInUserId]
         if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
           const formattedUsers = [{ id: 0, name: 'All Users' }, ...usersResponse.data]
           setUsers(formattedUsers)
-          setSelectedUserId(0)
+          initialUserIds = usersResponse.data.map((u: any) => u.id)
         }
-
-        // 2. Fetch Exchanges
         const exchangesResponse = await userManagementService.fetchExchanges()
         if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
           setExchanges(exchangesResponse)
-          const firstExchange = exchangesResponse[0].name
-          setSelectedExchange(firstExchange)
-          
-          // FIX: Manually trigger symbol fetch for the first load to bypass React state lag
-          await fetchSymbolsForExchange(firstExchange)
         }
-      } catch (error) {
-        toast.error('Failed to load initial data')
-      } finally {
-        setInitialLoading(false)
+        await handleView("All Exchanges", initialUserIds)
+      } finally { 
+        setInitialLoading(false) 
       }
     }
     loadInitialData()
+    return () => unsubscribeCurrentFeed()
   }, [])
 
-  // Auto-fetch data (portal api) when metadata is ready
-  useEffect(() => {
-    if (!initialLoading && exchanges.length > 0 && selectedExchange) {
-      handleView()
-    }
-  }, [initialLoading, exchanges, selectedExchange])
-
-  // Watch for manual exchange changes after first load
-  useEffect(() => {
-    if (!initialLoading && selectedExchange && selectedExchange !== 'All Exchanges') {
-      fetchSymbolsForExchange(selectedExchange)
-    }
-  }, [selectedExchange])
-
-  const handleView = async () => {
-    if (!selectedExchange) {
-      toast.error('Please select an exchange');
-      return;
-    }
-
-    setLoading(true);
+  const fetchSymbolsForExchange = async (exchangeName: string) => {
+    if (!exchangeName || exchangeName === 'All Exchanges') { setSymbols([]); return; }
     try {
-      let userIdsToFetch: number[] = [];
-      if (selectedUserId !== 0) {
-        userIdsToFetch = [selectedUserId];
-      } else if (users.length > 1) { 
-        userIdsToFetch = users.filter(u => u.id !== 0).map(u => u.id);
-      } else {
-        userIdsToFetch = [loggedInUserId];
-      }
-
-      const response = await userManagementService.fetchUserPositionsForExchange(
-        selectedExchange,
-        selectedToken || 0,
-        userIdsToFetch
-      );
-
-      if (response?.responseCode === '0' && response.data) {
-        setPositionData(response.data);
-        let positions = response.data.positions || [];
-        if (selectedSymbol) {
-          positions = positions.filter((p: PositionData) => p.tradeSymbol === selectedSymbol);
-        }
-        setFilteredPositions(positions);
-      } else {
-        setFilteredPositions([]);
-      }
-    } catch (error: any) {
-      setFilteredPositions([]);
-    } finally {
-      setLoading(false)
-    }
-  };
-
-  const handleClear = () => {
-    setSelectedUserId(0)
-    setSelectedExchange(exchanges.length > 0 ? exchanges[0].name : '')
-    setSelectedSymbol('')
-    setFilteredPositions([])
+      const response = await userManagementService.fetchSymbols(exchangeName)
+      if (response?.responseCode === '0' && Array.isArray(response.data)) setSymbols(response.data)
+    } catch (e) { console.error(e) }
   }
 
   const getPnLColor = (pnl: number) => {
@@ -169,11 +226,9 @@ const Positions: React.FC = () => {
     return 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/30'
   }
 
-  const stats = {
-    total: filteredPositions.length,
-    buy: filteredPositions.filter(p => p.position === 'BUY').length,
-    sell: filteredPositions.filter(p => p.position === 'SELL').length,
-    totalPnL: filteredPositions.reduce((sum, p) => sum + (p.totalPnl || 0), 0),
+  const getCMPColor = (ltp: number | null, avg: number) => {
+    if (!ltp) return 'text-blue-600 dark:text-blue-400'
+    return ltp >= avg ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
   }
 
   return (
@@ -186,26 +241,27 @@ const Positions: React.FC = () => {
             <div className="space-y-4 p-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Username :</label>
-                <select value={selectedUserId} onChange={(e) => setSelectedUserId(Number(e.target.value))} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
+                <select value={selectedUserId} onChange={(e) => setSelectedUserId(Number(e.target.value))} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none">
                   {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
-                <select value={selectedExchange} onChange={(e) => setSelectedExchange(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
+                <select value={selectedExchange} onChange={(e) => { setSelectedExchange(e.target.value); fetchSymbolsForExchange(e.target.value); }} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none">
+                  <option value="All Exchanges">All Exchanges</option>
                   {exchanges.map(ex => <option key={ex.name} value={ex.name}>{ex.name}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Symbol :</label>
-                <select value={selectedSymbol} onChange={(e) => { setSelectedSymbol(e.target.value); const found = symbols.find(s => s.tradeSymbol === e.target.value); setSelectedToken(found?.token || null); }} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
+                <select value={selectedSymbol} onChange={(e) => { setSelectedSymbol(e.target.value); const found = symbols.find(s => s.tradeSymbol === e.target.value); setSelectedToken(found?.token || null); }} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none">
                   <option value="">All Scripts</option>
                   {symbols.map(s => <option key={s.token} value={s.tradeSymbol}>{s.tradeSymbol}</option>)}
                 </select>
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={handleView} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition">View</button>
-                <button onClick={handleClear} className="flex-1 px-4 py-2 bg-slate-700 text-white rounded font-semibold text-sm transition">Clear</button>
+                <button onClick={() => handleView()} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md">View</button>
+                <button onClick={() => { setSelectedSymbol(''); handleView(); }} className="flex-1 px-4 py-2 bg-slate-700 text-white rounded font-semibold text-sm transition">Clear</button>
               </div>
             </div>
           }
@@ -218,7 +274,7 @@ const Positions: React.FC = () => {
                   <div className="text-center"><div className="text-2xl font-bold text-slate-900 dark:text-white">{stats.total}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
                   <div className="text-center"><div className="text-2xl font-bold text-blue-600">{stats.buy}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
                   <div className="text-center"><div className="text-2xl font-bold text-red-600">{stats.sell}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
-                  <div className="text-center"><div className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.totalPnL.toFixed(0)}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Net P&L</div></div>
+                  <div className="text-center"><div className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Net P&L</div></div>
                 </div>
               </div>
             </div>
@@ -229,56 +285,82 @@ const Positions: React.FC = () => {
               ) : (
                 <table className="w-full border-collapse min-w-max">
                   <colgroup>
-                    <col className="w-16" /><col className="w-16" /><col className="w-40" /><col className="w-56" />
-                    <col className="w-28" /><col className="w-24" /><col className="w-32" /><col className="w-32" />
-                    <col className="w-32" /><col className="w-32" />
+                    <col className="w-16" /><col className="w-16" /><col className="w-16" /><col className="w-16" />
+                    <col className="w-40" /><col className="w-56" /><col className="w-28" /><col className="w-24" />
+                    <col className="w-32" /><col className="w-32" /><col className="w-32" /><col className="w-32" />
                   </colgroup>
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                     <tr>
-                      <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">View</th>
-                      <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Own</th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-blue-600">Buy</th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">View</th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Own</th>
                       <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
                       <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Symbol</th>
-                      <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Position</th>
                       <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Qty</th>
                       <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Avg Rate</th>
                       <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">CMP</th>
                       <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">P&L</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Net Change</th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Net Change %</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                     {filteredPositions.map((p) => (
                       <tr key={p.positionId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-4 text-center">
+                          <button onClick={() => {
+                            console.log('🟢 Clicked Buy for token:', p.token);
+                            orderModal.openBuyModal({ 
+                              token: p.token || 0, 
+                              config: { 
+                                exchange: p.exchange, 
+                                tradeSymbol: p.tradeSymbol,
+                                instrumentName: p.tradeSymbol,
+                                script: p.tradeSymbol,
+                                lotSize: 1
+                              }
+                            });
+                          }} className="p-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-white transition-all shadow-sm"><TrendingUp className="w-4 h-4" /></button>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button onClick={() => {
+                            console.log('🔴 Clicked Sell for token:', p.token);
+                            orderModal.openSellModal({ 
+                              token: p.token || 0, 
+                              config: { 
+                                exchange: p.exchange, 
+                                tradeSymbol: p.tradeSymbol,
+                                instrumentName: p.tradeSymbol,
+                                script: p.tradeSymbol,
+                                lotSize: 1
+                              }
+                            });
+                          }} className="p-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-all shadow-sm"><TrendingDown className="w-4 h-4" /></button>
+                        </td>
+                        <td className="px-4 py-4 text-center">
                           <button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"><Eye className="w-4 h-4 text-blue-600" /></button>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-4 text-center">
                           <button className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900 rounded-lg"><Briefcase className="w-4 h-4 text-amber-600" /></button>
                         </td>
-                        <td className="px-6 py-4 text-left">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-blue-600 underline cursor-pointer">{p.username}</span>
-                            {/* <span className="text-[10px] text-slate-400 font-medium uppercase">{p.parentUsername}</span> */}
-                          </div>
-                        </td>
+                        <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">{p.username}</td>
                         <td className="px-6 py-4 text-left">
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{p.tradeSymbol}</span>
                             <span className="text-[10px] text-purple-600 font-bold uppercase">{p.exchange}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                             {p.position === 'BUY' ? <ArrowUpRight className="w-4 h-4 text-blue-600" /> : <ArrowDownLeft className="w-4 h-4 text-red-600" />}
-                            <span className={`text-xs font-bold ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`}>{p.position}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center font-semibold text-slate-700 dark:text-slate-300">{p.quantity}</td>
+                        <td className="px-6 py-4 text-center font-bold text-slate-700 dark:text-slate-300">{p.quantity}</td>
                         <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-6 py-4 text-right font-mono text-sm font-bold text-blue-600 dark:text-blue-400">{p.ltp?.toFixed(2) || '-'}</td>
-                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold rounded-lg ${getPnLColor(p.pnl)}`}>{p.pnl.toFixed(2)}</td>
-                        <td className="px-6 py-4 text-right font-mono text-sm text-slate-600 dark:text-slate-400">0.00</td>
+                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${getCMPColor(p.ltp, p.averagePrice)}`}>
+                          {p.ltp?.toFixed(2) || '0.00'}
+                        </td>
+                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold rounded-lg ${getPnLColor(p.pnl)}`}>
+                          {p.pnl.toFixed(2)}
+                        </td>
+                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${p.pnlPercentage >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {p.pnlPercentage.toFixed(2)}%
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -288,8 +370,73 @@ const Positions: React.FC = () => {
           </div>
         </FilterLayout>
       </div>
-      <OrderModal isOpen={orderModal.showBuyOrderModal} onClose={orderModal.closeBuyModal} orderType="BUY" {...orderModal} isAdminUser={isAdminUser} />
-      <OrderModal isOpen={orderModal.showSellOrderModal} onClose={orderModal.closeSellModal} orderType="SELL" {...orderModal} isAdminUser={isAdminUser} />
+      
+      {/* Fallback parameters explicitly handled if hooks pass down un-assigned state properties */}
+     {/* Buy Order Modal Mapping */}
+      <OrderModal
+        isOpen={orderModal.showBuyOrderModal}
+        onClose={orderModal.closeBuyModal}
+        orderType="BUY"
+        selectedInstrument={orderModal.selectedOrderInstrument}
+        liveData={orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null}
+        
+        // Form States
+        orderQuantity={orderModal.buyOrderQuantity}
+        onOrderQuantityChange={orderModal.setBuyOrderQuantity}
+        orderPrice={orderModal.buyOrderPrice}
+        onOrderPriceChange={orderModal.setBuyOrderPrice}
+        orderMethod={orderModal.buyOrderType}
+        onOrderMethodChange={orderModal.setBuyOrderType}
+        orderRemark={orderModal.buyOrderRemark}
+        onOrderRemarkChange={orderModal.setBuyOrderRemark}
+        
+        // Admin overrides & actions
+        isAdminUser={isAdminUser}
+        selectedClient={orderModal.selectedClient}
+        onClientSelect={orderModal.setSelectedClient}
+        clientSearchTerm={orderModal.clientSearchTerm}
+        onClientSearchChange={orderModal.setClientSearchTerm}
+        isSubmitting={orderModal.isBuyOrderSubmitting}
+        onSubmit={() => orderModal.submitBuyOrder(orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null)}
+        onCancel={() => orderModal.resetBuyForm(isAdminUser)}
+
+        // Drag handlers
+        modalPosition={orderModal.buyModalPosition}
+        isDragging={orderModal.isDraggingBuy}
+      />
+
+      {/* Sell Order Modal Mapping */}
+      <OrderModal
+        isOpen={orderModal.showSellOrderModal}
+        onClose={orderModal.closeSellModal}
+        orderType="SELL"
+        selectedInstrument={orderModal.selectedOrderInstrument}
+        liveData={orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null}
+        
+        // Form States
+        orderQuantity={orderModal.sellOrderQuantity}
+        onOrderQuantityChange={orderModal.setSellOrderQuantity}
+        orderPrice={orderModal.sellOrderPrice}
+        onOrderPriceChange={orderModal.setSellOrderPrice}
+        orderMethod={orderModal.sellOrderType}
+        onOrderMethodChange={orderModal.setSellOrderType}
+        orderRemark={orderModal.sellOrderRemark}
+        onOrderRemarkChange={orderModal.setSellOrderRemark}
+        
+        // Admin overrides & actions
+        isAdminUser={isAdminUser}
+        selectedClient={orderModal.selectedClient}
+        onClientSelect={orderModal.setSelectedClient}
+        clientSearchTerm={orderModal.clientSearchTerm}
+        onClientSearchChange={orderModal.setClientSearchTerm}
+        isSubmitting={orderModal.isSellOrderSubmitting}
+        onSubmit={() => orderModal.submitSellOrder(orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null)}
+        onCancel={() => orderModal.resetSellForm(isAdminUser)}
+
+        // Drag handlers
+        modalPosition={orderModal.sellModalPosition}
+        isDragging={orderModal.isDraggingSell}
+      />
     </div>
   )
 }

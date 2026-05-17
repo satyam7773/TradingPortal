@@ -185,7 +185,7 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
         parseInt(buyOrderQuantity),
         parseFloat(buyOrderPrice || liveData?.ask?.toString() || '0'),
         config?.lotSize || 100,
-        buyOrderType as 'MARKET' | 'LIMIT' | 'STOP_LOSS'
+        buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
       )
 
       if (response?.responseCode === '0') {
@@ -240,7 +240,7 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
         parseInt(sellOrderQuantity),
         parseFloat(sellOrderPrice || liveData?.bid?.toString() || '0'),
         config?.lotSize || 100,
-        sellOrderType as 'MARKET' | 'LIMIT' | 'STOP_LOSS'
+        sellOrderType as 'MARKET' | 'LIMIT' | 'SL'
       )
 
       if (response?.responseCode === '0') {

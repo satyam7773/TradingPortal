@@ -1392,9 +1392,9 @@ const MarketWatch: React.FC = () => {
                               }`}
                           >
                             <div className="flex flex-col">
-                            <span className="font-bold text-slate-900 dark:text-slate-200 text-sm">
-  {name} {strike} {type} {expiryDate}
-</span>
+                              <span className="font-bold text-slate-900 dark:text-slate-200 text-sm">
+                                {name} {strike} {type} {expiryDate}
+                              </span>
                               <div className="flex justify-between items-center mt-1">
                                 <span className="text-[10px] text-text-secondary uppercase font-semibold">{script.exchange}</span>
                                 <span className="text-[10px] text-text-secondary font-mono">#{script.instrumentToken}</span>

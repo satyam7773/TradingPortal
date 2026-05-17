@@ -75,7 +75,7 @@ const Trades: React.FC = () => {
     const userDataStr = localStorage.getItem('userData')
     if (userDataStr) {
       const userData = JSON.parse(userDataStr)
-      return userData.userId || 31
+      return userData.userId 
     }
     return 31
   }

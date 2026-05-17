@@ -94,21 +94,34 @@ class OrderUpdateService {
     }
   }
 
-  private showOrderNotification(order: OrderUpdate): void {
+ private showOrderNotification(order: OrderUpdate): void {
     // Verified: Username is included in all scenarios below
     const userName = order.username ? `[${order.username}] ` : '[System] '
-    const displayQty = order.netQuantity || 0
     const side = order.side || 'N/A'
     const tradeSymbol = order.tradeSymbol || `Token ${order.token}`
     const exchange = order.exchange || ''
     const instrumentInfo = exchange ? `${exchange}: ${tradeSymbol}` : tradeSymbol
     const sideEmoji = side === 'BUY' ? '📈' : side === 'SELL' ? '📉' : '📊'
     
+    // --- New Quantity Logic ---
+    let displayQty:any = order.lotValue || 0
+    const upperExchange = exchange.toUpperCase()
+    const upperSymbol = tradeSymbol.toUpperCase()
+
+    // Check if exchange is MCX, CDS, or if it looks like a Call/Put option contract
+    const isMcxOrCds = upperExchange.includes('MCX') || upperExchange.includes('CDS');
+    const isCallPut = upperSymbol.endsWith('CE') || upperSymbol.endsWith('PE') || upperSymbol.includes('CALL') || upperSymbol.includes('PUT');
+
+    if ((isMcxOrCds || isCallPut) && order.lotValue && order.lotValue > 0) {
+        displayQty = order.lotSize
+    }else{
+
+    }
+    // ---------------------------
+
     // Base formatting for UI consistency
     const commonStyle = {
-        fontWeight: '600',
-        whiteSpace: 'pre-line',
-        color: '#fff'
+        fontWeight: '600', whiteSpace: 'pre-line', color: '#fff'
     };
 
     switch (order.status) {

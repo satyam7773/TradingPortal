@@ -85,34 +85,40 @@ const RejectionLog: React.FC = () => {
   }, [loggedInUserId])
 
   useEffect(() => {
-  const loadSymbols = async () => {
-    try {
-      // Determine type based on whether exchange is selected
-      const type = selectedExchange ? 'SINGLE' : 'ALL';
-      
-      const res = await userManagementService.fetchTradeSymbolsReport(type, selectedExchange);
-      
-      if (res?.responseCode === '0' && Array.isArray(res.data)) {
-        // Since the response is grouped by exchange:
-        if (selectedExchange) {
-          // 1. Find the group that matches the selected exchange
-          const exchangeData = res.data.find((item: ExchangeGroup) => item.exchange === selectedExchange);
-          // 2. Bind the nested symbols array
-          setSymbols(exchangeData ? exchangeData.symbols : []);
-        } else {
-          // If ALL is selected, flatten all symbols from all exchanges into one list
-          const allSymbols = res.data.flatMap((item: ExchangeGroup) => item.symbols);
-          setSymbols(allSymbols);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading symbols:", error);
-      setSymbols([]);
-    }
-  };
+    const loadSymbols = async () => {
+      try {
+        // Determine type based on whether exchange is selected
+        const type = selectedExchange ? 'SINGLE' : 'ALL';
 
-  loadSymbols();
-}, [selectedExchange]);
+        const res = await userManagementService.fetchTradeSymbolsReport(type, selectedExchange);
+
+        if (res?.responseCode === '0' && Array.isArray(res.data)) {
+          // Since the response is grouped by exchange:
+          if (selectedExchange) {
+            // 1. Find the group that matches the selected exchange
+            const exchangeData = res.data.find((item: ExchangeGroup) => item.exchange === selectedExchange);
+            // 2. Bind the nested symbols array
+            setSymbols(exchangeData ? exchangeData.symbols : []);
+          } else {
+            // If ALL is selected, flatten all symbols from all exchanges into one list
+            const allSymbols = res.data.flatMap((item: ExchangeGroup) => item.symbols);
+            setSymbols(allSymbols);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading symbols:", error);
+        setSymbols([]);
+      }
+    };
+
+    loadSymbols();
+  }, [selectedExchange]);
+
+  useEffect(() => {
+  if (users.length > 0 && exchanges.length > 0) {
+    handleView(1);
+  }
+}, [users, exchanges]);
 
   const handleView = async (page: number = 1) => {
     setLoading(true)
@@ -284,64 +290,94 @@ const RejectionLog: React.FC = () => {
                         <th className="px-4 py-4 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Message</th>
                         <th className="px-4 py-4 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Username</th>
                         <th className="px-4 py-4 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Symbol</th>
-                        <th className="px-4 py-4 text-center text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Type</th>
+                        <th className="px-4 py-4 text-center text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider w-32">
+                          Type
+                        </th>
                         <th className="px-4 py-4 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Qty</th>
                         <th className="px-4 py-4 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Price</th>
                         <th className="px-4 py-4 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Device/IP</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {logResponse.rejectedOrders.map((log, index) => (
-                        <tr key={index} className="border-b border-slate-200/70 dark:border-slate-700/70 hover:bg-blue-50/80 dark:hover:bg-slate-700/50 transition-colors">
-                          <td className="px-4 py-3.5 text-xs text-slate-500 font-mono tracking-tighter">
-                            {formatDateTime(log.createdAt)}
-                          </td>
-                          <td className="px-4 py-3.5 text-sm font-semibold text-red-600 dark:text-red-400 max-w-xs truncate" title={log.rejectedReason}>
-                            {log.rejectedReason}
-                          </td>
-                          <td className="px-4 py-3.5 text-sm font-bold text-slate-800 dark:text-slate-200">
-                            {log.tradeBy}
-                            {/* <span className="text-[10px] text-slate-400 block font-normal mt-0.5 tracking-tight">Admin: {log.username}</span> */}
-                          </td>
-                          <td className="px-4 py-3.5 text-sm font-bold text-blue-600 dark:text-blue-400">{log.tradeSymbol}</td>
-                          <td className="px-4 py-3.5 text-center">
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold ${log.orderType.includes('BUY') ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                              {log.orderType}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3.5 text-right text-sm font-mono">{log.quantity}</td>
-                          <td className="px-4 py-3.5 text-right text-sm font-mono font-bold">₹{log.price.toFixed(2)}</td>
-                          <td className="px-4 py-3.5 text-[10px] text-slate-500 leading-tight">
-                            {log.deviceId} <br /> {log.ipAddress}
-                          </td>
-                        </tr>
-                      ))}
+                      {logResponse.rejectedOrders.map((log, index) => {
+                        // Determine color based on order type (BUY vs SELL)
+                        const isBuy = log.orderType.includes('BUY');
+                        const sideColorClass = isBuy
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-red-600 dark:text-red-400';
+
+                        return (
+                          <tr key={index} className="border-b border-slate-200/70 dark:border-slate-700/70 hover:bg-blue-50/80 dark:hover:bg-slate-700/50 transition-colors">
+                            <td className="px-4 py-3.5 text-xs text-slate-500 font-mono tracking-tighter whitespace-nowrap">
+                              {formatDateTime(log.createdAt)}
+                            </td>
+
+                            {/* MESSAGE - Increased width */}
+                            <td className="px-4 py-3.5 text-sm font-semibold text-red-600 dark:text-red-500 min-w-[200px] max-w-xs" title={log.rejectedReason}>
+                              {log.rejectedReason}
+                            </td>
+
+                            <td className="px-4 py-3.5 text-sm font-bold text-slate-800 dark:text-slate-200">
+                              {log.tradeBy}
+                            </td>
+
+                            {/* SYMBOL - Dynamic Color */}
+                            <td className={`px-4 py-3.5 text-sm font-bold ${sideColorClass}`}>
+                              {log.tradeSymbol}
+                            </td>
+
+                            {/* TYPE - Styled label */}
+                            <td className="px-4 py-3.5 text-center w-32">
+                              <span className={`inline-block w-full py-1 rounded text-[10px] font-bold ${isBuy
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                }`}>
+                                {log.orderType}
+                              </span>
+                            </td>
+
+                            {/* QTY - Dynamic Color */}
+                            <td className={`px-4 py-3.5 text-right text-sm font-mono font-bold ${sideColorClass}`}>
+                              {log.quantity}
+                            </td>
+
+                            {/* PRICE - Dynamic Color */}
+                            <td className={`px-4 py-3.5 text-right text-sm font-mono font-bold ${sideColorClass}`}>
+                              ₹{log.price.toFixed(2)}
+                            </td>
+
+                            <td className="px-4 py-3.5 text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                              {log.deviceId} <br /> {log.ipAddress}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Pagination - Matching LoginHistory logic style */}
                 {logResponse.totalPages > 1 && (
-                  <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-r from-white/50 via-blue-50/50 to-white/50 flex items-center justify-between">
+                  <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/80 flex items-center justify-between">
                     <div className="text-sm text-slate-600 dark:text-slate-400">
-                      Showing <span className="font-semibold text-slate-900">{(currentPage - 1) * pageSize + 1}</span> to{' '}
-                      <span className="font-semibold text-slate-900">{Math.min(currentPage * pageSize, logResponse.totalRecords)}</span> of {logResponse.totalRecords} records
+                      Showing <span className="font-semibold text-slate-900 dark:text-white">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+                      <span className="font-semibold text-slate-900 dark:text-white">{Math.min(currentPage * pageSize, logResponse.totalRecords)}</span> of {logResponse.totalRecords} records
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleView(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className="p-2 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                        className="p-2 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30"
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </button>
-                      <span className="px-4 py-2 text-sm font-semibold bg-slate-100 rounded-lg">
+                      <span className="px-4 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg">
                         Page {currentPage} of {logResponse.totalPages}
                       </span>
                       <button
                         onClick={() => handleView(currentPage + 1)}
                         disabled={currentPage === logResponse.totalPages}
-                        className="p-2 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                        className="p-2 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30"
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
