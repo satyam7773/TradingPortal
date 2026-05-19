@@ -6,10 +6,11 @@ import marketWatchService from '../../services/marketWatchService'
 import FilterLayout from '../../components/FilterLayout'
 import { useOrderModal } from '../../hooks/useOrderModal'
 import OrderModal from '../../components/modals/OrderModal'
+import ConfigManager from '../../utils/configManager'
 
 interface PositionData {
   positionId: number
-  positionDate: number
+  positionDate: number | null
   positionDays: number
   username: string
   parentUsername: string
@@ -23,6 +24,7 @@ interface PositionData {
   pnlPercentage: number
   totalPnl: number
   token?: number
+  userId?: number
 }
 
 interface PositionResponse {
@@ -51,6 +53,7 @@ const Positions: React.FC = () => {
   const feedUnsubscribeRef = useRef<(() => void) | null>(null)
   const subscriptionRef = useRef({ subscribed: false, userId: null as string | null })
   const lastUpdateRef = useRef<number>(0)
+  const instrumentConfigRef = useRef<Record<number, any>>({})
 
   const userDataStr = localStorage.getItem('userData')
   const userData = userDataStr ? JSON.parse(userDataStr) : null
@@ -58,8 +61,73 @@ const Positions: React.FC = () => {
   const isAdminUser = userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3
   const orderModal = useOrderModal(isAdminUser)
 
-  // Cache for raw live tick values to pass down directly into the OrderModals
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({})
+  const maxAvailableQuantityRef = useRef<number>(999999)
+
+  // Draggable state coordinate tracking handlers
+  const handleDragSetup = (e: React.MouseEvent, type: 'BUY' | 'SELL') => {
+    e.preventDefault()
+    const targetModalElement = (e.currentTarget as HTMLElement).parentElement as HTMLElement
+    const rect = targetModalElement.getBoundingClientRect()
+
+    orderModal.setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+
+    if (type === 'BUY') orderModal.setIsDraggingBuy(true)
+    else orderModal.setIsDraggingSell(true)
+  }
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (orderModal.isDraggingBuy) {
+        orderModal.setBuyModalPosition({
+          x: e.clientX - orderModal.dragOffset.x,
+          y: e.clientY - orderModal.dragOffset.y
+        })
+      }
+      if (orderModal.isDraggingSell) {
+        orderModal.setSellModalPosition({
+          x: e.clientX - orderModal.dragOffset.x,
+          y: e.clientY - orderModal.dragOffset.y
+        })
+      }
+    }
+
+    const handleGlobalMouseUp = () => {
+      orderModal.setIsDraggingBuy(false)
+      orderModal.setIsDraggingSell(false)
+    }
+
+    if (orderModal.isDraggingBuy || orderModal.isDraggingSell) {
+      document.addEventListener('mousemove', handleGlobalMouseMove)
+      document.addEventListener('mouseup', handleGlobalMouseUp)
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove)
+      document.removeEventListener('mouseup', handleGlobalMouseUp)
+    }
+  }, [orderModal.isDraggingBuy, orderModal.isDraggingSell, orderModal.dragOffset])
+
+  // Live price freezing logic based on chosen Order Method 
+  useEffect(() => {
+    if (orderModal.showBuyOrderModal && orderModal.selectedOrderInstrument && orderModal.buyOrderType === 'MARKET') {
+      const liveData = liveTicks[orderModal.selectedOrderInstrument.token]
+      if (liveData?.ask) {
+        orderModal.setBuyOrderPrice(liveData.ask.toFixed(2))
+      }
+    }
+  }, [liveTicks, orderModal.buyOrderType, orderModal.showBuyOrderModal, orderModal.selectedOrderInstrument])
+
+  useEffect(() => {
+    if (orderModal.showSellOrderModal && orderModal.selectedOrderInstrument && orderModal.sellOrderType === 'MARKET') {
+      const liveData = liveTicks[orderModal.selectedOrderInstrument.token]
+      if (liveData?.bid) {
+        orderModal.setSellOrderPrice(liveData.bid.toFixed(2))
+      }
+    }
+  }, [liveTicks, orderModal.sellOrderType, orderModal.showSellOrderModal, orderModal.selectedOrderInstrument])
 
   const stats = useMemo(() => ({
     total: filteredPositions.length,
@@ -83,7 +151,6 @@ const Positions: React.FC = () => {
 
   const establishStompSubscription = useCallback((userId: string, tokens: string[]) => {
     unsubscribeCurrentFeed()
-    
     marketWatchService.subscribeToInstruments(userId)
     marketWatchService.subscribeToWatchlist(userId)
     subscriptionRef.current = { subscribed: true, userId }
@@ -91,15 +158,11 @@ const Positions: React.FC = () => {
 
     feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
       if (!data) return
-
       const incomingFeedArray = Array.isArray(data) ? data : [data]
-      
-      // Save raw feeds to state so modals have immediate access to live data objects
+
       setLiveTicks(prev => {
         const nextTicks = { ...prev }
-        incomingFeedArray.forEach(item => {
-          nextTicks[Number(item.insToken)] = item
-        })
+        incomingFeedArray.forEach(item => { nextTicks[Number(item.insToken)] = item })
         return nextTicks
       })
 
@@ -108,29 +171,23 @@ const Positions: React.FC = () => {
       lastUpdateRef.current = now
 
       const feedMap = new Map(incomingFeedArray.map(item => [Number(item.insToken), item]))
-
       setFilteredPositions(prevPositions => {
         let hasChanges = false
         const newPositions = prevPositions.map(pos => {
           const currentToken = Number(pos.token)
           if (!currentToken || !feedMap.has(currentToken)) return pos
-          
           const tick = feedMap.get(currentToken)!
-          if (pos.ltp === tick.ltp) return pos
+
+          const price = pos.position === 'BUY' ? tick.ask : tick.bid
+          if (pos.ltp === price) return pos
 
           hasChanges = true
-          const price = tick.ltp
           const priceChange = pos.position === 'BUY' ? (price - pos.averagePrice) : (pos.averagePrice - price)
           const unrealisedPnl = priceChange * Math.abs(pos.quantity)
           const amount = pos.averagePrice * Math.abs(pos.quantity)
           const unrealisedPnlPercentage = amount !== 0 ? (unrealisedPnl * 100) / amount : 0
 
-          return {
-            ...pos,
-            ltp: price,
-            pnl: unrealisedPnl,
-            pnlPercentage: unrealisedPnlPercentage,
-          }
+          return { ...pos, ltp: price, pnl: unrealisedPnl, pnlPercentage: unrealisedPnlPercentage }
         })
         return hasChanges ? newPositions : prevPositions
       })
@@ -168,23 +225,16 @@ const Positions: React.FC = () => {
       }
 
       const response = await userManagementService.fetchUserPositionsForExchange(exchange, selectedToken || 0, uids)
-      
       if (response?.responseCode === '0' && response.data) {
         setPositionData(response.data)
         let positions = response.data.positions || []
-        if (selectedSymbol) {
-          positions = positions.filter((p: PositionData) => p.tradeSymbol === selectedSymbol)
-        }
+        if (selectedSymbol) positions = positions.filter((p: PositionData) => p.tradeSymbol === selectedSymbol)
         setFilteredPositions(positions)
         if (positions.length > 0) setupLivePositionFeed(positions)
       } else {
         setFilteredPositions([])
       }
-    } catch (error) { 
-      setFilteredPositions([]) 
-    } finally { 
-      setLoading(false) 
-    }
+    } catch (error) { setFilteredPositions([]) } finally { setLoading(false) }
   }
 
   useEffect(() => {
@@ -200,13 +250,21 @@ const Positions: React.FC = () => {
           initialUserIds = usersResponse.data.map((u: any) => u.id)
         }
         const exchangesResponse = await userManagementService.fetchExchanges()
-        if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
-          setExchanges(exchangesResponse)
+        if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) setExchanges(exchangesResponse)
+
+        const fullConfig = ConfigManager.getFullConfig()
+        if (fullConfig && fullConfig.instruments) {
+          Object.entries(fullConfig.instruments).forEach(([exchangeKey, instrumentsList]: [string, any]) => {
+            if (Array.isArray(instrumentsList)) {
+              instrumentsList.forEach((instrument: any) => {
+                if (instrument.instrumentToken) instrumentConfigRef.current[instrument.instrumentToken] = instrument
+              })
+            }
+          })
         }
+
         await handleView("All Exchanges", initialUserIds)
-      } finally { 
-        setInitialLoading(false) 
-      }
+      } finally { setInitialLoading(false) }
     }
     loadInitialData()
     return () => unsubscribeCurrentFeed()
@@ -231,6 +289,77 @@ const Positions: React.FC = () => {
     return ltp >= avg ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
   }
 
+  const handleOpenModifyModal = (p: PositionData, targetType: 'BUY' | 'SELL') => {
+    const matchedProfile = users.find(u => u.username === p.username)
+    const targetClientId = p.userId || matchedProfile?.id || loggedInUserId
+
+    orderModal.setSelectedClient({
+      userId: targetClientId,
+      name: matchedProfile?.name || p.username,
+      username: p.username
+    })
+    orderModal.setClientSearchTerm(`${matchedProfile?.name || p.username} (${p.username})`)
+
+    maxAvailableQuantityRef.current = p.exchange === 'CALLPUT' ? Math.abs(p.quantity) : 999999
+
+    const cachedConfig = p.token ? instrumentConfigRef.current[p.token] : null
+    const mergedConfig = {
+      exchange: p.exchange,
+      tradeSymbol: p.tradeSymbol,
+      instrumentName: p.tradeSymbol,
+      script: p.tradeSymbol,
+      lotSize: cachedConfig?.lotSize || 100
+    }
+
+    if (targetType === 'BUY') {
+      orderModal.setBuyOrderQuantity(p.quantity.toString())
+      orderModal.setBuyOrderPrice(p.averagePrice.toString())
+      orderModal.setBuyOrderType('LIMIT')
+      orderModal.openBuyModal({
+        token: p.token || 0,
+        config: mergedConfig
+      })
+    } else {
+      orderModal.setSellOrderQuantity(p.quantity.toString())
+      orderModal.setSellOrderPrice(p.averagePrice.toString())
+      orderModal.setSellOrderType('LIMIT')
+      orderModal.openSellModal({
+        token: p.token || 0,
+        config: mergedConfig
+      })
+    }
+  }
+
+  const handleValidatedQuantityChange = (val: string, methodType: 'BUY' | 'SELL') => {
+    const requestedQty = parseInt(val) || 0
+
+    if (methodType === 'SELL' && orderModal.selectedOrderInstrument?.config?.exchange === 'CALLPUT') {
+      if (requestedQty > maxAvailableQuantityRef.current) {
+        toast.error(`Sells cannot exceed your current open holding of ${maxAvailableQuantityRef.current} lots for CALLPUT positions.`)
+        orderModal.setSellOrderQuantity(maxAvailableQuantityRef.current.toString())
+        return
+      }
+    }
+
+    if (methodType === 'BUY') {
+      orderModal.setBuyOrderQuantity(val)
+    } else {
+      orderModal.setSellOrderQuantity(val)
+    }
+  }
+
+  const handleBuySubmitAction = async () => {
+    const currentTick = orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null
+    const isSuccess = await orderModal.submitBuyOrder(currentTick)
+    if (isSuccess) orderModal.closeBuyModal()
+  }
+
+  const handleSellSubmitAction = async () => {
+    const currentTick = orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null
+    const isSuccess = await orderModal.submitSellOrder(currentTick)
+    if (isSuccess) orderModal.closeSellModal()
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
@@ -248,7 +377,6 @@ const Positions: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
                 <select value={selectedExchange} onChange={(e) => { setSelectedExchange(e.target.value); fetchSymbolsForExchange(e.target.value); }} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none">
-                  <option value="All Exchanges">All Exchanges</option>
                   {exchanges.map(ex => <option key={ex.name} value={ex.name}>{ex.name}</option>)}
                 </select>
               </div>
@@ -285,17 +413,20 @@ const Positions: React.FC = () => {
               ) : (
                 <table className="w-full border-collapse min-w-max">
                   <colgroup>
-                    <col className="w-16" /><col className="w-16" /><col className="w-16" /><col className="w-16" />
-                    <col className="w-40" /><col className="w-56" /><col className="w-28" /><col className="w-24" />
-                    <col className="w-32" /><col className="w-32" /><col className="w-32" /><col className="w-32" />
+                    <col className="w-16" /><col className="w-16" />
+                    <col className="w-16" /><col className="w-16" />
+                    <col className="w-40" /><col className="w-24" /><col className="w-24" /><col className="w-56" />
+                    <col className="w-24" /><col className="w-32" /><col className="w-32" /><col className="w-32" /><col className="w-32" />
                   </colgroup>
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                     <tr>
-                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-blue-600">Buy</th>
-                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">View</th>
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Own</th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-blue-600">Buy</th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
                       <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Exchange</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Position</th>
                       <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Symbol</th>
                       <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Qty</th>
                       <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Avg Rate</th>
@@ -305,64 +436,66 @@ const Positions: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {filteredPositions.map((p) => (
-                      <tr key={p.positionId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                        <td className="px-4 py-4 text-center">
-                          <button onClick={() => {
-                            console.log('🟢 Clicked Buy for token:', p.token);
-                            orderModal.openBuyModal({ 
-                              token: p.token || 0, 
-                              config: { 
-                                exchange: p.exchange, 
-                                tradeSymbol: p.tradeSymbol,
-                                instrumentName: p.tradeSymbol,
-                                script: p.tradeSymbol,
-                                lotSize: 1
-                              }
-                            });
-                          }} className="p-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-white transition-all shadow-sm"><TrendingUp className="w-4 h-4" /></button>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button onClick={() => {
-                            console.log('🔴 Clicked Sell for token:', p.token);
-                            orderModal.openSellModal({ 
-                              token: p.token || 0, 
-                              config: { 
-                                exchange: p.exchange, 
-                                tradeSymbol: p.tradeSymbol,
-                                instrumentName: p.tradeSymbol,
-                                script: p.tradeSymbol,
-                                lotSize: 1
-                              }
-                            });
-                          }} className="p-2 bg-red-500 hover:bg-red-600 rounded-lg text-white transition-all shadow-sm"><TrendingDown className="w-4 h-4" /></button>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"><Eye className="w-4 h-4 text-blue-600" /></button>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900 rounded-lg"><Briefcase className="w-4 h-4 text-amber-600" /></button>
-                        </td>
-                        <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">{p.username}</td>
-                        <td className="px-6 py-4 text-left">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{p.tradeSymbol}</span>
-                            <span className="text-[10px] text-purple-600 font-bold uppercase">{p.exchange}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-700 dark:text-slate-300">{p.quantity}</td>
-                        <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${getCMPColor(p.ltp, p.averagePrice)}`}>
-                          {p.ltp?.toFixed(2) || '0.00'}
-                        </td>
-                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold rounded-lg ${getPnLColor(p.pnl)}`}>
-                          {p.pnl.toFixed(2)}
-                        </td>
-                        <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${p.pnlPercentage >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {p.pnlPercentage.toFixed(2)}%
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredPositions.map((p) => {
+                      // Apply the matching red/blue context styles dynamically
+                      const isBuyPosition = p.position === 'BUY';
+                      const sideColorClass = isBuyPosition ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400';
+                      const dynamicBgClass = isBuyPosition ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-red-50 dark:bg-red-900/20';
+                      const borderBgClass = isBuyPosition ? 'border-blue-200 dark:border-blue-800' : 'border-red-200 dark:border-red-800';
+
+                      return (
+                        <tr key={p.positionId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
+                          <td className="px-4 py-4 text-center">
+                            <button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"><Eye className="w-4 h-4 text-blue-600" /></button>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900 rounded-lg"><Briefcase className="w-4 h-4 text-amber-600" /></button>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => handleOpenModifyModal(p, 'BUY')}
+                              className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
+                            >
+                              B
+                            </button>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => handleOpenModifyModal(p, 'SELL')}
+                              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
+                            >
+                              S
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">{p.username}</td>
+                          {/* EXCHANGE - Styled with standard purple outline badge */}
+                          <td className="px-6 py-4 text-left">
+                            <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 dark:border-purple-800 uppercase tracking-wider">{p.exchange}</span>
+                          </td>
+                          {/* POSITION - Styled with dynamic colors (B/S Style match) */}
+                          <td className="px-6 py-4 text-left whitespace-nowrap">
+                            <span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${sideColorClass} ${dynamicBgClass} ${borderBgClass}`}>
+                              {p.position}
+                            </span>
+                          </td>
+                          {/* SYMBOL - Text tracking matches side colors context */}
+                          <td className={`px-6 py-4 text-left font-bold whitespace-nowrap ${sideColorClass}`}>
+                            {p.tradeSymbol}
+                          </td>
+                          <td className="px-6 py-4 text-center font-bold text-slate-700 dark:text-slate-300">{p.quantity}</td>
+                          <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${getCMPColor(p.ltp, p.averagePrice)}`}>
+                            {p.ltp?.toFixed(2) || '0.00'}
+                          </td>
+                          <td className={`px-6 py-4 text-right font-mono text-sm font-bold rounded-lg ${getPnLColor(p.pnl)}`}>
+                            {p.pnl.toFixed(2)}
+                          </td>
+                          <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${p.pnlPercentage >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {p.pnlPercentage.toFixed(2)}%
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -370,38 +503,33 @@ const Positions: React.FC = () => {
           </div>
         </FilterLayout>
       </div>
-      
-      {/* Fallback parameters explicitly handled if hooks pass down un-assigned state properties */}
-     {/* Buy Order Modal Mapping */}
+
+      {/* Buy Order Modal Mapping */}
       <OrderModal
         isOpen={orderModal.showBuyOrderModal}
         onClose={orderModal.closeBuyModal}
         orderType="BUY"
         selectedInstrument={orderModal.selectedOrderInstrument}
         liveData={orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null}
-        
-        // Form States
+
         orderQuantity={orderModal.buyOrderQuantity}
-        onOrderQuantityChange={orderModal.setBuyOrderQuantity}
+        onOrderQuantityChange={(val) => handleValidatedQuantityChange(val, 'BUY')}
         orderPrice={orderModal.buyOrderPrice}
         onOrderPriceChange={orderModal.setBuyOrderPrice}
         orderMethod={orderModal.buyOrderType}
         onOrderMethodChange={orderModal.setBuyOrderType}
         orderRemark={orderModal.buyOrderRemark}
         onOrderRemarkChange={orderModal.setBuyOrderRemark}
-        
-        // Admin overrides & actions
+
         isAdminUser={isAdminUser}
-        selectedClient={orderModal.selectedClient}
-        onClientSelect={orderModal.setSelectedClient}
         clientSearchTerm={orderModal.clientSearchTerm}
         onClientSearchChange={orderModal.setClientSearchTerm}
         isSubmitting={orderModal.isBuyOrderSubmitting}
-        onSubmit={() => orderModal.submitBuyOrder(orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null)}
+        onSubmit={handleBuySubmitAction}
         onCancel={() => orderModal.resetBuyForm(isAdminUser)}
 
-        // Drag handlers
         modalPosition={orderModal.buyModalPosition}
+        onDragStart={(e) => handleDragSetup(e, 'BUY')}
         isDragging={orderModal.isDraggingBuy}
       />
 
@@ -412,29 +540,25 @@ const Positions: React.FC = () => {
         orderType="SELL"
         selectedInstrument={orderModal.selectedOrderInstrument}
         liveData={orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null}
-        
-        // Form States
+
         orderQuantity={orderModal.sellOrderQuantity}
-        onOrderQuantityChange={orderModal.setSellOrderQuantity}
+        onOrderQuantityChange={(val) => handleValidatedQuantityChange(val, 'SELL')}
         orderPrice={orderModal.sellOrderPrice}
         onOrderPriceChange={orderModal.setSellOrderPrice}
         orderMethod={orderModal.sellOrderType}
         onOrderMethodChange={orderModal.setSellOrderType}
         orderRemark={orderModal.sellOrderRemark}
         onOrderRemarkChange={orderModal.setSellOrderRemark}
-        
-        // Admin overrides & actions
+
         isAdminUser={isAdminUser}
-        selectedClient={orderModal.selectedClient}
-        onClientSelect={orderModal.setSelectedClient}
         clientSearchTerm={orderModal.clientSearchTerm}
         onClientSearchChange={orderModal.setClientSearchTerm}
         isSubmitting={orderModal.isSellOrderSubmitting}
-        onSubmit={() => orderModal.submitSellOrder(orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null)}
+        onSubmit={handleSellSubmitAction}
         onCancel={() => orderModal.resetSellForm(isAdminUser)}
 
-        // Drag handlers
         modalPosition={orderModal.sellModalPosition}
+        onDragStart={(e) => handleDragSetup(e, 'SELL')}
         isDragging={orderModal.isDraggingSell}
       />
     </div>

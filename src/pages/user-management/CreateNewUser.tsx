@@ -395,7 +395,7 @@ const CreateNewUser: React.FC = () => {
             const apiUserData = response.data.userInfo
             const userSettings = response.data.userSettings
 
-            console.log(response,'response data')
+            console.log(response, 'response data')
 
             // Extract marginSquareOff from userSettings.userInfo array
             let marginSquareOffValue = false
@@ -783,10 +783,10 @@ const CreateNewUser: React.FC = () => {
           }))
 
         // Prepare highLowTradeLimit from High Trade Limit section (when admin account is selected)
-      const highLowTradeLimit = Object.entries(values.highTradeLimit)
-  .filter(([key, isEnabled]) => isEnabled)
-  .map(([key]) => key.toUpperCase())
-  .join(',')
+        const highLowTradeLimit = Object.entries(values.highTradeLimit)
+          .filter(([key, isEnabled]) => isEnabled)
+          .map(([key]) => key.toUpperCase())
+          .join(',')
 
         // Prepare API payload
         const apiPayload = {
@@ -1014,7 +1014,7 @@ const CreateNewUser: React.FC = () => {
                                       }}
                                       className="px-4 py-2 hover:bg-surface-hover cursor-pointer text-text-primary text-sm border-b border-border-primary last:border-b-0"
                                     >
-                                      {user.name} ({user.username}) - Role: {user.roleId}
+                                      {user.name} ({user.username})
                                     </div>
                                   ))}
                                 {userConfig.userList.filter((user) =>
@@ -1288,6 +1288,12 @@ const CreateNewUser: React.FC = () => {
                                   placeholder="Enter Profit & Loss sharing"
                                   value={field.value ?? ''}
                                   onChange={field.onChange}
+                                  onKeyDown={(e) => {
+                                    // Block Up and Down arrow keys
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault();
+                                    }
+                                  }}
                                   onBlur={(e) => {
                                     field.onBlur(e)
                                     // Trigger validation on blur only if truly empty (not zero)
@@ -1350,6 +1356,12 @@ const CreateNewUser: React.FC = () => {
                                 <input
                                   type="number"
                                   placeholder="Enter Brokerage sharing"
+                                  onKeyDown={(e) => {
+                                    // Block Up and Down arrow keys
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault();
+                                    }
+                                  }}
                                   value={field.value ?? ''}
                                   onChange={field.onChange}
                                   onBlur={(e) => {

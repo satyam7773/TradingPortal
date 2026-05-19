@@ -10,6 +10,7 @@ interface TradeData {
   tradeId: number
   userId?: number
   username?: string
+  placedByUsername?: string
   tradeSymbol: string
   exchange: string
   side: 'BUY' | 'SELL'
@@ -36,7 +37,6 @@ interface TradeData {
   durationSeconds?: any
 }
 
-// Fixed UserData interface to match Modal expectations
 interface UserData {
   id: string;
   username: string;
@@ -66,7 +66,6 @@ interface UserData {
   isTradeLock: boolean;
 }
 
-// Trackers to stop double-firing and race conditions
 let lastClickTime = 0;
 let lastProcessedId: number | null = null;
 
@@ -178,28 +177,12 @@ const Trades: React.FC = () => {
     } catch (e) { return dateTimeStr }
   }
 
-  const getPnLColor = (pnl: number) => {
-    if (pnl > 0) return 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
-    if (pnl < 0) return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
-    return 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/30'
-  }
-
-  const getSideIcon = (side: string) => {
-    if (side === 'BUY') return <ArrowUpRight className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-    return <ArrowDownLeft className="w-4 h-4 text-red-600 dark:text-red-400" />
-  }
-
-  /**
-   * FIXED: This function now passes a simple placeholder object to the Modal.
-   * The Modal will see the 'id' and trigger its internal fetch automatically.
-   */
   const handleUserNameClick = (e: React.MouseEvent, username: string, userId: number | undefined | null) => {
     e.preventDefault();
     e.stopPropagation();
 
     const currentTime = Date.now();
 
-    // 1. Guard against null ID or rapid double-click
     if (!userId || userId === 0 || (lastProcessedId === userId && currentTime - lastClickTime < 800)) {
       return;
     }
@@ -211,8 +194,6 @@ const Trades: React.FC = () => {
     lastClickTime = currentTime;
     lastProcessedId = userId;
 
-    // 2. We do NOT fetch details here. We just set the user object with the ID.
-    // The Modal component's own useEffect will handle the fetching using this ID.
     const placeholderUser: any = {
       id: userId.toString(),
       username: username,
@@ -278,7 +259,6 @@ const Trades: React.FC = () => {
                   <div><div className="text-2xl font-bold text-slate-900 dark:text-white">{totalRecords}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
                   <div><div className="text-2xl font-bold text-blue-600">{stats.buyTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
                   <div><div className="text-2xl font-bold text-red-600">{stats.sellTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
-                  {/* <div><div className={`text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{stats.totalPnL.toFixed(0)}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">P&L</div></div> */}
                 </div>
               </div>
             </div>
@@ -289,24 +269,27 @@ const Trades: React.FC = () => {
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Execution Time</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Placed By</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Symbol</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Exchange</th>
                     <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Method</th>
                     <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Quantity</th>
                     <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Price</th>
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Reference Price</th>
                     <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Brk</th>
                     <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Others</th>
                     <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Deal</th>
                     <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Duration</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Order Time</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">IP Address</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Device ID</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Reference Price</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider min-w-[280px]">Device ID</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {tradesData.map((trade) => {
-                    // Define the theme color based on the side (BUY vs SELL)
                     const tradeColorClass = trade.side === 'BUY' ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400';
+                    const dynamicBgClass = trade.side === 'BUY' ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-red-50 dark:bg-red-950/40';
 
                     return (
                       <tr key={trade.tradeId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
@@ -319,13 +302,20 @@ const Trades: React.FC = () => {
                             {trade.username}
                           </span>
                         </td>
+                        
+                        <td className="px-6 py-4 text-left text-xs font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          {trade.placedByUsername || '-'}
+                        </td>
 
-                        {/* SYMBOL - Now using tradeColorClass */}
-                        <td className="px-6 py-4 text-left">
-                          <div className="flex flex-col">
-                            <span className={`text-sm font-bold ${tradeColorClass}`}>{trade.tradeSymbol}</span>
-                            <span className="text-[10px] text-purple-600 font-bold uppercase">{trade.exchange}</span>
-                          </div>
+                        <td className="px-6 py-4 text-left whitespace-nowrap">
+                          <span className={`text-sm font-bold ${tradeColorClass}`}>{trade.tradeSymbol}</span>
+                        </td>
+
+                        {/* EXCHANGE - Styled with Dynamic color according to BUY/SELL */}
+                        <td className="px-6 py-4 text-left whitespace-nowrap">
+                          <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${tradeColorClass} ${dynamicBgClass}`}>
+                            {trade.exchange}
+                          </span>
                         </td>
 
                         <td className="px-6 py-4 text-center">
@@ -334,14 +324,21 @@ const Trades: React.FC = () => {
                           </span>
                         </td>
 
-                        {/* QUANTITY - Now using tradeColorClass */}
+                        <td className="px-6 py-4 text-center text-xs font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          {trade.tradeOrderMethod || '-'}
+                        </td>
+
                         <td className={`px-6 py-4 text-center text-sm font-bold ${tradeColorClass}`}>
                           {trade.actualLotSize || trade.lotSize}
                         </td>
 
-                        {/* PRICE - Now using tradeColorClass */}
                         <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${tradeColorClass}`}>
                           {trade.price?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+
+                        {/* REFERENCE PRICE - Repositioned next to main price */}
+                        <td className="px-6 py-4 text-right text-xs text-slate-500 font-mono">
+                          {trade.referencePrice ? trade.referencePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
                         </td>
 
                         <td className="px-6 py-4 text-right text-sm font-mono text-slate-600 dark:text-slate-400">
@@ -349,7 +346,6 @@ const Trades: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right text-sm font-mono text-slate-600 dark:text-slate-400">0</td>
 
-                        {/* DEAL (PnL) - Kept as Emerald/Red based on Profit/Loss */}
                         <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${trade.realisedPnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                           {trade.realisedPnl?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
@@ -365,13 +361,11 @@ const Trades: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.orderTime)}</td>
                         <td className="px-6 py-4 text-left text-xs text-slate-400 font-mono">{trade.ipAddress || '127.0.0.1'}</td>
-                        <td className="px-6 py-4 text-left text-xs text-slate-400 truncate max-w-[120px]">{trade.deviceId || '-'}</td>
-                        <td className="px-6 py-4 text-right text-xs text-slate-500 font-mono">{trade.referencePrice || '-'}</td>
+                        {/* DEVICE ID - Expanded container space */}
+                        <td className="px-6 py-4 text-left text-xs text-slate-400 max-w-[320px] break-all">{trade.deviceId || '-'}</td>
                       </tr>
                     );
                   })}
-
-
                 </tbody>
               </table>
             </div>

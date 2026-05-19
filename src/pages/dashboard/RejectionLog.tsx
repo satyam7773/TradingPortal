@@ -38,7 +38,7 @@ const RejectionLog: React.FC = () => {
     const userDataStr = localStorage.getItem('userData')
     if (userDataStr) {
       const userData = JSON.parse(userDataStr)
-      return userData.userId || 31
+      return userData.userId || 0
     }
     return 31
   }
@@ -141,7 +141,7 @@ const RejectionLog: React.FC = () => {
       if (response?.responseCode === '0' && response.data) {
         setLogResponse(response.data)
         setCurrentPage(page)
-        toast.success(`Found ${response.data.rejectedOrders.length} records`)
+        // toast.success(`Found ${response.data.rejectedOrders.length} records`)
       } else {
         setLogResponse(null)
         toast.error(response?.responseMessage || 'No logs found')
@@ -206,7 +206,7 @@ const RejectionLog: React.FC = () => {
                     onChange={(e) => setSelectedUserId(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="0">All Users</option>
+                    {/* <option value="0">All Users</option> */}
                     {users.map(user => (
                       <option key={user.userId} value={user.userId}>{user.userName}</option>
                     ))}
@@ -220,7 +220,7 @@ const RejectionLog: React.FC = () => {
                     onChange={(e) => setSelectedExchange(e.target.value)}
                     className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="">Select Exchange</option>
+                    {/* <option value="">Select Exchange</option> */}
                     {exchanges.map(ex => <option key={ex.name} value={ex.name}>{ex.name}</option>)}
                   </select>
                 </div>

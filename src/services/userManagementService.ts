@@ -689,7 +689,7 @@ class UserManagementService {
     try {
       // Build query parameters
       const params = new URLSearchParams();
-      params.append('userFIlterType', userFilterType);
+      params.append('userFilterType', userFilterType);
       
       if (userFilterType === 'SINGLE' && exchange) {
         params.append('exchange', exchange);
@@ -923,7 +923,7 @@ class UserManagementService {
 async fetchM2MReport(userId: number | string, userFilterType: 'ALL' | 'SINGLE'): Promise<any> {
   try {
     // FIX: Changed 'userFIlterType' to 'userFilterType'
-    const endpoint = `https://api-staging.rivoplus.live/oms/api/v1/m2m/user/${userId}?userFIlterType=${userFilterType}`;
+    const endpoint = `https://api-staging.rivoplus.live/oms/api/v1/m2m/user/${userId}?userFilterType=${userFilterType}`;
     
     console.log('📡 Requesting M2M:', endpoint);
     
@@ -943,7 +943,7 @@ async fetchRejectionLogs(payload: any): Promise<any> {
   try {
     const response = await apiClient.post<any>(
       'https://api-staging.rivoplus.live/oms/rejected/orders/log',
-      { data: payload }
+      {...payload }
     );
     return response;
   } catch (error: any) {

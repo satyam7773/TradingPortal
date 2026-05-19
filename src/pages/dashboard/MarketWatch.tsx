@@ -98,12 +98,15 @@ const formatExpiry = (expiry: string | undefined): string => {
 }
 
 // Memoized Table Row Component
+// Memoized Table Row Component
 const TableRow = memo(({
   instrument,
   index,
   config,
   changes,
   onActionMenuOpen,
+  onBuyClick,
+  onSellClick,
   deletingToken
 }: {
   instrument: FeedInstrument
@@ -111,6 +114,8 @@ const TableRow = memo(({
   config: InstrumentConfig | undefined
   changes: PriceChange
   onActionMenuOpen: (token: number, position: { x: number, y: number }) => void
+  onBuyClick: (token: number, config: InstrumentConfig | undefined) => void
+  onSellClick: (token: number, config: InstrumentConfig | undefined) => void
   deletingToken: number | null
 }) => {
   const change = instrument.ltp - instrument.close
@@ -138,9 +143,6 @@ const TableRow = memo(({
   const lastTradedTime = formatTimestamp(instrument.lastTradedTime)
   const isEvenRow = instrument.insToken % 2 === 0
 
-
-
-
   return (
     <tr className={`hover:bg-slate-700 transition-colors ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}>
       {/* Actions */}
@@ -154,6 +156,35 @@ const TableRow = memo(({
         >
           <MoreVertical className="w-4 h-4" />
         </button>
+      </td>
+
+      {/* Buy Button Column */}
+      <td className="px-2 py-2 text-center">
+        <button
+          onClick={() => onBuyClick(instrument.insToken, config)}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
+        >
+          B
+        </button>
+      </td>
+
+      {/* Sell Button Column (Grayed out if CALLPUT) */}
+      <td className="px-2 py-2 text-center">
+        {config?.exchange !== 'CALLPUT' ? (
+          <button
+            onClick={() => onSellClick(instrument.insToken, config)}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
+          >
+            S
+          </button>
+        ) : (
+          <button
+            disabled
+            className="bg-slate-600 text-slate-400 font-bold text-xs px-2.5 py-1 rounded cursor-not-allowed opacity-50"
+          >
+            S
+          </button>
+        )}
       </td>
 
       {/* Exchange */}
@@ -174,7 +205,6 @@ const TableRow = memo(({
         </div>
       </td>
 
-      {/* ... rest of the columns (Expiry, Qty, LTP, etc.) remain the same ... */}
       <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{expiry}</span></td>
       <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.buyQty ? (changes.buyQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bids?.[0]?.qty || '-'}</span></td>
       <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.bid ? (changes.bid === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bid.toFixed(2)}</span></td>
@@ -190,6 +220,9 @@ const TableRow = memo(({
     </tr>
   )
 })
+
+
+
 const MarketWatch: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -250,6 +283,8 @@ const MarketWatch: React.FC = () => {
   // Column resize state
   const [columnWidths, setColumnWidths] = useState({
     actions: 100,
+    buyBtn: 60,
+    sellBtn: 60,
     exchange: 120,
     symbol: 240,
     expiry: 130,
@@ -302,6 +337,7 @@ const MarketWatch: React.FC = () => {
     setClientSearchTerm('');
   }, []);
 
+  
 
   useEffect(() => {
     if (!showBuyOrderModal) resetBuyForm();
@@ -344,6 +380,16 @@ const MarketWatch: React.FC = () => {
     new Set(watchlist.map(item => item.token)),
     [watchlist]
   )
+
+  const onDirectBuyClick = useCallback((token: number, config: InstrumentConfig | undefined) => {
+    setSelectedOrderInstrument({ token, config })
+    setShowBuyOrderModal(true)
+  }, [])
+
+  const onDirectSellClick = useCallback((token: number, config: InstrumentConfig | undefined) => {
+    setSelectedOrderInstrument({ token, config })
+    setShowSellOrderModal(true)
+  }, [])
 
   // Get tokens from selected tab's watchlist
   const selectedTabTokens = useMemo(() => {
@@ -1464,6 +1510,8 @@ const MarketWatch: React.FC = () => {
               <table className="w-full table-fixed border-collapse">
                 <colgroup>
                   <col style={{ width: `${columnWidths.actions}px` }} />
+                  <col style={{ width: `${columnWidths.buyBtn}px` }} />
+                  <col style={{ width: `${columnWidths.sellBtn}px` }} />
                   <col style={{ width: `${columnWidths.exchange}px` }} />
                   <col style={{ width: `${columnWidths.symbol}px` }} />
                   <col style={{ width: `${columnWidths.expiry}px` }} />
@@ -1486,6 +1534,20 @@ const MarketWatch: React.FC = () => {
                       <div
                         className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
                         onMouseDown={(e) => handleResizeStart(e, 'actions')}
+                      />
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
+                      Buy
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
+                        onMouseDown={(e) => handleResizeStart(e, 'buyBtn')}
+                      />
+                    </th>
+                    <th className="px-2 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
+                      Sell
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
+                        onMouseDown={(e) => handleResizeStart(e, 'sellBtn')}
                       />
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
@@ -1600,6 +1662,8 @@ const MarketWatch: React.FC = () => {
                         setActionMenuToken(token)
                         setActionMenuPosition(position)
                       }}
+                      onBuyClick={onDirectBuyClick}
+                      onSellClick={onDirectSellClick}
                       deletingToken={deletingToken}
                     />
                   ))}
