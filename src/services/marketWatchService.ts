@@ -28,6 +28,8 @@ class MarketWatchService {
   private healthCheckThreshold = 5000 // 5 seconds - if no data received, mark as disconnected
   private isHealthCheckRunning = false
   private isConnecting = false;
+  // Dedicated background interval tracker for Positions screen custom polling loop
+  private positionsPollInterval: NodeJS.Timeout | null = null
 
   /**
    * Connect to WebSocket for market data
@@ -653,6 +655,48 @@ class MarketWatchService {
       }
     } catch (error) {
       console.error('Error handling STOMP frame:', error, frameStr)
+    }
+  }
+
+  /**
+   * CUSTOM FOR POSITIONS SCREEN:
+   * Starts a dedicated 1-second interval loop that posts the current user positions tokens 
+   * directly to the server's /app/instruments destination.
+   */
+  startPositionsPollingLoop(userId: string, instrumentTokens: string[]): void {
+    // 1. Clear any existing active interval to prevent duplicates or resource leaks
+    this.stopPositionsPollingLoop();
+
+    console.log(`⏱️ Starting dedicated Positions loop for user ${userId} (${instrumentTokens.length} tokens)`);
+
+    // 2. Define the payload transmission execution helper
+    const transmitPayload = () => {
+      if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+        if (!userId || !instrumentTokens || instrumentTokens.length === 0) return;
+
+        const payload = JSON.stringify({ userId, instrumentTokens });
+        const frame = `SEND\ndestination:/app/instruments\ncontent-type:application/json\ncontent-length:${payload.length}\n\n${payload}\0`;
+        
+        this.socket.send(frame);
+      }
+    };
+
+    // 3. Fire an initial immediate payload request packet on call setup
+    transmitPayload();
+
+    // 4. Set up the automated loop runner to push updates every 1000 milliseconds (1 second)
+    this.positionsPollInterval = setInterval(transmitPayload, 1000);
+  }
+
+  /**
+   * CUSTOM FOR POSITIONS SCREEN:
+   * Safely clears out and stops the dedicated positions polling heartbeat timer.
+   */
+  stopPositionsPollingLoop(): void {
+    if (this.positionsPollInterval) {
+      clearInterval(this.positionsPollInterval);
+      this.positionsPollInterval = null;
+      console.log('⏱️ Dedicated Positions loop stopped cleanly');
     }
   }
 

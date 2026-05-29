@@ -47,6 +47,7 @@ interface UserData {
   lastLogin: string;
   isActive: boolean;
   isTradeLock: boolean;
+  parentId:any;
   freshStopLoss: boolean;
   freshStopLossEnabled: boolean;
   manualOrder: boolean;
@@ -1043,6 +1044,16 @@ const UserList: React.FC = () => {
                       setCreditAmount(e.target.value);
                       setCreditError('');
                     }}
+                     onKeyDown={(e) => {
+                                    // 1. Block Keyboard Up and Down arrow keys
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                  onWheel={(e) => {
+                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
+                                    e.currentTarget.blur();
+                                  }}
                     className="w-full px-4 py-3 bg-white dark:bg-slate-800 border-b-2 border-emerald-500 dark:border-emerald-400 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-300 text-center text-xl font-semibold text-gray-900 dark:text-white rounded-t-lg transition-colors"
                     placeholder="Enter amount..."
                   />

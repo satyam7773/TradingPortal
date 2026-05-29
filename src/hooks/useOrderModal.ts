@@ -176,15 +176,23 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
       const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
 
       const config = selectedOrderInstrument?.config
+      
+      // 🟢 SPECIAL EXCHANGE INTERCEPTOR (BUY)
+      const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(config?.exchange ?? '');
+      const userTypedQuantity = parseInt(buyOrderQuantity) || 0;
+      
+      const finalQuantity = isSpecialExchange ? 1 : userTypedQuantity;
+      const finalLotValue = isSpecialExchange ? userTypedQuantity : (config?.lotSize || 100);
+
       const response = await orderService.placeBuyOrder(
         loggedInUserId,
         recipientUserId,
         config?.exchange || 'MCX',
         config?.tradeSymbol || config?.instrumentName || config?.script || '',
         selectedOrderInstrument?.token || 0,
-        parseInt(buyOrderQuantity),
+        finalQuantity,                                  // JSON "lotSize"
         parseFloat(buyOrderPrice || liveData?.ask?.toString() || '0'),
-        config?.lotSize || 100,
+        finalLotValue,                                  // JSON "lotValue"
         buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
       )
 
@@ -231,15 +239,23 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
       const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
 
       const config = selectedOrderInstrument?.config
+
+      // 🔴 SPECIAL EXCHANGE INTERCEPTOR (SELL)
+      const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(config?.exchange ?? '');
+      const userTypedQuantity = parseInt(sellOrderQuantity) || 0;
+      
+      const finalQuantity = isSpecialExchange ? 1 : userTypedQuantity;
+      const finalLotValue = isSpecialExchange ? userTypedQuantity : (config?.lotSize || 100);
+
       const response = await orderService.placeSellOrder(
         loggedInUserId,
         recipientUserId,
         config?.exchange || 'MCX',
         config?.tradeSymbol || config?.instrumentName || config?.script || '',
         selectedOrderInstrument?.token || 0,
-        parseInt(sellOrderQuantity),
+        finalQuantity,                                  // JSON "lotSize"
         parseFloat(sellOrderPrice || liveData?.bid?.toString() || '0'),
-        config?.lotSize || 100,
+        finalLotValue,                                  // JSON "lotValue"
         sellOrderType as 'MARKET' | 'LIMIT' | 'SL'
       )
 

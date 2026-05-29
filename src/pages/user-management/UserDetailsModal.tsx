@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import ChangePassword from './user-details-tabs/ChangePassword';
 import SharingDetails from './user-details-tabs/SharingDetails';
 import AddCredits from './user-details-tabs/AddCredits';
+import UserPositionsPanel from '../../components/UserPositionsPanel';
 
 interface UserData {
   id: string;
@@ -131,10 +132,10 @@ const ToggleSwitch = ({ enabled, onClick, size = 'sm', disabled = false }: { ena
     <div
       onClick={disabled ? undefined : onClick}
       className={`${sizeClasses} ${disabled
-          ? 'bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 opacity-50 cursor-not-allowed'
-          : enabled
-            ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/25 cursor-pointer hover:scale-105'
-            : 'bg-gradient-to-r from-gray-300 to-gray-400 dark:from-gray-600 dark:to-gray-700 cursor-pointer hover:scale-105'
+        ? 'bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 opacity-50 cursor-not-allowed'
+        : enabled
+          ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/25 cursor-pointer hover:scale-105'
+          : 'bg-gradient-to-r from-gray-300 to-gray-400 dark:from-gray-600 dark:to-gray-700 cursor-pointer hover:scale-105'
         } rounded-full flex items-center transition-all duration-300`}
     >
       <div
@@ -627,8 +628,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <button
               onClick={() => setActiveTab('details')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'details'
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
               User Details
@@ -636,8 +637,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <button
               onClick={() => setActiveTab('userList')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'userList'
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
               <User className="w-4 h-4" />
@@ -646,8 +647,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <button
               onClick={() => setActiveTab('positions')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'positions'
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
               Positions
@@ -655,8 +656,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <button
               onClick={() => setActiveTab('trades')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'trades'
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
               Trades
@@ -664,8 +665,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <button
               onClick={() => setActiveTab('deletedTrades')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'deletedTrades'
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
               Deleted Trades
@@ -673,8 +674,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <button
               onClick={() => setActiveTab('settings')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'settings'
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
             >
               Settings
@@ -685,8 +686,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 key={menu.name}
                 onClick={() => setActiveTab(menu.name)}
                 className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === menu.name
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                   }`}
               >
                 {menu.ctaText}
@@ -1023,16 +1024,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
                 {/* Positions Tab */}
                 {activeTab === 'positions' && (
-                  <div className="animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
-                      <div className="flex items-center justify-center h-64">
-                        <div className="text-center">
-                          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">Positions</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Coming soon...</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <UserPositionsPanel username={user.username} userId={user.id} />
                 )}
 
                 {/* Trades Tab */}
@@ -1408,6 +1400,16 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   setCreditAmount(e.target.value);
                   setCreditError('');
                 }}
+                onKeyDown={(e) => {
+                  // 1. Block Keyboard Up and Down arrow keys
+                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                  }
+                }}
+                onWheel={(e) => {
+                  // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
+                  e.currentTarget.blur();
+                }}
                 className="w-full px-4 py-3 bg-white dark:bg-slate-800 border-b-2 border-emerald-500 dark:border-emerald-400 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-300 text-center text-xl font-semibold text-gray-900 dark:text-white rounded-t-lg transition-colors"
                 placeholder="0.00"
               />
@@ -1415,6 +1417,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               <textarea
                 value={creditNote}
                 onChange={(e) => setCreditNote(e.target.value)}
+
                 rows={2}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-400 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
                 placeholder="Optional note..."
@@ -1424,7 +1427,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               )}
             </div>
 
-            {/* User Info */}dnfk
+            {/* User Info */}
             <div className="bg-white/80 dark:bg-slate-700/50 p-4 rounded-xl space-y-4">
               <div>
                 <p className="text-xs font-bold mb-2 text-gray-600 dark:text-gray-300 text-center">User</p>
@@ -1503,7 +1506,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   const operatorUserId = storedUserData?.userId
 
 
-                  const res = await userManagementService.manageCredits(payload, operatorUserId);
+                  const res = await userManagementService.manageCredits(payload, selectedUserForAddCredits.parentId);
                   const code = String(res?.responseCode ?? res?.data?.responseCode ?? '');
                   const message = res?.responseMessage ?? res?.data?.responseMessage ?? 'Operation completed';
 

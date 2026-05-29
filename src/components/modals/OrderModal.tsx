@@ -25,30 +25,30 @@ interface OrderModalProps {
     ask?: number
     ltp?: number
   }
-  
+
   // Form state
   orderQuantity: string
   onOrderQuantityChange: (value: string) => void
-  
+
   orderPrice: string
   onOrderPriceChange: (value: string) => void
-  
+
   orderMethod: string
   onOrderMethodChange: (value: string) => void
-  
+
   orderRemark: string
   onOrderRemarkChange: (value: string) => void
-  
+
   // Pre-filled Client Profile Display
   isAdminUser?: boolean
   clientSearchTerm: string
   onClientSearchChange: (value: string) => void
-  
+
   // Submission
   isSubmitting: boolean
   onSubmit: () => void
   onCancel?: () => void
-  
+
   // Fixed Draggable mouse hooks
   modalPosition?: { x: number; y: number }
   onDragStart?: (e: React.MouseEvent) => void
@@ -61,27 +61,27 @@ const OrderModal: React.FC<OrderModalProps> = ({
   orderType: typeParam,
   selectedInstrument,
   liveData,
-  
+
   orderQuantity,
   onOrderQuantityChange,
-  
+
   orderPrice,
   onOrderPriceChange,
-  
+
   orderMethod,
   onOrderMethodChange,
-  
+
   orderRemark,
   onOrderRemarkChange,
-  
+
   isAdminUser = false,
   clientSearchTerm,
   onClientSearchChange,
-  
+
   isSubmitting,
   onSubmit,
   onCancel,
-  
+
   modalPosition = { x: 0, y: 0 },
   onDragStart,
   isDragging = false
@@ -95,7 +95,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
   const inputBorderColor = isBuy ? 'border-blue-300 dark:border-blue-600' : 'border-red-300 dark:border-red-600'
   const focusBorderColor = isBuy ? 'focus:border-blue-500' : 'focus:border-red-500'
   const priceLabel = isBuy ? 'Sell Price (ASK)' : 'Buy Price (BID)'
-  
+
   const config = selectedInstrument.config
   const isCallPutExchange = config?.exchange === 'CALLPUT'
   const isMarketMode = orderMethod === 'MARKET'
@@ -157,13 +157,9 @@ const OrderModal: React.FC<OrderModalProps> = ({
                 <label className="block text-sm font-bold text-slate-500 mb-2">Order Type</label>
                 <select
                   value={orderMethod}
-                  disabled={isCallPutExchange}
                   onChange={(e) => onOrderMethodChange(e.target.value)}
-                  className={`w-full px-3 py-3 font-medium border-2 rounded-lg outline-none ${
-                    isCallPutExchange 
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed' 
-                      : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 focus:border-blue-500'
-                  }`}
+                  className={`w-full px-3 py-3 font-medium border-2 rounded-lg outline-none ${'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 focus:border-blue-500'
+                    }`}
                 >
                   <option value="MARKET">Market</option>
                   <option value="LIMIT">Limit</option>
@@ -188,11 +184,10 @@ const OrderModal: React.FC<OrderModalProps> = ({
                   onChange={(e) => onOrderPriceChange(e.target.value)}
                   disabled={isMarketMode}
                   placeholder={isBuy ? liveData?.ask?.toFixed(2) : liveData?.bid?.toFixed(2) || '0'}
-                  className={`w-full px-3 py-3 border-2 rounded-lg font-semibold transition-all focus:outline-none ${focusBorderColor} ${
-                    isMarketMode 
-                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-70' 
+                  className={`w-full px-3 py-3 border-2 rounded-lg font-semibold transition-all focus:outline-none ${focusBorderColor} ${isMarketMode
+                      ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-70'
                       : `${inputBgColor} ${inputBorderColor} text-gray-900 dark:text-white`
-                  }`}
+                    }`}
                 />
               </div>
             </div>

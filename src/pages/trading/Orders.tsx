@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 
 // --- Interfaces ---
 interface OrderData {
@@ -12,6 +13,7 @@ interface OrderData {
   orderId: number; orderLimitType: string; orderMethod: string; orderTime: string;
   side?: any; price: number; quantity: number; referencePrice: number;
   tradeSymbol: string; userId: number; userName: string;
+  placedByUsername: string;
 }
 
 interface OrdersResponse { limit: number; offset: number; side?: any; orders: OrderData[]; size: number; }
@@ -27,7 +29,7 @@ const Orders: React.FC = () => {
   const [fromDate, setFromDate] = useState<string>(today);
   const [toDate, setToDate] = useState<string>(today);
 
-  const [selectedUserId, setSelectedUserId] = useState<number>(0)
+  const [selectedUserId, setSelectedUserId] = useState<number | string>(0)
   const [selectedExchange, setSelectedExchange] = useState<string>('')
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
 
@@ -51,8 +53,16 @@ const Orders: React.FC = () => {
   const userDataStr = localStorage.getItem('userData');
   const loggedInUser = userDataStr ? JSON.parse(userDataStr) : null;
 
+  // --- Adapt users array to match DropdownItem interface [{ id, name }] ---
+  const selectableUsers = useMemo(() => {
+    return users.map(u => ({
+      id: u.userId,
+      name: u.userName
+    }));
+  }, [users]);
+
   // --- Core Fetch Logic ---
-  const handleFetchOrders = async (pageOverride?: number, customId?: number, customEx?: string) => {
+  const handleFetchOrders = async (pageOverride?: number, customId?: number | string, customEx?: string) => {
     const userIdToUse = customId !== undefined ? customId : selectedUserId;
     const exchangeToUse = customEx !== undefined ? customEx : selectedExchange;
 
@@ -69,7 +79,7 @@ const Orders: React.FC = () => {
           toDate,
           tradeSymbol: selectedSymbol,
           exchange: exchangeToUse === 'All Exchanges' ? '' : exchangeToUse,
-          userId: userIdToUse
+          userId: Number(userIdToUse)
         }
       )
 
@@ -95,7 +105,7 @@ const Orders: React.FC = () => {
           userManagementService.fetchExchanges()
         ]);
 
-        let defaultUserId = loggedInUserId;
+        let defaultUserId: number | string = loggedInUserId;
         let defaultExchange = '';
 
         if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
@@ -156,7 +166,6 @@ const Orders: React.FC = () => {
   // --- Cancel/Delete Handler ---
   const handleDeleteSelected = async () => {
     if (!ordersData || selectedOrders.size === 0) return;
-    
     if (!window.confirm(`Are you sure you want to cancel the ${selectedOrders.size} selected order(s)?`)) return;
 
     try {
@@ -165,14 +174,50 @@ const Orders: React.FC = () => {
       
       if (res?.responseCode === '0' || res?.status === 'success') {
         toast.success("Selected orders cancelled successfully");
-        setSelectedOrders(new Set()); // Reset selections
-        handleFetchOrders(currentPage); // Refresh current viewport page
+        setSelectedOrders(new Set());
+        handleFetchOrders(currentPage);
       } else {
         toast.error(res?.message || "Failed to cancel orders");
       }
     } catch (err) {
       console.error("❌ Order cancellation failure:", err);
       toast.error("An error occurred while deleting orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Proceed to Success API Handler ---
+  const handleProceedToSuccess = async () => {
+    if (!ordersData || selectedOrders.size === 0) return;
+    if (!window.confirm(`Are you sure you want to proceed ${selectedOrders.size} order(s) to success?`)) return;
+
+    try {
+      setLoading(true);
+      const payload = {
+        userId: loggedInUserId,
+        requestTimestamp: new Date().toISOString(),
+        data: Array.from(selectedOrders)
+      };
+
+      const response = await fetch('https://api-staging.rivoplus.live/oms/proceedToSuccess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (response.ok && (result?.responseCode === '0' || result?.status === 'success')) {
+        toast.success("Orders processed to success layout!");
+        setSelectedOrders(new Set());
+        handleFetchOrders(currentPage);
+      } else {
+        toast.error(result?.message || "Failed to process orders to success");
+      }
+    } catch (err) {
+      console.error("❌ Proceed to Success API failure:", err);
+      toast.error("An error occurred while upgrading order states");
     } finally {
       setLoading(false);
     }
@@ -203,12 +248,16 @@ const Orders: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">User :</label>
-                  <select value={selectedUserId} onChange={(e) => setSelectedUserId(Number(e.target.value))} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500">
-                    {users.map(u => <option key={u.userId} value={u.userId}>{u.userName}</option>)}
-                  </select>
-                </div>
+                
+                {/* CLEAN REUSABLE SEARCHABLE SELECT EXECUTED HERE */}
+                <SearchableSelect 
+                  label="User :"
+                  placeholder="Search User..."
+                  items={selectableUsers}
+                  selectedId={selectedUserId}
+                  onSelect={(id) => setSelectedUserId(id)}
+                />
+
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
                   <select value={selectedExchange} onChange={(e) => handleExchangeChange(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500">
@@ -269,7 +318,11 @@ const Orders: React.FC = () => {
                   >
                     <Trash2 className="w-4 h-4" /> Cancel Selected
                   </button>
-                  <button className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded font-semibold text-sm transition shadow-sm">
+                  <button 
+                    onClick={handleProceedToSuccess}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
+                  >
                     <CheckCircle className="w-4 h-4" /> Proceed to Success
                   </button>
                 </div>
@@ -288,7 +341,7 @@ const Orders: React.FC = () => {
             ) : (
               <>
                 <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-blue-400 dark:scrollbar-thumb-blue-600">
-                  <table className="w-full border-collapse min-w-[2000px]">
+                  <table className="w-full border-collapse min-w-[2150px]">
                     <thead>
                       <tr className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b-2 border-blue-200 dark:border-blue-500/30">
                         <th className="px-3 py-3.5 w-12">
@@ -300,6 +353,7 @@ const Orders: React.FC = () => {
                           />
                         </th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Username</th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Placed By</th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Symbol</th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Type</th>
                         <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Quantity</th>
@@ -352,6 +406,10 @@ const Orders: React.FC = () => {
                               </span>
                             </td>
 
+                            <td className="px-4 py-3.5 text-left text-sm text-slate-800 dark:text-slate-200 font-medium">
+                              {order.placedByUsername || '-'}
+                            </td>
+
                             <td className={`px-4 py-3.5 text-left text-sm font-bold uppercase ${sideColorClass}`}>
                               {order.exchange} {order.tradeSymbol}
                             </td>
@@ -360,7 +418,7 @@ const Orders: React.FC = () => {
                               {isBuy ? 'Buy' : 'Sell'} {order.orderLimitType === 'LIMIT' ? 'Limit' : order.orderLimitType}
                             </td>
 
-                            <td className={`px-4 py-3.5 text-right text-sm font-bold ${sideColorClass}`}>
+                            <td className={`px-4 py-3.5 text-left text-sm font-bold ${sideColorClass}`}>
                               {order.quantity}
                             </td>
 

@@ -236,6 +236,19 @@ const CreateNewUser: React.FC = () => {
           }),
         otherwise: (schema) => schema.notRequired()
       }),
+      exchanges: Yup.object().test(
+        'at-least-one-exchange-enabled',
+        'At least one exchange must be enabled',
+        function (exchangesValues) {
+          if (!exchangesValues) return false;
+
+          return Object.entries(exchangesValues).some(([key, config]: [string, any]) => {
+            // Ensure it respects your filtering mechanism `isExchangeAllowed`
+            const allowed = !forUserAccount || selectedUserAllowedExchanges.length === 0 || selectedUserAllowedExchanges.includes(key);
+            return allowed && config?.enabled === true;
+          });
+        }
+      ),
       brokerageSharing: Yup.number().when('userType', {
         is: 'master',
         then: (schema) => schema
@@ -455,16 +468,28 @@ const CreateNewUser: React.FC = () => {
       allowedExchangesArr.forEach((ex: any) => {
         const key = ex.name?.toLowerCase();
         if (key && exchangesObj.hasOwnProperty(key)) {
+          // Check if this key belongs to the permanently locked turnover columns
+          const isLockedTurnover = ['nse', 'sgx', 'others'].includes(key);
+
           exchangesObj[key] = {
             enabled: true,
-            turnoverBrk: !!ex.turnover,
-            // Only allow symbolBrk to be true if turnover is false
-            symbolBrk: !!ex.turnover ? false : !!ex.lot,
+            // Force true for locked rows, otherwise use API value
+            turnoverBrk: isLockedTurnover ? true : !!ex.turnover,
+            // Force false for locked rows, otherwise calculate from API value
+            symbolBrk: isLockedTurnover ? false : (!!ex.turnover ? false : !!ex.lot),
             group: ex.groupName ? ex.groupName : '',
             highLowLimit: false
           };
         }
       });
+
+      ['nse', 'sgx', 'others'].forEach((key) => {
+        if (exchangesObj[key].enabled) {
+          exchangesObj[key].turnoverBrk = true;
+          exchangesObj[key].symbolBrk = false;
+        }
+      });
+
       let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
 
       if (editingUser.highLowTradeLimit) {
@@ -684,17 +709,28 @@ const CreateNewUser: React.FC = () => {
     return group?.groupId || null
   }
 
-  const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
+ const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
     try {
       console.log('Form Submitted:', values)
 
-      // Check if there's a username validation error
+      // 1. Mandatory Brokerage Guard: Ensure all enabled exchanges have at least one brokerage type selected
+      const enabledExchangesWithoutBrokerage = Object.entries(values.exchanges)
+        .filter(([key, exchange]: [string, any]) => isExchangeAllowed(key) && exchange.enabled)
+        .filter(([key, exchange]: [string, any]) => !exchange.turnoverBrk && !exchange.symbolBrk)
+        .map(([key]) => key.toUpperCase());
+
+      if (enabledExchangesWithoutBrokerage.length > 0) {
+        toast.error(`Please select either Turnover or Symbol Brokerage for: ${enabledExchangesWithoutBrokerage.join(', ')}`);
+        return; // Absolute stop to prevent invalid submission
+      }
+
+      // 2. Check if there's a username validation error (Create Mode only)
       if (!isEditMode && usernameError) {
         toast.error('Please fix username validation errors before submitting')
         return
       }
 
-      // Validate that all enabled and allowed exchanges have a group selected (only for clients, not masters)
+      // 3. Validate that all enabled and allowed exchanges have a group selected (only for clients, not masters)
       if (values.userType === 'client') {
         const enabledExchangesWithoutGroup = Object.entries(values.exchanges)
           .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled && !exchange.group)
@@ -707,7 +743,9 @@ const CreateNewUser: React.FC = () => {
       }
 
       if (isEditMode && editingUser) {
+        // ==========================================================
         // EDIT MODE - Use editUserDetails API
+        // ==========================================================
         const userDataStr = localStorage.getItem('userData')
         const userData = userDataStr ? JSON.parse(userDataStr) : null
         const parentUserId = userData?.userId || 2
@@ -768,7 +806,9 @@ const CreateNewUser: React.FC = () => {
           toast.error(response?.responseMessage || 'Failed to update user')
         }
       } else {
+        // ==========================================================
         // CREATE MODE - Original logic
+        // ==========================================================
         // Map userType to roleId (3 = master, 4 = client)
         const roleId = values.userType === 'master' ? 3 : 4
 
@@ -1219,6 +1259,16 @@ const CreateNewUser: React.FC = () => {
                                   onChange={field.onChange}
                                   onBlur={field.onBlur}
                                   name={field.name}
+                                  onKeyDown={(e) => {
+                                    // 1. Block Keyboard Up and Down arrow keys
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                  onWheel={(e) => {
+                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
+                                    e.currentTarget.blur();
+                                  }}
                                   error={
                                     isExceeding
                                       ? `Cannot exceed available credit of ${availableCredit}`
@@ -1294,6 +1344,10 @@ const CreateNewUser: React.FC = () => {
                                       e.preventDefault();
                                     }
                                   }}
+                                  onWheel={(e) => {
+                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
+                                    e.currentTarget.blur();
+                                  }}
                                   onBlur={(e) => {
                                     field.onBlur(e)
                                     // Trigger validation on blur only if truly empty (not zero)
@@ -1364,6 +1418,10 @@ const CreateNewUser: React.FC = () => {
                                   }}
                                   value={field.value ?? ''}
                                   onChange={field.onChange}
+                                  onWheel={(e) => {
+                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
+                                    e.currentTarget.blur();
+                                  }}
                                   onBlur={(e) => {
                                     field.onBlur(e)
                                     // Trigger validation on blur only if truly empty (not zero)
@@ -1559,13 +1617,27 @@ const CreateNewUser: React.FC = () => {
                                     <input
                                       type="checkbox"
                                       className="sr-only peer"
-                                      // Force lowercase key and provide fallback to false
                                       checked={!!values.exchanges[exchange.key.toLowerCase()]?.turnoverBrk}
                                       onChange={(e) => {
-                                        const isChecked = e.target.checked;
                                         const key = exchange.key.toLowerCase();
-                                        setFieldValue(`exchanges.${key}.turnoverBrk`, isChecked);
-                                        if (isChecked) {
+
+                                        // 1. Guard check: If this exchange is unallowed, stop everything
+                                        if (!isExchangeAllowed(key)) return;
+
+                                        // 2. Strong structural guard: If Symbol Brk is a disabled column type, 
+                                        // Turnover Brk MUST remain true permanently in both create and edit modes.
+                                        if (['nse', 'sgx', 'others'].includes(key)) {
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, true);
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, false);
+                                          return;
+                                        }
+
+                                        // Standard Radio-like logic for editable rows (MCX, CDS, CALLPUT)
+                                        if (!e.target.checked) {
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, false);
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, true);
+                                        } else {
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, true);
                                           setFieldValue(`exchanges.${key}.symbolBrk`, false);
                                         }
                                       }}
@@ -1583,25 +1655,42 @@ const CreateNewUser: React.FC = () => {
                                       className="sr-only peer"
                                       checked={!!values.exchanges[exchange.key.toLowerCase()]?.symbolBrk}
                                       onChange={(e) => {
-                                        const isChecked = e.target.checked;
                                         const key = exchange.key.toLowerCase();
-                                        setFieldValue(`exchanges.${key}.symbolBrk`, isChecked);
-                                        if (isChecked) {
+
+                                        // 1. Guard check: Reject clicks if column is disabled or unallowed (applies to both modes)
+                                        const isColumnDisabled =
+                                          ['nse', 'sgx', 'others'].includes(key) ||
+                                          !isExchangeAllowed(key);
+
+                                        if (isColumnDisabled) {
+                                          // Re-enforce safety lock states explicitly 
+                                          if (['nse', 'sgx', 'others'].includes(key)) {
+                                            setFieldValue(`exchanges.${key}.turnoverBrk`, true);
+                                            setFieldValue(`exchanges.${key}.symbolBrk`, false);
+                                          }
+                                          return;
+                                        }
+
+                                        // Standard Radio-like logic for editable rows (MCX, CDS, CALLPUT)
+                                        if (!e.target.checked) {
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, false);
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, true);
+                                        } else {
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, true);
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, false);
                                         }
                                       }}
-                                      // DISABLE logic: 
-                                      // 1. If in Create Mode AND key is nse/sgx/others
-                                      // 2. OR standard isExchangeAllowed check
                                       disabled={
-                                        (!isEditMode && ['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase())) ||
+                                        ['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) ||
                                         !isExchangeAllowed(exchange.key.toLowerCase())
                                       }
                                     />
-                                    <div className={`relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600 ${(!isEditMode && ['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase())) ? 'opacity-30' : ''
+                                    <div className={`relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600 ${['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) ? 'opacity-30' : ''
                                       }`}></div>
                                   </label>
                                 </td>
+
+
                                 <td className="py-4 px-2">
                                   <select
                                     value={values.exchanges[exchange.key as keyof typeof values.exchanges].group}

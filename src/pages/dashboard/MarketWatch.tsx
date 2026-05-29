@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, Reorder } from 'framer-motion'
 import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2, Plus } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import marketWatchService from '../../services/marketWatchService'
@@ -144,7 +144,13 @@ const TableRow = memo(({
   const isEvenRow = instrument.insToken % 2 === 0
 
   return (
-    <tr className={`hover:bg-slate-700 transition-colors ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}>
+    <Reorder.Item
+      value={instrument}
+      id={instrument.insToken.toString()}
+      as="tr"
+      className={`hover:bg-slate-700 transition-colors active:cursor-grabbing cursor-grab ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'
+        }`}
+    >
       {/* Actions */}
       <td className={`px-3 py-2 text-center sticky left-0 z-10 ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}>
         <button
@@ -170,21 +176,21 @@ const TableRow = memo(({
 
       {/* Sell Button Column (Grayed out if CALLPUT) */}
       <td className="px-2 py-2 text-center">
-        {config?.exchange !== 'CALLPUT' ? (
-          <button
-            onClick={() => onSellClick(instrument.insToken, config)}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
-          >
-            S
-          </button>
-        ) : (
+        {/* {config?.exchange !== 'CALLPUT' ? ( */}
+        <button
+          onClick={() => onSellClick(instrument.insToken, config)}
+          className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
+        >
+          S
+        </button>
+        {/* ) : (
           <button
             disabled
             className="bg-slate-600 text-slate-400 font-bold text-xs px-2.5 py-1 rounded cursor-not-allowed opacity-50"
           >
             S
           </button>
-        )}
+        )} */}
       </td>
 
       {/* Exchange */}
@@ -217,7 +223,7 @@ const TableRow = memo(({
       <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.low.toFixed(2)}</span></td>
       <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.close.toFixed(2)}</span></td>
       <td className="px-4 py-2 text-right"><span className="text-slate-400 text-xs font-mono whitespace-nowrap">{lastTradedTime}</span></td>
-    </tr>
+    </Reorder.Item>
   )
 })
 
@@ -280,6 +286,16 @@ const MarketWatch: React.FC = () => {
   const [isDraggingSell, setIsDraggingSell] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 
+  // Set position to null initially to let native CSS center it on open
+  const [scripInfoModalPosition, setScripInfoModalPosition] = useState<{ x: number; y: number } | null>(null)
+  const [isDraggingScripInfo, setIsDraggingScripInfo] = useState(false)
+
+
+  // Guard flag to strictly prevent socket traffic unless the Scrip Info modal is active
+  const isScripModalActiveRef = useRef(false)
+  const [scripInfoLiveData, setScripInfoLiveData] = useState<FeedInstrument | null>(null)
+  const reorderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Column resize state
   const [columnWidths, setColumnWidths] = useState({
     actions: 100,
@@ -337,7 +353,7 @@ const MarketWatch: React.FC = () => {
     setClientSearchTerm('');
   }, []);
 
-  
+
 
   useEffect(() => {
     if (!showBuyOrderModal) resetBuyForm();
@@ -381,6 +397,12 @@ const MarketWatch: React.FC = () => {
     [watchlist]
   )
 
+  useEffect(() => {
+    if (!showScripInfoModal) {
+      setScripInfoModalPosition(null)
+    }
+  }, [showScripInfoModal])
+
   const onDirectBuyClick = useCallback((token: number, config: InstrumentConfig | undefined) => {
     setSelectedOrderInstrument({ token, config })
     setShowBuyOrderModal(true)
@@ -408,17 +430,92 @@ const MarketWatch: React.FC = () => {
   }, [watchlistTabs, selectedTabId])
 
   // Memoize filtered feed data - show only tokens from selected tab
+ // Memoize filtered feed data - guaranteed to follow the database sort structure sequence on return
   const filteredFeedData = useMemo(() => {
-    // Filter by selected tab's tokens AND exclude deleting token
     const filtered: FeedInstrument[] = []
+    
+    // 1. Extract and clean matching instruments
     for (const instrument of feedData) {
       if (selectedTabTokens.has(instrument.insToken) && instrument.insToken !== deletingToken) {
         filtered.push(instrument)
       }
     }
-    console.log('🔍 Filtered feed data:', filtered.length, 'instruments from', feedData.length, 'total feed items for tab', selectedTabId)
-    return filtered
-  }, [feedData, selectedTabTokens, deletingToken, selectedTabId])
+
+    // 2. SORT THE LIST dynamically based on the exact index order in our database watchlist mapping
+    if (watchlist && watchlist.length > 0) {
+      const orderMap = new Map(watchlist.map((item, index) => [item.token, index]));
+      
+      return filtered.sort((a, b) => {
+        const indexA = orderMap.has(a.insToken) ? orderMap.get(a.insToken)! : 999;
+        const indexB = orderMap.has(b.insToken) ? orderMap.get(b.insToken)! : 999;
+        return indexA - indexB;
+      });
+    }
+
+    return filtered;
+  }, [feedData, selectedTabTokens, deletingToken, watchlist]);
+
+  const handleReorderSave = (reorderedFeedList: FeedInstrument[]) => {
+    // 1. Update UI state instantly so drag animations remain fluid
+    setFeedData(reorderedFeedList);
+
+    // 2. Clear any pending API execution timers (Debounce)
+    if (reorderTimeoutRef.current) {
+      clearTimeout(reorderTimeoutRef.current);
+    }
+
+    // 3. Set a 500ms timer. The API will fire ONLY after the user stops moving the row.
+    reorderTimeoutRef.current = setTimeout(async () => {
+      try {
+        const userData = localStorage.getItem('userData');
+        if (!userData || !selectedTabId) return;
+        const user = JSON.parse(userData);
+        const userId = user.userId;
+
+        const selectedTab = watchlistTabs.find(tab => tab.tabId === selectedTabId);
+        if (!selectedTab || !Array.isArray(selectedTab.watchList)) return;
+
+        const reorderedIds = reorderedFeedList
+          .map(feedItem => {
+            const match = selectedTab.watchList.find(w => w.token === feedItem.insToken);
+            return match ? match.id : null;
+          })
+          .filter((id): id is number => id !== null);
+
+        if (reorderedIds.length === 0) return;
+
+        console.log("📤 Sending single reorder sync packet to backend...");
+        const response = await fetch('https://api-staging.rivoplus.live/user/watchlist/reorder', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+            watchListTabId: selectedTabId,
+            requestTimestamp: Date.now().toString(),
+            data: {
+              watchListIds: reorderedIds,
+              watchListTabId: selectedTabId
+            }
+          }),
+        });
+
+        const result = await response.json();
+        if (result.responseCode === '0') {
+          toast.success('Watchlist order saved successfully');
+          // Crucial: refresh state tabs so the structural cache stays synced
+          await fetchWatchlistTabs();
+        } else {
+          toast.error(result.responseMessage || 'Failed to save order sequence');
+        }
+      } catch (error) {
+        console.error('❌ Failed to reorder watchlist:', error);
+        toast.error('Network error saving list order');
+      }
+    }, 500); // 500ms window wrapper
+  };
+
 
   // Throttle price change updates
   const [throttledPriceChanges, setThrottledPriceChanges] = useState<Record<number, PriceChange>>({})
@@ -454,6 +551,67 @@ const MarketWatch: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showClientListModal])
 
+  // Handshakes subscription and 1-second polling lifecycle strictly with modal visibility
+  useEffect(() => {
+    let pollingInterval: NodeJS.Timeout | null = null;
+    let unsubscribeFeed: (() => void) | null = null;
+    let dynamicUserId: string | null = null;
+
+    if (showScripInfoModal && selectedScripInfo) {
+      isScripModalActiveRef.current = true;
+
+      const userData = localStorage.getItem('userData')
+      if (userData) {
+        const user = JSON.parse(userData)
+        dynamicUserId = user.userId.toString()
+        const tokenStr = selectedScripInfo.token.toString()
+
+        // 1. LIVE SUBSCRIBE: Listen to instruments queue only now
+        console.log(`📡 Modal Opened: Subscribing to instruments for user ${dynamicUserId}`)
+        marketWatchService.subscribeToInstruments(dynamicUserId)
+
+        // 2. Stream Message Callback Listener
+        unsubscribeFeed = marketWatchService.onFeedData((data) => {
+          if (!isScripModalActiveRef.current) return;
+
+          if (Array.isArray(data)) {
+            const targetInstrument = data.find(item => item.insToken === selectedScripInfo.token)
+            if (targetInstrument) setScripInfoLiveData(targetInstrument)
+          } else if (data && data.insToken === selectedScripInfo.token) {
+            setScripInfoLiveData(data)
+          }
+        })
+
+        // 3. Isolated Polling Engine Block targeting /app/instruments
+        const executePollPacket = () => {
+          if (isScripModalActiveRef.current && marketWatchService.isConnected()) {
+            marketWatchService.sendInstrumentsRequestduplicate(dynamicUserId!, [tokenStr])
+          }
+        }
+
+        // 4. Initial trigger, then cycle at 1-second ticks
+        executePollPacket()
+        pollingInterval = setInterval(executePollPacket, 1000)
+      }
+    } else {
+      isScripModalActiveRef.current = false;
+      setScripInfoLiveData(null)
+    }
+
+    // Teardown Hook: Clears intervals, feed listeners, and forcefully unsubscribes from the socket channel
+    return () => {
+      isScripModalActiveRef.current = false;
+
+      if (pollingInterval) clearInterval(pollingInterval)
+      if (unsubscribeFeed) unsubscribeFeed()
+
+      // If we recorded a userId during this lifecycle, explicitly cut the server stream now
+      if (dynamicUserId) {
+        console.log(`🔕 Modal Closed: Unsubscribing from instruments for user ${dynamicUserId}`)
+        marketWatchService.unsubscribeFromInstruments(dynamicUserId)
+      }
+    }
+  }, [showScripInfoModal, selectedScripInfo])
   // Fetch watchlist
   const fetchWatchlist = async () => {
     try {
@@ -735,7 +893,7 @@ const MarketWatch: React.FC = () => {
 
       subscriptionRef.current = { subscribed: true, userId };
       marketWatchService.subscribeToWatchlist(userId);
-      marketWatchService.subscribeToInstruments(userId);
+      // marketWatchService.subscribeToInstruments(userId);
     };
 
     const forceResubscribe = (userId: string) => {
@@ -748,7 +906,7 @@ const MarketWatch: React.FC = () => {
       // 2. Fresh Subscriptions
       subscriptionRef.current = { subscribed: true, userId };
       marketWatchService.subscribeToWatchlist(userId);
-      marketWatchService.subscribeToInstruments(userId);
+      // marketWatchService.subscribeToInstruments(userId);
 
       // 3. IMPORTANT: Re-request current instruments to kickstart the feed
       if (watchlist.length > 0) {
@@ -1066,14 +1224,21 @@ const MarketWatch: React.FC = () => {
           y: e.clientY - dragOffset.y
         })
       }
+      if (isDraggingScripInfo) {
+        setScripInfoModalPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y
+        })
+      }
     }
 
     const handleMouseUp = () => {
       setIsDraggingBuy(false)
       setIsDraggingSell(false)
+      setIsDraggingScripInfo(false)
     }
 
-    if (isDraggingBuy || isDraggingSell) {
+    if (isDraggingBuy || isDraggingSell || isDraggingScripInfo) {
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
     }
@@ -1082,7 +1247,7 @@ const MarketWatch: React.FC = () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDraggingBuy, isDraggingSell, dragOffset])
+  }, [isDraggingBuy, isDraggingSell, isDraggingScripInfo, dragOffset])
 
   // Updated Effect for Buy Modal
   useEffect(() => {
@@ -1650,7 +1815,13 @@ const MarketWatch: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700 bg-slate-900">
+                <Reorder.Group
+                  axis="y"
+                  values={filteredFeedData}
+                  onReorder={handleReorderSave}
+                  as="tbody"
+                  className="divide-y divide-slate-700 bg-slate-900"
+                >
                   {filteredFeedData.map((instrument, index) => (
                     <TableRow
                       key={instrument.insToken}
@@ -1667,7 +1838,7 @@ const MarketWatch: React.FC = () => {
                       deletingToken={deletingToken}
                     />
                   ))}
-                </tbody>
+                </Reorder.Group>
               </table>
             </div>
           </motion.div>
@@ -2055,7 +2226,7 @@ const MarketWatch: React.FC = () => {
                                       buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
                                     );
                                     if (response?.responseCode === '0') {
-                                      toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+                                      // toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
 
                                       // Reset form
                                       setBuyOrderQuantity('1')
@@ -2382,7 +2553,7 @@ const MarketWatch: React.FC = () => {
                                     )
 
                                     if (response?.responseCode === '0') {
-                                      toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+                                      // toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
 
                                       // Reset form
                                       setSellOrderQuantity('1')
@@ -2452,21 +2623,23 @@ const MarketWatch: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-[100000] p-4"
+            className="fixed inset-0 bg-black/60 z-[100000] p-4 flex items-center justify-center backdrop-blur-sm"
             onClick={() => setShowScripInfoModal(false)}
           >
             <motion.div
+              drag
+              dragMomentum={false}
+              dragElastic={0}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 100001 }}
-              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden"
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col relative"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Modal Header */}
-              <div className="bg-gradient-to-r from-red-600 to-orange-600 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              {/* Modal Header (Acts as drag handle) */}
+              <div className="bg-gradient-to-r from-red-600 to-orange-600 px-6 py-4 flex items-center justify-between cursor-grab active:cursor-grabbing select-none flex-shrink-0">
+                <div className="flex items-center gap-3 pointer-events-none">
                   <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
                     <span className="text-xl">📊</span>
                   </div>
@@ -2476,22 +2649,25 @@ const MarketWatch: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setShowScripInfoModal(false)}
-                  className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+                  className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors cursor-pointer"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
               {/* Modal Body */}
-              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)] custom-scrollbar">
                 {(() => {
-                  const liveData = feedData.find(item => item.insToken === selectedScripInfo.token)
+                  // FIX: Switch resource mapping path from 'feedData.find()' directly to standalone state
+                  const liveData = scripInfoLiveData
                   const config = selectedScripInfo.config
 
                   if (!liveData) {
                     return (
                       <div className="text-center py-12">
-                        <p className="text-gray-500">No live data available for this instrument</p>
+                        {/* Visual loading spin/indicator state waiting for first 1s socket packet */}
+                        <div className="animate-spin inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
+                        <p className="text-gray-500 dark:text-gray-400">Fetching streaming quote info...</p>
                       </div>
                     )
                   }
@@ -2509,7 +2685,6 @@ const MarketWatch: React.FC = () => {
                             <select
                               value={config?.exchange || ''}
                               onChange={(e) => {
-                                // Find instruments in the selected exchange
                                 const newExchange = e.target.value
                                 const fullConfig = ConfigManager.getFullConfig()
                                 if (fullConfig?.instruments?.[newExchange]?.[0]) {
@@ -2572,7 +2747,7 @@ const MarketWatch: React.FC = () => {
                                   {i === 0 ? (liveData.buyQty || 0) : 0}
                                 </div>
                                 <div className="text-center py-2 bg-white dark:bg-slate-700 rounded text-blue-600 dark:text-blue-400 font-semibold">
-                                  {i === 0 ? liveData.bid.toFixed(2) : liveData.bid.toFixed(2)}
+                                  {liveData.bid.toFixed(2)}
                                 </div>
                               </div>
                             ))}
@@ -2590,7 +2765,7 @@ const MarketWatch: React.FC = () => {
                             {[...Array(5)].map((_, i) => (
                               <div key={i} className="grid grid-cols-2 gap-2 mb-1">
                                 <div className="text-center py-2 bg-white dark:bg-slate-700 rounded text-red-600 dark:text-red-400 font-semibold">
-                                  {i === 0 ? liveData.ask.toFixed(2) : liveData.ask.toFixed(2)}
+                                  {liveData.ask.toFixed(2)}
                                 </div>
                                 <div className="text-center py-2 bg-white dark:bg-slate-700 rounded text-red-600 dark:text-red-400 font-semibold">
                                   {i === 0 ? (liveData.sellQty || 0) : 0}
@@ -2714,6 +2889,9 @@ const MarketWatch: React.FC = () => {
           </motion.div>,
           document.body
         )}
+
+
+
       </div>
     </div>
   )

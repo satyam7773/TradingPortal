@@ -22,6 +22,7 @@ export interface OrderUpdate {
   netQuantity: number;
   lotValue?: number;
   price: number;
+  orderPrice:any;
   userId: number;
   username?: string; // Ensure this matches your JSON "username"
   instrumentName?: string;
@@ -112,6 +113,7 @@ class OrderUpdateService {
       ? `${exchange}: ${tradeSymbol}`
       : tradeSymbol;
     const sideEmoji = side === "BUY" ? "📈" : side === "SELL" ? "📉" : "📊";
+    const orderType = order.orderType || "N/A";
 
     // --- New Quantity Logic ---
     let displayQty: any = order.lotValue || 0;
@@ -144,7 +146,7 @@ class OrderUpdateService {
     switch (order.status) {
       case OrderStatus.APPROVED:
         toast.success(
-          `${userName}${sideEmoji} ${side} Order Approved\n${instrumentInfo}\nQty: ${displayQty}`,
+          `${userName}${sideEmoji} ${orderType} ${side} Order Placed\n${instrumentInfo}\nQty: ${displayQty} @ ₹${order.orderPrice.toFixed(2)}`,
           {
             duration: 3000,
             icon: "✅",
@@ -160,7 +162,7 @@ class OrderUpdateService {
           side === "BUY" ? "#059669" : side === "SELL" ? "#ef4444" : "#4b5563";
 
         toast.success(
-          `${userName}${sideEmoji} ${side} Order Filled\n${instrumentInfo}\nQty: ${displayQty} @ ₹${order.price.toFixed(2)}`,
+          `${userName}${sideEmoji} ${orderType} ${side} Order Filled\n${instrumentInfo}\nQty: ${displayQty} @ ₹${order.orderPrice.toFixed(2)}`,
           {
             duration: 4000,
             icon: "🎯",
@@ -171,7 +173,7 @@ class OrderUpdateService {
 
       case OrderStatus.REJECTED:
         toast.error(
-          `${userName}${sideEmoji} ${side} Order Rejected\n${instrumentInfo}\nQty: ${displayQty}\nReason: ${order.rejectedReason || "Rejected by RMS"}`,
+          `${userName}${sideEmoji} ${orderType} ${side} Order Rejected\n${instrumentInfo}\nQty: ${displayQty}\nReason: ${order.rejectedReason || "Rejected by RMS"}`,
           {
             duration: 5000,
             icon: "❌",
@@ -182,7 +184,7 @@ class OrderUpdateService {
 
       case OrderStatus.CANCELLED:
         toast(
-          `${userName}${sideEmoji} ${side} Order Cancelled\n${instrumentInfo}\nQty: ${displayQty}`,
+          `${userName}${sideEmoji} ${orderType} ${side} Order Cancelled\n${instrumentInfo}\nQty: ${displayQty}`,
           {
             duration: 3000,
             icon: "🚫",
