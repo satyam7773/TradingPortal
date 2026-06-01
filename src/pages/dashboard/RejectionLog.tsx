@@ -38,7 +38,7 @@ const RejectionLog: React.FC = () => {
     const userDataStr = localStorage.getItem('userData')
     if (userDataStr) {
       const userData = JSON.parse(userDataStr)
-      return userData.userId || 0
+      return userData.userId
     }
     return 31
   }
@@ -69,7 +69,7 @@ const RejectionLog: React.FC = () => {
       try {
         setInitialLoading(true)
         const [usersResponse, exchangesResponse] = await Promise.all([
-          userManagementService.fetchOwnUsers(loggedInUserId),
+          userManagementService.fetchOwnUsersforOrders(loggedInUserId),
           userManagementService.fetchExchanges()
         ])
 

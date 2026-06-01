@@ -28,6 +28,7 @@ import ScrollToTop from './components/common/ScrollToTop'
 import M2MReport from './pages/dashboard/M2MReport'
 import RejectionLog from './pages/dashboard/RejectionLog'
 import UserSettingsChangePassword from './pages/dashboard/UserSettingsChangePassword'
+import BillGenerate from './pages/reports/BillGenerate'
 
 const App: React.FC = () => {
   return (
@@ -60,6 +61,7 @@ const App: React.FC = () => {
           <Route path="trade-account" element={<TradeAccount />} />
           <Route path="settlement" element={<Settlement />} />
           <Route path="file-upload" element={<FileUploadPage />} />
+          <Route path="bill-generate" element={<BillGenerate />} />
           <Route path="*" element={<div className="p-8 text-center">
             <h1 className="text-2xl font-bold mb-4">Page Not Found</h1>
             <p className="text-gray-600 mb-4">The route you're looking for doesn't exist within /dashboard</p>

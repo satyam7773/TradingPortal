@@ -137,7 +137,7 @@ const dashboardTabConfigs = {
   '/dashboard/exchange-schedule': { title: 'Exchange Time Schedule', icon: FileText },
   '/dashboard/configure-2fa': { title: 'Configure 2FA', icon: Lock },
   '/dashboard/file-upload': { title: 'File Upload', icon: Upload },
-  '/dashboard/change-password': { title: 'Change Password', icon: Lock }
+  '/dashboard/change-password': { title: 'Change Password', icon: Lock },
 
 }
 

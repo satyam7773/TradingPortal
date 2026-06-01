@@ -73,6 +73,8 @@ interface UseOrderModalReturn {
   // Submit handlers
   submitBuyOrder: (liveData: any) => Promise<boolean>
   submitSellOrder: (liveData: any) => Promise<boolean>
+  submitManualBuyOrder: (liveData: any) => Promise<boolean>
+  submitManualSellOrder: (liveData: any) => Promise<boolean>
   
   // Reset handlers
   resetBuyForm: (isAdminUser?: boolean) => void
@@ -149,7 +151,7 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
     }
   }, [isAdminUser])
 
-  const submitBuyOrder = async (liveData: any): Promise<boolean> => {
+  const submitBuyOrder = async (liveData: any, tradeOrderMethod: string = 'WEB'): Promise<boolean> => {
     try {
       setIsBuyOrderSubmitting(true)
 
@@ -193,7 +195,8 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
         finalQuantity,                                  // JSON "lotSize"
         parseFloat(buyOrderPrice || liveData?.ask?.toString() || '0'),
         finalLotValue,                                  // JSON "lotValue"
-        buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
+        buyOrderType as 'MARKET' | 'LIMIT' | 'SL',
+        tradeOrderMethod
       )
 
       if (response?.responseCode === '0') {
@@ -212,7 +215,7 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
     }
   }
 
-  const submitSellOrder = async (liveData: any): Promise<boolean> => {
+  const submitSellOrder = async (liveData: any, tradeOrderMethod: string = 'WEB'): Promise<boolean> => {
     try {
       setIsSellOrderSubmitting(true)
 
@@ -256,7 +259,8 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
         finalQuantity,                                  // JSON "lotSize"
         parseFloat(sellOrderPrice || liveData?.bid?.toString() || '0'),
         finalLotValue,                                  // JSON "lotValue"
-        sellOrderType as 'MARKET' | 'LIMIT' | 'SL'
+        sellOrderType as 'MARKET' | 'LIMIT' | 'SL',
+        tradeOrderMethod
       )
 
       if (response?.responseCode === '0') {
@@ -274,6 +278,9 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
       setIsSellOrderSubmitting(false)
     }
   }
+
+  const submitManualBuyOrder = useCallback((liveData: any) => submitBuyOrder(liveData, 'MANUAL_ORDER'), [submitBuyOrder])
+  const submitManualSellOrder = useCallback((liveData: any) => submitSellOrder(liveData, 'MANUAL_ORDER'), [submitSellOrder])
 
   return {
     showBuyOrderModal,
@@ -321,6 +328,8 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
     
     submitBuyOrder,
     submitSellOrder,
+    submitManualBuyOrder,
+    submitManualSellOrder,
     resetBuyForm,
     resetSellForm
   }

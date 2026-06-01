@@ -16,6 +16,7 @@ interface UserData {
   id: string;
   username: string;
   name: string;
+  roleId?: number;
   type: 'Client' | 'Master' | 'Admin';
   parent: string;
   credit: number;
@@ -1024,7 +1025,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
                 {/* Positions Tab */}
                 {activeTab === 'positions' && (
-                  <UserPositionsPanel username={user.username} userId={user.id} />
+                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} />
                 )}
 
                 {/* Trades Tab */}

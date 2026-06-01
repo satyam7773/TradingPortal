@@ -49,7 +49,10 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         <input
           type="text"
           value={searchTerm}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            setSearchTerm(''); // Clear the input so the user can start typing a new search
+            setIsOpen(true);
+          }}
           onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
           placeholder={placeholder}
           className="w-full pl-3 pr-8 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500"

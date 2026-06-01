@@ -6,17 +6,20 @@ import { Briefcase, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import userManagementService from '../services/userManagementService';
 import marketWatchService from '../services/marketWatchService';
+import orderService from '../services/orderService';
 import FilterLayout from '../components/FilterLayout';
 import { useOrderModal } from '../hooks/useOrderModal';
 import OrderModal from '../components/modals/OrderModal';
 import SearchableSelect from '../components/ui/SearchableSelect';
+import ConfigManager from '../utils/configManager';
 
 interface UserPositionsPanelProps {
   username: string;
   userId?: string | number;
+  roleId?: any;
 }
 
-const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId }) => {
+const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId }) => {
   // --- State (mostly copied from Positions.tsx) ---
   const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges');
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
@@ -30,12 +33,78 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
   const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>('addOrder');
+  const displayRoleId = roleId;
+  console.log('displayRoleId',displayRoleId,username)
+  const isClient = displayRoleId === 'Client';
   const feedUnsubscribeRef = useRef<(() => void) | null>(null);
   const subscriptionRef = useRef({ subscribed: false, userId: null as string | null });
   const lastUpdateRef = useRef<number>(0);
   const instrumentConfigRef = useRef<Record<number, any>>({});
   const orderModal = useOrderModal(true);
   const maxAvailableQuantityRef = useRef<number>(999999);
+
+  const handleDragSetup = (e: React.MouseEvent<Element>, type: 'BUY' | 'SELL') => {
+    e.preventDefault();
+    const targetModalElement = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+    const rect = targetModalElement.getBoundingClientRect();
+
+    orderModal.setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+
+    if (type === 'BUY') orderModal.setIsDraggingBuy(true);
+    else orderModal.setIsDraggingSell(true);
+  };
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (orderModal.isDraggingBuy) {
+        orderModal.setBuyModalPosition({
+          x: e.clientX - orderModal.dragOffset.x,
+          y: e.clientY - orderModal.dragOffset.y
+        });
+      }
+      if (orderModal.isDraggingSell) {
+        orderModal.setSellModalPosition({
+          x: e.clientX - orderModal.dragOffset.x,
+          y: e.clientY - orderModal.dragOffset.y
+        });
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      orderModal.setIsDraggingBuy(false);
+      orderModal.setIsDraggingSell(false);
+    };
+
+    if (orderModal.isDraggingBuy || orderModal.isDraggingSell) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [orderModal.isDraggingBuy, orderModal.isDraggingSell, orderModal.dragOffset]);
+
+  useEffect(() => {
+    if (orderModal.showBuyOrderModal && orderModal.selectedOrderInstrument && orderModal.buyOrderType === 'MARKET') {
+      const liveData = liveTicks[orderModal.selectedOrderInstrument.token];
+      if (liveData?.ask) {
+        orderModal.setBuyOrderPrice(liveData.ask.toFixed(2));
+      }
+    }
+  }, [liveTicks, orderModal.buyOrderType, orderModal.showBuyOrderModal, orderModal.selectedOrderInstrument]);
+
+  useEffect(() => {
+    if (orderModal.showSellOrderModal && orderModal.selectedOrderInstrument && orderModal.sellOrderType === 'MARKET') {
+      const liveData = liveTicks[orderModal.selectedOrderInstrument.token];
+      if (liveData?.bid) {
+        orderModal.setSellOrderPrice(liveData.bid.toFixed(2));
+      }
+    }
+  }, [liveTicks, orderModal.sellOrderType, orderModal.showSellOrderModal, orderModal.selectedOrderInstrument]);
 
   // --- Fetch users, exchanges, and initial positions; stop polling/socket on tab change or unmount ---
   useEffect(() => {
@@ -53,6 +122,18 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           setExchanges(exchangesResponse);
           setSelectedExchange(exchangesResponse[0].name);
         }
+
+        const fullConfig = ConfigManager.getFullConfig();
+        if (fullConfig && fullConfig.instruments) {
+          Object.entries(fullConfig.instruments).forEach(([_, instrumentsList]: [string, any]) => {
+            if (Array.isArray(instrumentsList)) {
+              instrumentsList.forEach((instrument: any) => {
+                if (instrument.instrumentToken) instrumentConfigRef.current[instrument.instrumentToken] = instrument;
+              });
+            }
+          });
+        }
+
         await handleView(exchangesResponse?.[0]?.name || 'All Exchanges', userId ? [Number(userId)] : []);
       } finally {
         setLoading(false);
@@ -67,14 +148,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- Fetch symbols when exchange changes ---
   useEffect(() => {
-    if (!selectedExchange || selectedExchange === 'All Exchanges') { setSymbols([]); return; }
     (async () => {
       try {
-        const response = await userManagementService.fetchSymbols(selectedExchange);
+        const response = await userManagementService.fetchAllSymbols(selectedExchange, userId ? Number(userId) : undefined);
         if (response?.responseCode === '0' && Array.isArray(response.data)) setSymbols(response.data);
       } catch (e) { console.error(e); }
     })();
-  }, [selectedExchange]);
+  }, [selectedExchange, userId]);
 
   // --- Live socket logic (copied from Positions.tsx) ---
   const unsubscribeCurrentFeed = useCallback(() => {
@@ -95,15 +175,18 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     feedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
       if (!data) return;
       const incomingFeedArray = Array.isArray(data) ? data : [data];
+      const feedItems = incomingFeedArray.filter((item) => item && item.insToken != null);
+      if (feedItems.length === 0) return;
+
       setLiveTicks(prev => {
         const nextTicks = { ...prev };
-        incomingFeedArray.forEach(item => { nextTicks[Number(item.insToken)] = item; });
+        feedItems.forEach(item => { nextTicks[Number(item.insToken)] = item; });
         return nextTicks;
       });
       const now = Date.now();
       if (now - lastUpdateRef.current < 100) return;
       lastUpdateRef.current = now;
-      const feedMap = new Map(incomingFeedArray.map(item => [Number(item.insToken), item]));
+      const feedMap = new Map(feedItems.map(item => [Number(item.insToken), item]));
       setFilteredPositions(prevPositions => {
         return prevPositions.map(pos => {
           const currentToken = Number(pos.token);
@@ -133,19 +216,20 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   }, [establishStompSubscription, userId]);
 
   // --- View handler (copied from Positions.tsx, but always uses userId) ---
-  const handleView = async (targetExchange?: string, targetUserIds?: number[]) => {
+  const handleView = async (targetExchange?: string, targetUserIds?: number[], ignoreSelectedSymbol = false, targetToken?: number) => {
     const exchange = targetExchange || selectedExchange;
     if (!exchange) return;
     setLoading(true);
     unsubscribeCurrentFeed();
     setSelectedPositions(new Set());
     try {
-      let uids: number[] = targetUserIds && targetUserIds.length > 0 ? targetUserIds : userId ? [Number(userId)] : [];
-      const response = await userManagementService.fetchUserPositionsForExchange(exchange, selectedToken || 0, uids);
+      const tokenToFetch = targetToken !== undefined ? targetToken : (selectedToken || 0);
+      console.log("Fetching positions for User ID:", userId, "Exchange:", exchange, "Token:", tokenToFetch);
+      const response = await userManagementService.fetchUserPositionsForExchange(exchange, tokenToFetch, userId ? Number(userId) : 0);
       if (response?.responseCode === '0' && response.data) {
         setPositionData(response.data);
         let positions = response.data.positions || [];
-        if (selectedSymbol) positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
+        if (selectedSymbol && !ignoreSelectedSymbol) positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
         setFilteredPositions(positions);
         if (positions.length > 0) setupLivePositionFeed(positions);
       } else {
@@ -176,6 +260,181 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [rateBy, setRateBy] = useState('Market Price');
   const [price, setPrice] = useState('');
 
+  // --- Fetch current market price for selected script in filter panel ---
+  useEffect(() => {
+    if (!selectedToken || rateBy !== 'Market Price') return;
+
+    const tick = liveTicks[selectedToken];
+    if (!tick) return;
+
+    if (buySell === 'Buy') {
+      setPrice(tick.ask?.toFixed(2) || '');
+    } else {
+      setPrice(tick.bid?.toFixed(2) || '');
+    }
+  }, [selectedToken, buySell, liveTicks, rateBy]);
+
+  // --- Ensure live quote feed includes the selected script token ---
+  useEffect(() => {
+    if (!selectedToken || !userId) return;
+    const userIdStr = String(userId);
+    const tokenString = String(selectedToken);
+    let pollingInterval: number | null = null;
+
+    const fetchInstrumentTick = async () => {
+      if (!marketWatchService.isConnected()) {
+        await marketWatchService.connect(() => {
+          marketWatchService.subscribeToInstruments(userIdStr);
+          marketWatchService.sendInstrumentsRequestduplicate(userIdStr, [tokenString]);
+        });
+      } else {
+        marketWatchService.subscribeToInstruments(userIdStr);
+        marketWatchService.sendInstrumentsRequestduplicate(userIdStr, [tokenString]);
+      }
+    };
+
+    const startPolling = async () => {
+      await fetchInstrumentTick();
+      pollingInterval = setInterval(() => {
+        if (marketWatchService.isConnected()) {
+          marketWatchService.sendInstrumentsRequestduplicate(userIdStr, [tokenString]);
+        }
+      }, 1000);
+    };
+
+    startPolling().catch(console.error);
+
+    return () => {
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
+  }, [selectedToken, userId]);
+
+  const selectedTick = selectedToken ? liveTicks[selectedToken] : null;
+  const buyPriceDisplay = selectedTick?.ask ? Number(selectedTick.ask).toFixed(2) : '--';
+  const sellPriceDisplay = selectedTick?.bid ? Number(selectedTick.bid).toFixed(2) : '--';
+
+  const updatePriceFromTick = useCallback(() => {
+    if (!selectedToken || !selectedTick) return;
+    const nextPrice = buySell === 'Buy' ? selectedTick.ask : selectedTick.bid;
+    if (nextPrice != null) {
+      setPrice(Number(nextPrice).toFixed(2));
+    }
+  }, [selectedToken, selectedTick, buySell]);
+
+  useEffect(() => {
+    if (!selectedToken) return;
+
+    if (orderType === 'Market' || rateBy === 'Market Price') {
+      updatePriceFromTick();
+    }
+  }, [selectedToken, orderType, rateBy, updatePriceFromTick]);
+
+  const handleOrderTypeChange = (value: string) => {
+    setOrderType(value);
+    if (value === 'Market') {
+      setRateBy('Market Price');
+      updatePriceFromTick();
+    }
+  };
+
+  const handleManualOrderSubmit = async () => {
+    if (!isClient) {
+      toast.error('Manual orders can only be placed for client users (roleId 4)');
+      return;
+    }
+
+    if (!selectedToken || !selectedSymbol) {
+      toast.error('Please select a script first');
+      return;
+    }
+
+    const quantity = parseInt(qty, 10) || 0;
+    if (quantity <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    const symbolItem = symbols.find(s => s.token === selectedToken);
+    const config = instrumentConfigRef.current[selectedToken] || symbolItem || {};
+    const exchange = config?.exchange || symbolItem?.exchangeName ;
+    const tradeSymbol = selectedSymbol || symbolItem?.tradeSymbol || symbolItem?.instrumentName || '';
+
+    if (!orderType) {
+      toast.error('Please select an order type');
+      return;
+    }
+
+    const orderTypeCode = orderType === 'Limit' ? 'LIMIT' : 'MARKET';
+
+    if (orderTypeCode === 'LIMIT') {
+      if (!price || parseFloat(price) <= 0) {
+        toast.error('Please enter a valid limit price');
+        return;
+      }
+    }
+
+    const marketPrice = buySell === 'Buy' ? selectedTick?.ask : selectedTick?.bid;
+    const finalPrice = orderTypeCode === 'MARKET'
+      ? marketPrice
+      : parseFloat(price);
+
+    if (orderTypeCode === 'MARKET' && (finalPrice == null || finalPrice === 0)) {
+      toast.error('Market price is not available for the selected script');
+      return;
+    }
+
+    const submitToast = toast.loading('Placing manual order...');
+    const loggedInUserId = Number(JSON.parse(localStorage.getItem('userData') || '{}')?.userId || 0);
+    const recipientUserId = Number(userId);
+    const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(exchange);
+    const finalQuantity = isSpecialExchange ? 1 : quantity;
+    const finalLotValue = isSpecialExchange ? quantity : (config?.lotSize || 100);
+
+    try {
+      const response = buySell === 'Buy'
+        ? await orderService.placeBuyOrder(
+            loggedInUserId,
+            recipientUserId,
+            exchange,
+            tradeSymbol,
+            selectedToken,
+            finalQuantity,
+            Number(finalPrice),
+            finalLotValue,
+            orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
+            'MANUAL_ORDER'
+          )
+        : await orderService.placeSellOrder(
+            loggedInUserId,
+            recipientUserId,
+            exchange,
+            tradeSymbol,
+            selectedToken,
+            finalQuantity,
+            Number(finalPrice),
+            finalLotValue,
+            orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
+            'MANUAL_ORDER'
+          );
+
+      if (response?.responseCode === '0') {
+        toast.success(`Manual order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast });
+        await handleView(selectedExchange, userId ? [Number(userId)] : [], true, 0);
+        setSelectedSymbol('');
+        setSelectedToken(null);
+        setQty('');
+        setPrice('');
+        setOrderType('');
+        setRateBy('Market Price');
+        setBuySell('Buy');
+      } else {
+        toast.error(response?.responseMessage || 'Failed to place manual order', { id: submitToast });
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Error placing manual order', { id: submitToast });
+    }
+  };
+
   // --- Add Order filter panel UI (matches screenshot) ---
   const filters = (
     <div className="space-y-4 p-4">
@@ -204,9 +463,15 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           {symbols.map(s => <option key={s.token} value={s.tradeSymbol}>{s.tradeSymbol}</option>)}
         </select>
       </div>
-      <div className="flex gap-2 mb-2">
-        <button type="button" className={`flex-1 px-2 py-1 rounded ${buySell === 'Sell' ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200'}`} onClick={() => setBuySell('Sell')}>Sell</button>
-        <button type="button" className={`flex-1 px-2 py-1 rounded ${buySell === 'Buy' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200'}`} onClick={() => setBuySell('Buy')}>Buy</button>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-center">
+          <div className="text-xs uppercase font-semibold text-red-700 dark:text-red-300">Sell</div>
+          <div className="mt-2 text-2xl font-bold text-red-800 dark:text-red-200">{sellPriceDisplay}</div>
+        </div>
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-3 text-center">
+          <div className="text-xs uppercase font-semibold text-emerald-700 dark:text-emerald-300">Buy</div>
+          <div className="mt-2 text-2xl font-bold text-emerald-800 dark:text-emerald-200">{buyPriceDisplay}</div>
+        </div>
       </div>
       <div>
         <label className="block text-xs font-semibold mb-1">Buy/Sell :</label>
@@ -217,7 +482,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       </div>
       <div>
         <label className="block text-xs font-semibold mb-1">Order Type :</label>
-        <select value={orderType} onChange={e => setOrderType(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
+        <select value={orderType} onChange={e => handleOrderTypeChange(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
           <option value="">Select Type</option>
           <option value="Market">Market</option>
           <option value="Limit">Limit</option>
@@ -236,16 +501,111 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       </div>
       <div>
         <label className="block text-xs font-semibold mb-1">Price :</label>
-        <input type="number" value={price} onChange={e => setPrice(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />
+        <input
+          type="number"
+          value={price}
+          onChange={e => setPrice(e.target.value)}
+          disabled={orderType === 'Market'}
+          className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 text-sm ${orderType === 'Market' ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-700'}`}
+        />
       </div>
       <div className="flex gap-2 pt-2">
-        <button onClick={() => handleView()} disabled={loading} className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-sm transition shadow-md">Submit</button>
-        <button onClick={() => { setSelectedSymbol(''); setBuySell('Buy'); setOrderType(''); setQty(''); setRateBy('Market Price'); setPrice(''); handleView(); }} className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-600 text-white rounded font-semibold text-sm transition">Clear</button>
+        <button
+          onClick={handleManualOrderSubmit}
+          disabled={loading || !isClient}
+          className={`flex-1 px-4 py-2 rounded font-semibold text-sm transition shadow-md ${isClient ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-400 text-gray-200 cursor-not-allowed'}`}
+        >
+          Submit
+        </button>
+        <button onClick={() => { setSelectedSymbol(''); setSelectedToken(null); setBuySell('Buy'); setOrderType(''); setQty(''); setRateBy('Market Price'); setPrice(''); handleView(undefined, undefined, false, 0); }} className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-600 text-white rounded font-semibold text-sm transition">Clear</button>
       </div>
+      {!isClient && (
+        <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">Only for client users can place manual orders.</div>
+      )}
     </div>
   );
 
-  // --- Table and content (copied from Positions.tsx, but only Add Order tab is live) ---
+  // --- Buy/Sell modal and close selected logic from Positions page ---
+  const handleOpenModifyModal = (p: any, targetType: 'BUY' | 'SELL') => {
+    // Find user profile for modal (if needed)
+    const matchedProfile = users.find((u: any) => u.username === p.username);
+    const targetClientId = p.userId || matchedProfile?.id || userId;
+    orderModal.setSelectedClient({ userId: targetClientId, name: matchedProfile?.name || p.username, username: p.username });
+    orderModal.setClientSearchTerm(`${matchedProfile?.name || p.username} (${p.username})`);
+    maxAvailableQuantityRef.current = p.exchange === 'CALLPUT' ? Math.abs(p.quantity) : 999999;
+    const cachedConfig = p.token ? instrumentConfigRef.current[p.token] : null;
+    const mergedConfig = { exchange: p.exchange, tradeSymbol: p.tradeSymbol, instrumentName: p.tradeSymbol, script: p.tradeSymbol, lotSize: cachedConfig?.lotSize || 100 };
+    if (targetType === 'BUY') {
+      orderModal.setBuyOrderQuantity(p.quantity.toString());
+      orderModal.setBuyOrderPrice(p.averagePrice.toString());
+      orderModal.setBuyOrderType('LIMIT');
+      orderModal.openBuyModal({ token: p.token || 0, config: mergedConfig });
+    } else {
+      orderModal.setSellOrderQuantity(p.quantity.toString());
+      orderModal.setSellOrderPrice(p.averagePrice.toString());
+      orderModal.setSellOrderType('LIMIT');
+      orderModal.openSellModal({ token: p.token || 0, config: mergedConfig });
+    }
+  };
+
+  const handleValidatedQuantityChange = (val: string, methodType: 'BUY' | 'SELL') => {
+    const requestedQty = parseInt(val) || 0;
+    if (methodType === 'SELL' && orderModal.selectedOrderInstrument?.config?.exchange === 'CALLPUT') {
+      if (requestedQty > maxAvailableQuantityRef.current) {
+        toast.error(`Sells cannot exceed your current open holding of ${maxAvailableQuantityRef.current} lots for CALLPUT positions.`);
+        orderModal.setSellOrderQuantity(maxAvailableQuantityRef.current.toString());
+        return;
+      }
+    }
+    if (methodType === 'BUY') orderModal.setBuyOrderQuantity(val);
+    else orderModal.setSellOrderQuantity(val);
+  };
+
+  const handleBuySubmitAction = async () => {
+    const currentTick = orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null;
+    const isSuccess = await orderModal.submitBuyOrder(currentTick);
+    if (isSuccess) orderModal.closeBuyModal();
+  };
+
+  const handleSellSubmitAction = async () => {
+    const currentTick = orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null;
+    const isSuccess = await orderModal.submitSellOrder(currentTick);
+    if (isSuccess) orderModal.closeSellModal();
+  };
+
+  const handleCloseSelectedPositions = async () => {
+    if (selectedPositions.size === 0) return;
+    if (!window.confirm(`Are you sure you want to close the ${selectedPositions.size} selected position(s)?`)) return;
+    try {
+      setLoading(true);
+      const payload = {
+        userId: userId,
+        requestTimestamp: new Date().getTime().toString(),
+        deviceId: "WEB",
+        tradeOrderMethod: "WEB",
+        data: Array.from(selectedPositions)
+      };
+      const response = await fetch('https://api-staging.rivoplus.live/oms/closeMultiplePositions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (result?.responseCode === '0' || result?.status === 'success') {
+        toast.success("Selected positions closed successfully");
+        setSelectedPositions(new Set());
+        handleView();
+      } else {
+        toast.error(result?.message || "Failed to close positions");
+      }
+    } catch (err) {
+      toast.error("Error closing positions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Table and content (now matches Positions page) ---
   return (
     <FilterLayout
       filters={filters}
@@ -264,6 +624,14 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           </div>
         </div>
+        {selectedPositions.size > 0 && (
+          <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
+            <span className="text-sm font-bold text-red-700 dark:text-red-300">{selectedPositions.size} positions selected</span>
+            <button onClick={handleCloseSelectedPositions} disabled={loading} className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow-sm">
+              Close Selected Positions
+            </button>
+          </div>
+        )}
         <div className="flex-1 overflow-auto scrollbar-thin">
           {tab === 'addOrder' && (
             loading ? (
@@ -297,11 +665,11 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                         <input type="checkbox" checked={selectedPositions.has(p.positionId)} onChange={() => { const next = new Set(selectedPositions); next.has(p.positionId) ? next.delete(p.positionId) : next.add(p.positionId); setSelectedPositions(next); }} className="cursor-pointer" />
                       </td>
                       <td className="px-4 py-4 text-center"><button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"><Eye className="w-4 h-4 text-blue-600" /></button></td>
-                      <td className="px-4 py-4 text-center"><button className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
-                      <td className="px-4 py-4 text-center"><button className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
+                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'BUY')} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
+                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'SELL')} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
                       <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">{p.username}</td>
                       <td className="px-6 py-4 text-left"><span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 uppercase">{p.exchange}</span></td>
-                      <td className="px-6 py-4 text-left">{p.position}</td>
+                      <td className="px-6 py-4 text-left"><span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${p.position === 'BUY' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-red-600 border-red-200 bg-red-50'}`}>{p.position}</span></td>
                       <td className={`px-6 py-4 text-left font-bold ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`}>{p.tradeSymbol}</td>
                       <td className="px-6 py-4 text-center font-bold text-sm">{p.quantity}</td>
                       <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice}</td>
@@ -322,6 +690,55 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           )}
         </div>
+        {/* Order Modals */}
+        <OrderModal
+          isOpen={orderModal.showBuyOrderModal}
+          onClose={orderModal.closeBuyModal}
+          orderType="BUY"
+          selectedInstrument={orderModal.selectedOrderInstrument}
+          liveData={orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null}
+          orderQuantity={orderModal.buyOrderQuantity}
+          onOrderQuantityChange={(val) => handleValidatedQuantityChange(val, 'BUY')}
+          orderPrice={orderModal.buyOrderPrice}
+          onOrderPriceChange={orderModal.setBuyOrderPrice}
+          orderMethod={orderModal.buyOrderType}
+          onOrderMethodChange={orderModal.setBuyOrderType}
+          orderRemark={orderModal.buyOrderRemark}
+          onOrderRemarkChange={orderModal.setBuyOrderRemark}
+          isAdminUser={true}
+          clientSearchTerm={orderModal.clientSearchTerm}
+          onClientSearchChange={orderModal.setClientSearchTerm}
+          isSubmitting={orderModal.isBuyOrderSubmitting}
+          onSubmit={handleBuySubmitAction}
+          onCancel={() => orderModal.resetBuyForm(true)}
+          modalPosition={orderModal.buyModalPosition}
+          onDragStart={(e) => handleDragSetup(e, 'BUY')}
+          isDragging={orderModal.isDraggingBuy}
+        />
+        <OrderModal
+          isOpen={orderModal.showSellOrderModal}
+          onClose={orderModal.closeSellModal}
+          orderType="SELL"
+          selectedInstrument={orderModal.selectedOrderInstrument}
+          liveData={orderModal.selectedOrderInstrument?.token ? liveTicks[orderModal.selectedOrderInstrument.token] : null}
+          orderQuantity={orderModal.sellOrderQuantity}
+          onOrderQuantityChange={(val) => handleValidatedQuantityChange(val, 'SELL')}
+          orderPrice={orderModal.sellOrderPrice}
+          onOrderPriceChange={orderModal.setSellOrderPrice}
+          orderMethod={orderModal.sellOrderType}
+          onOrderMethodChange={orderModal.setSellOrderType}
+          orderRemark={orderModal.sellOrderRemark}
+          onOrderRemarkChange={orderModal.setSellOrderRemark}
+          isAdminUser={true}
+          clientSearchTerm={orderModal.clientSearchTerm}
+          onClientSearchChange={orderModal.setClientSearchTerm}
+          isSubmitting={orderModal.isSellOrderSubmitting}
+          onSubmit={handleSellSubmitAction}
+          onCancel={() => orderModal.resetSellForm(true)}
+          modalPosition={orderModal.sellModalPosition}
+          onDragStart={(e) => handleDragSetup(e, 'SELL')}
+          isDragging={orderModal.isDraggingSell}
+        />
       </div>
     </FilterLayout>
   );

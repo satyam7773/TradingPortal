@@ -84,6 +84,7 @@ class OrderService {
     price: number,
     lotValue: number,
     orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
+    tradeOrderMethod: string = 'WEB',
     // deviceId: string = '1234567890'
     deviceId: string = getDeviceId()
   ): Promise<PlaceOrderResponse> {
@@ -91,7 +92,7 @@ class OrderService {
       requestTimestamp: Date.now().toString(),
       userId: loggedInUserId,
       deviceId,
-      tradeOrderMethod: 'WEB',
+      tradeOrderMethod,
       data: {
         userId: clientUserId,
         exchange,
@@ -124,6 +125,7 @@ class OrderService {
     price: number,
     lotValue: number,
     orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
+    tradeOrderMethod: string = 'WEB',
     // deviceId: string = '1234567890'
     deviceId: string = getDeviceId()
   ): Promise<PlaceOrderResponse> {
@@ -131,7 +133,7 @@ class OrderService {
       requestTimestamp: Date.now().toString(),
       userId: loggedInUserId,
       deviceId,
-      tradeOrderMethod: 'WEB',
+      tradeOrderMethod,
       data: {
         userId: clientUserId,
         exchange,
