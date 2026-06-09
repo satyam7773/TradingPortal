@@ -913,6 +913,26 @@ class UserManagementService {
   }
 
   /**
+   * Fetch own users (for user dropdown)
+   */
+  async fetchOwnUsersforBillGenerate(userId: number): Promise<any> {
+    const request = {
+      userId,
+    };
+
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/user/portal/fetchOwnUsers?userFilterType=BILLING",
+        request,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch own users:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Fetch orders with filters
    */
   async fetchOrders(
@@ -1160,7 +1180,7 @@ class UserManagementService {
   }
 
   async fetchSettlement(
-    payload: { from: string; to: string; opening: "WITH" | "WITHOUT" },
+    payload: { from: string; to: string; opening: "WITH" | "WITHOUT",searchUserId: number },
     userId: number,
   ): Promise<any> {
     try {
@@ -1177,6 +1197,108 @@ class UserManagementService {
       console.error("❌ Failed to fetch settlement report:", error);
       throw error;
     }
+  }
+
+  // --- New Group Settings Methods ---
+
+  /**
+   * Fetch groups for a specific user and exchange
+   * POST: http://localhost:8081/api/quantity/group/exchange/:userid
+   */
+  async fetchUserGroups(
+    loggedInUserId: number,
+    targetUserId: number,
+    exchangeId: number,
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        `https://api-staging.rivoplus.live/user/api/quantity/group/exchange/userid`,
+        {
+          userId: loggedInUserId,
+          requestTimestamp: Date.now(),
+          data: {
+            requestedForUserId: targetUserId,
+            exchangeId: exchangeId,
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch user groups:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add or Update Group for user
+   * POST: .../addorUpdateGroupUser
+   */
+  async addOrUpdateGroupUser(
+    loggedInUserId: number,
+    targetUserId: number,
+    selectedExchangeId: number,
+    groupIds: number[],
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/api/v1/user/wise/quantity/group",
+        {
+          userId: loggedInUserId,
+          requestTimestamp: Date.now(),
+          data: {
+            exchangeId: selectedExchangeId,
+            assignGroupToUserId: targetUserId,
+            groupIds: groupIds,
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to update groups:", error);
+      throw error;
+    }
+  }
+
+  // Add to UserManagementService class
+  async fetchScriptQuantitySettings(
+    targetUserId: number,
+    exchangeId: number,
+    groupId: number,
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/api/v1/user/wise/quantity/group/exchange",
+        {
+          userId: 31, // Admin User ID
+          requestTimestamp: Date.now(),
+          data: {
+            exchangeId,
+            groupId,
+            userId: targetUserId,
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch script quantity settings:", error);
+      throw error;
+    }
+  }
+
+  // If you are using LocalStorage or a Auth Provider
+  async updateScriptQuantity(payload: any): Promise<any> {
+    // Retrieve the actual dynamic ID
+    const authData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const dynamicUserId = authData.userId;
+
+    return await apiClient.put(
+      "https://api-staging.rivoplus.live/user/api/v1/user/wise/quantity/group/exchange",
+      {
+        userId: dynamicUserId, // Use the real ID
+        requestTimestamp: Date.now(),
+        data: payload,
+      },
+    );
   }
 }
 

@@ -15,6 +15,7 @@ export { default as SettlementReport } from './SettlementReport';
 export const tabComponentMap: Record<string, string> = {
   addCredits: 'AddCredits',
   groupQuantitySettings: 'GroupQuantitySettings',
+  scriptQuantitySettings: 'ScriptQuantitySettings',
   brokerageSettings: 'BrokerageSettings',
   tradeMarginSettings: 'TradeMarginSettings',
   sharingDetails: 'SharingDetails',
@@ -30,6 +31,7 @@ export const tabComponentMap: Record<string, string> = {
 export const tabLoaders: Record<string, () => Promise<any>> = {
   AddCredits: () => import('./AddCredits'),
   GroupQuantitySettings: () => import('./GroupQuantitySettings'),
+  ScriptQuantitySettings: () => import('./ScriptQuantity'),
   BrokerageSettings: () => import('./BrokerageSettings'),
   TradeMarginSettings: () => import('./TradeMarginSettings'),
   SharingDetails: () => import('./SharingDetails'),

@@ -137,6 +137,7 @@ const ProfitLoss: React.FC = () => {
     }
   }, [activeModalUserId])
 
+  // FIXED: Interval duration adjusted to 5000ms (5s) instead of 10000ms (10s)
   useEffect(() => {
     if (!autoRefresh) return;
 
@@ -145,7 +146,7 @@ const ProfitLoss: React.FC = () => {
       if (stateRef.current.activeModalUserId) {
         fetchModalPnL(stateRef.current.activeModalUserId, true)
       }
-    }, 10000)
+    }, 5000)
 
     return () => clearInterval(interval)
   }, [autoRefresh])
@@ -187,7 +188,8 @@ const ProfitLoss: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">Auto Refresh</label>
                 <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <span className="text-[10px] text-slate-500 italic">Every 10s</span>
+                  {/* UI Label updated to read "Every 5s" */}
+                  <span className="text-[10px] text-slate-500 italic">Every 5s</span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" className="sr-only peer" checked={autoRefresh} onChange={() => setAutoRefresh(!autoRefresh)} />
                     <div className="w-9 h-5 bg-slate-300 dark:bg-slate-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>

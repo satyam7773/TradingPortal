@@ -35,8 +35,10 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>('addOrder');
   const displayRoleId = roleId;
   console.log('displayRoleId',displayRoleId,username)
-  const isClient = displayRoleId === 'Client';
+  const isClient = Number(displayRoleId) === 4 || displayRoleId === 'Client';
   const feedUnsubscribeRef = useRef<(() => void) | null>(null);
+  const selectedFeedUnsubscribeRef = useRef<(() => void) | null>(null);
+  const selectedTokenRef = useRef<number | null>(null);
   const subscriptionRef = useRef({ subscribed: false, userId: null as string | null });
   const lastUpdateRef = useRef<number>(0);
   const instrumentConfigRef = useRef<Record<number, any>>({});
@@ -160,6 +162,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const unsubscribeCurrentFeed = useCallback(() => {
     marketWatchService.stopPositionsPollingLoop();
     if (feedUnsubscribeRef.current) { feedUnsubscribeRef.current(); feedUnsubscribeRef.current = null; }
+    if (selectedFeedUnsubscribeRef.current) { selectedFeedUnsubscribeRef.current(); selectedFeedUnsubscribeRef.current = null; }
     if (subscriptionRef.current.subscribed && subscriptionRef.current.userId) {
       const uid = subscriptionRef.current.userId;
       marketWatchService.unsubscribeFromInstruments(uid);
@@ -255,14 +258,14 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- Add Order filter fields state ---
   const [buySell, setBuySell] = useState<'Buy' | 'Sell'>('Buy');
-  const [orderType, setOrderType] = useState('');
+  const [orderType, setOrderType] = useState('Market');
   const [qty, setQty] = useState('');
   const [rateBy, setRateBy] = useState('Market Price');
   const [price, setPrice] = useState('');
 
   // --- Fetch current market price for selected script in filter panel ---
   useEffect(() => {
-    if (!selectedToken || rateBy !== 'Market Price') return;
+    if (!selectedToken || rateBy !== 'Market Price' || orderType !== 'Market') return;
 
     const tick = liveTicks[selectedToken];
     if (!tick) return;
@@ -293,6 +296,29 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       }
     };
 
+    // Keep a ref to the currently selected token so the feed callback can
+    // reference it without needing to re-register on every selection change.
+    selectedTokenRef.current = selectedToken;
+
+    // Register a single lightweight feed callback when the heavy positions
+    // subscription is not present. The callback consults `selectedTokenRef`
+    // to decide whether to update `liveTicks` for the currently selected script.
+    if (!subscriptionRef.current.subscribed && !selectedFeedUnsubscribeRef.current) {
+      selectedFeedUnsubscribeRef.current = marketWatchService.onFeedData((data) => {
+        if (!data) return;
+        const incoming = Array.isArray(data) ? data : [data];
+        const curToken = selectedTokenRef.current;
+        if (!curToken) return;
+        const items = incoming.filter((item: any) => item && item.insToken != null && Number(item.insToken) === Number(curToken));
+        if (items.length === 0) return;
+        setLiveTicks(prev => {
+          const next = { ...prev };
+          items.forEach((it: any) => { next[Number(it.insToken)] = it; });
+          return next;
+        });
+      });
+    }
+
     const startPolling = async () => {
       await fetchInstrumentTick();
       pollingInterval = setInterval(() => {
@@ -321,20 +347,40 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     }
   }, [selectedToken, selectedTick, buySell]);
 
+  const isRateByEnabled = orderType === 'Market';
+  const isPriceEditable = orderType !== 'Market' || rateBy === 'Manual Price';
+
+  const resetManualOrderForm = useCallback(() => {
+    setSelectedSymbol('');
+    setSelectedToken(null);
+    setBuySell('Buy');
+    setOrderType('Market');
+    setQty('');
+    setRateBy('Market Price');
+    setPrice('');
+  }, []);
+
   useEffect(() => {
     if (!selectedToken) return;
 
-    if (orderType === 'Market' || rateBy === 'Market Price') {
+    // Only auto-update price from market ticks for Market orders using Market Price.
+    // Limit/SL orders should keep the manually entered price instead of reverting to live ticks.
+    if (orderType === 'Market' && rateBy === 'Market Price') {
       updatePriceFromTick();
     }
   }, [selectedToken, orderType, rateBy, updatePriceFromTick]);
 
   const handleOrderTypeChange = (value: string) => {
     setOrderType(value);
+
     if (value === 'Market') {
       setRateBy('Market Price');
       updatePriceFromTick();
+      return;
     }
+
+    setRateBy('Manual Price');
+    setPrice('');
   };
 
   const handleManualOrderSubmit = async () => {
@@ -364,22 +410,35 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       return;
     }
 
-    const orderTypeCode = orderType === 'Limit' ? 'LIMIT' : 'MARKET';
+    const orderTypeCode = orderType === 'Limit' ? 'LIMIT' : orderType === 'SL' ? 'SL' : 'MARKET';
 
-    if (orderTypeCode === 'LIMIT') {
+    // If user chose Manual Price, ensure they entered a valid price
+    if (rateBy === 'Manual Price') {
       if (!price || parseFloat(price) <= 0) {
-        toast.error('Please enter a valid limit price');
+        toast.error('Please enter a valid manual price');
         return;
       }
     }
 
     const marketPrice = buySell === 'Buy' ? selectedTick?.ask : selectedTick?.bid;
-    const finalPrice = orderTypeCode === 'MARKET'
-      ? marketPrice
-      : parseFloat(price);
+    let finalPrice: number | undefined;
+    if (rateBy === 'Manual Price') {
+      finalPrice = parseFloat(price);
+    } else if (orderTypeCode === 'MARKET') {
+      finalPrice = marketPrice;
+    } else {
+      finalPrice = parseFloat(price);
+    }
 
-    if (orderTypeCode === 'MARKET' && (finalPrice == null || finalPrice === 0)) {
+    // If MARKET order and using market price, ensure market price is available
+    if (orderTypeCode === 'MARKET' && rateBy === 'Market Price' && (finalPrice == null || finalPrice === 0)) {
       toast.error('Market price is not available for the selected script');
+      return;
+    }
+
+    // For non-market orders or manual price, ensure finalPrice is valid
+    if ((orderTypeCode !== 'MARKET' || rateBy === 'Manual Price') && (finalPrice == null || isNaN(finalPrice) || Number(finalPrice) <= 0)) {
+      toast.error('Please enter a valid price');
       return;
     }
 
@@ -420,13 +479,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       if (response?.responseCode === '0') {
         toast.success(`Manual order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast });
         await handleView(selectedExchange, userId ? [Number(userId)] : [], true, 0);
-        setSelectedSymbol('');
-        setSelectedToken(null);
-        setQty('');
-        setPrice('');
-        setOrderType('');
-        setRateBy('Market Price');
-        setBuySell('Buy');
+        resetManualOrderForm();
       } else {
         toast.error(response?.responseMessage || 'Failed to place manual order', { id: submitToast });
       }
@@ -464,13 +517,14 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         </select>
       </div>
       <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-center">
-          <div className="text-xs uppercase font-semibold text-red-700 dark:text-red-300">Sell</div>
-          <div className="mt-2 text-2xl font-bold text-red-800 dark:text-red-200">{sellPriceDisplay}</div>
-        </div>
+       
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-3 text-center">
           <div className="text-xs uppercase font-semibold text-emerald-700 dark:text-emerald-300">Buy</div>
           <div className="mt-2 text-2xl font-bold text-emerald-800 dark:text-emerald-200">{buyPriceDisplay}</div>
+        </div>
+         <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-center">
+          <div className="text-xs uppercase font-semibold text-red-700 dark:text-red-300">Sell</div>
+          <div className="mt-2 text-2xl font-bold text-red-800 dark:text-red-200">{sellPriceDisplay}</div>
         </div>
       </div>
       <div>
@@ -483,9 +537,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       <div>
         <label className="block text-xs font-semibold mb-1">Order Type :</label>
         <select value={orderType} onChange={e => handleOrderTypeChange(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
-          <option value="">Select Type</option>
           <option value="Market">Market</option>
           <option value="Limit">Limit</option>
+          <option value="SL">Stop Loss</option>
         </select>
       </div>
       <div>
@@ -494,9 +548,25 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       </div>
       <div>
         <label className="block text-xs font-semibold mb-1">Rate By :</label>
-        <select value={rateBy} onChange={e => setRateBy(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
+        <select
+          value={rateBy}
+          disabled={!isRateByEnabled}
+          onChange={e => {
+            const v = e.target.value;
+            setRateBy(v);
+            if (v === 'Manual Price') {
+              setPrice('');
+            } else {
+              // restore market tick if available
+              const tick = selectedToken ? liveTicks[selectedToken] : null;
+              const next = buySell === 'Buy' ? tick?.ask : tick?.bid;
+              setPrice(next != null ? Number(next).toFixed(2) : '');
+            }
+          }}
+          className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm ${!isRateByEnabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+        >
           <option value="Market Price">Market Price</option>
-          <option value="Limit Price">Limit Price</option>
+          <option value="Manual Price">Manual Price</option>
         </select>
       </div>
       <div>
@@ -505,8 +575,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           type="number"
           value={price}
           onChange={e => setPrice(e.target.value)}
-          disabled={orderType === 'Market'}
-          className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 text-sm ${orderType === 'Market' ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-700'}`}
+          disabled={!isPriceEditable}
+          className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 text-sm ${!isPriceEditable ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-700'}`}
         />
       </div>
       <div className="flex gap-2 pt-2">
@@ -517,7 +587,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         >
           Submit
         </button>
-        <button onClick={() => { setSelectedSymbol(''); setSelectedToken(null); setBuySell('Buy'); setOrderType(''); setQty(''); setRateBy('Market Price'); setPrice(''); handleView(undefined, undefined, false, 0); }} className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-600 text-white rounded font-semibold text-sm transition">Clear</button>
+        <button onClick={() => { resetManualOrderForm(); handleView(undefined, undefined, false, 0); }} className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-600 text-white rounded font-semibold text-sm transition">Clear</button>
       </div>
       {!isClient && (
         <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">Only for client users can place manual orders.</div>
@@ -538,12 +608,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     if (targetType === 'BUY') {
       orderModal.setBuyOrderQuantity(p.quantity.toString());
       orderModal.setBuyOrderPrice(p.averagePrice.toString());
-      orderModal.setBuyOrderType('LIMIT');
+      orderModal.setBuyOrderType('MARKET');
       orderModal.openBuyModal({ token: p.token || 0, config: mergedConfig });
     } else {
       orderModal.setSellOrderQuantity(p.quantity.toString());
       orderModal.setSellOrderPrice(p.averagePrice.toString());
-      orderModal.setSellOrderType('LIMIT');
+      orderModal.setSellOrderType('MARKET');
       orderModal.openSellModal({ token: p.token || 0, config: mergedConfig });
     }
   };
@@ -690,7 +760,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           )}
         </div>
-        {/* Order Modals */}
+        {/* Order Modals */}u
         <OrderModal
           isOpen={orderModal.showBuyOrderModal}
           onClose={orderModal.closeBuyModal}

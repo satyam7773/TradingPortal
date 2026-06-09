@@ -611,25 +611,25 @@ const UserList: React.FC = () => {
             {/* Single Table with Sticky Header */}
             <table className="min-w-[1500px] w-full table-fixed border-collapse bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-none">
               <colgroup>
-                <col style={{ width: '100px' }} /> {/* Actions */}
-                <col style={{ width: '140px' }} /> {/* Username */}
-                <col style={{ width: '140px' }} /> {/* Name */}
-                <col style={{ width: '90px' }} /> {/* Type */}
-                <col style={{ width: '100px' }} /> {/* Parent */}
-                <col style={{ width: '90px' }} /> {/* Credits */}
-                <col style={{ width: '100px' }} /> {/* Balance */}
-                <col style={{ width: '90px' }} /> {/* Sharing% */}
-                <col style={{ width: '60px' }} /> {/* Bet */}
-                <col style={{ width: '60px' }} /> {/* FSL -*/}
-                <col style={{ width: '60px' }} /> {/* FSL -*/}
-                <col style={{ width: '70px' }} /> {/* margin */}
-                <col style={{ width: '70px' }} /> {/* Margin */}
-                <col style={{ width: '70px' }} /> {/* Status */}
-                <col style={{ width: '70px' }} /> {/* CBM */}
-                <col style={{ width: '150px' }} /> {/* Created */}
-                <col style={{ width: '140px' }} /> {/* IP Address */}
-                <col style={{ width: '160px' }} /> {/* Device ID */}
-                <col style={{ width: '150px' }} /> {/* Last Login */}
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '60px' }} />
+                <col style={{ width: '60px' }} />
+                <col style={{ width: '60px' }} />
+                <col style={{ width: '70px' }} />
+                <col style={{ width: '70px' }} />
+                <col style={{ width: '70px' }} />
+                <col style={{ width: '70px' }} />
+                <col style={{ width: '150px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '160px' }} />
+                <col style={{ width: '150px' }} />
               </colgroup>
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sticky top-0 z-10 border-none">

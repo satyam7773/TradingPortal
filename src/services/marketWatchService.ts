@@ -13,7 +13,7 @@ class MarketWatchService {
   private messageBuffer = ''
   private onConnectedCallback: (() => void) | null = null
   private connectPromiseResolve: (() => void) | null = null
-  private heartbeatInterval: NodeJS.Timeout | null = null
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null
   private lastPingTime = 0
   
   // Track subscriptions to prevent duplicates
@@ -24,12 +24,12 @@ class MarketWatchService {
   
   // Health check tracking (similar to Flutter implementation)
   private lastReceivedTimePerQueue: Map<string, number> = new Map()
-  private healthCheckInterval: NodeJS.Timeout | null = null
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null
   private healthCheckThreshold = 5000 // 5 seconds - if no data received, mark as disconnected
   private isHealthCheckRunning = false
   private isConnecting = false;
   // Dedicated background interval tracker for Positions screen custom polling loop
-  private positionsPollInterval: NodeJS.Timeout | null = null
+  private positionsPollInterval: ReturnType<typeof setInterval> | null = null
 
   /**
    * Connect to WebSocket for market data
@@ -440,9 +440,9 @@ class MarketWatchService {
       const frame = `SUBSCRIBE\nid:sub-queue-instruments\ndestination:/queue/instruments/${userId}\nack:auto\n\n\0`
       this.socket.send(frame)
       
-      // If your positions are on a different queue, send that too:
-      const posFrame = `SUBSCRIBE\nid:sub-orders-${userId}\ndestination:/queue/positions/${userId}\nack:auto\n\n\0`
-      this.socket.send(posFrame)
+      // Note: We DO NOT subscribe to /queue/positions here to avoid
+      // duplicating order update subscriptions. Order updates should be
+      // handled by `orderUpdateService` (subscribed centrally in AppLayout).
       
     } else {
       console.warn(`⚠️ Socket not ready for subscription.`)

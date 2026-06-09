@@ -21,7 +21,7 @@ interface AuthState {
 // Restore user from localStorage on app initialization
 const restoreAuthState = (): AuthState => {
   try {
-    const userData = localStorage.getItem('userData')
+    const userData = sessionStorage.getItem('userData') || localStorage.getItem('userData')
     if (userData) {
       const parsedData = JSON.parse(userData)
       return {
@@ -87,10 +87,11 @@ const authSlice = createSlice({
       if (state.user) {
         state.user.firstLogin = false
         // Update localStorage
-        const userData = localStorage.getItem('userData')
+        const userData = sessionStorage.getItem('userData') || localStorage.getItem('userData')
         if (userData) {
           const parsedData = JSON.parse(userData)
           parsedData.firstLogin = false
+          sessionStorage.setItem('userData', JSON.stringify(parsedData))
           localStorage.setItem('userData', JSON.stringify(parsedData))
         }
       }

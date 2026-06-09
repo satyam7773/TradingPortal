@@ -37,6 +37,8 @@ interface UserData {
   creditBasedMarginEnabled: boolean;
   createdDate: string;
   ipAddress: string;
+  manualOrder: boolean;
+  manualOrderEnabled: boolean;
   deviceId: string;
   lastLogin: string;
   isActive: boolean;
@@ -152,8 +154,12 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // activeTab is a string so we can use dynamic menu names as top-level tabs
-  const [activeTab, setActiveTab] = useState<string>('details');
+  const [activeTab, setActiveTab] = useState<string>('positions');
   const [selectedChildUser, setSelectedChildUser] = useState<UserData | null>(null);
+
+  useEffect(() => {
+    setActiveTab('positions');
+  }, [user?.id]);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
   const [selectedUserForIntradaySquareOff, setSelectedUserForIntradaySquareOff] = useState<any>(null);
@@ -205,11 +211,14 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   // Map setting toggle name to API type values
   const mapSettingKeyToType = (toggleName: string): string => {
     const keyMap: Record<string, string> = {
-      'status': 'status',
-      'closeOnly': 'closeOnly',
       'bet': 'bet',
+      'closeOnly': 'closeOnly',
       'freshStopLoss': 'freshStopLoss',
       'marginSquareOff': 'marginSquareOff',
+      'status': 'status',
+      'creditLimit': 'creditLimit',
+      'creditBasedMargin': 'creditBasedMargin',
+      'manualOrder': 'manualOrder'
     };
     return keyMap[toggleName] || toggleName;
   };
@@ -273,7 +282,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   }, [userDetails]);
 
   // Handle child user toggle with API call
-  const handleChildUserToggle = useCallback(async (childUserId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin') => {
+  const handleChildUserToggle = useCallback(async (childUserId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'manualOrder') => {
     try {
       const fieldToApiType: Record<string, string> = {
         'bet': 'bet',
@@ -281,7 +290,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         'margin': 'marginSquareOff',
         'status': 'status',
         'creditLimit': 'creditLimit',
-        'creditBasedMargin': 'creditBasedMargin'
+        'creditBasedMargin': 'creditBasedMargin',
+        'manualOrder': 'manualOrder'
       };
 
       const apiType = fieldToApiType[field];
@@ -295,10 +305,15 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         'margin': 'marginSquareOff',
         'status': 'status',
         'creditLimit': 'creditLimit',
-        'creditBasedMargin': 'creditBasedMargin'
+        'creditBasedMargin': 'creditBasedMargin',
+        'manualOrder': 'manualOrder'
       };
 
+      
+      
+      
       const toggleName = fieldToToggleName[field];
+      console.log(`DEBUG: Toggling field: ${field}, API Type: ${apiType}, Toggle Name: ${toggleName}`);
       const toggleSetting = childUser.userSettingsToggles?.find(t => t.toggle === toggleName);
       const currentValue = field === 'creditLimit' ? !childUser.isBlocked : (toggleSetting?.value ?? false);
       const newValue = !currentValue;
@@ -541,6 +556,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       creditLimit: !apiUser.isBlocked,
       creditBasedMargin: getToggleValue('creditBasedMargin'),
       betEnabled: getToggleEnabled('bet'),
+      manualOrder: getToggleValue('manualOrder'),
+      manualOrderEnabled: getToggleEnabled('manualOrder'),
       closeOutEnabled: getToggleEnabled('closeOnly'),
       marginEnabled: getToggleEnabled('marginSquareOff'),
       statusEnabled: getToggleEnabled('status'),
@@ -742,32 +759,41 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 )}
 
                 {/* Settings Tab */}
+                {/* Settings & Permissions Tab */}
                 {activeTab === 'settings' && (
                   <div className="animate-fadeIn">
-                    <div className="lg:col-span-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl p-3 border border-gray-200/50 dark:border-slate-700/50 shadow-lg">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
-                          <Settings className="w-4 h-4 text-white" />
+                    <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl p-4 border border-gray-200/50 dark:border-slate-700/50 shadow-lg">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                          <Settings className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-sm font-bold text-slate-800 dark:text-white">Settings & Permissions</h3>
+                        <h3 className="text-base font-bold text-slate-800 dark:text-white">Settings & Permissions</h3>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {userDetails.userSettings.userInfo.map((setting) => (
-                          <div key={setting.toggle} className={`flex justify-between items-center bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-slate-700/50 dark:to-slate-600/50 p-2 rounded-lg border border-gray-200/50 dark:border-slate-600/50 transition-all duration-200 ${setting.toggleEnabled ? 'hover:border-indigo-300 dark:hover:border-indigo-500' : 'opacity-60'
-                            }`}>
-                            <span className={`font-semibold text-xs capitalize ${setting.toggleEnabled ? 'text-slate-700 dark:text-slate-300' : 'text-gray-400 dark:text-gray-500'
-                              }`}>{setting.toggle}</span>
+                          <div
+                            key={setting.toggle}
+                            className={`flex justify-between items-center p-3 rounded-lg border transition-all duration-200 
+              ${setting.toggleEnabled
+                                ? 'bg-slate-50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 hover:border-indigo-400'
+                                : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-800 opacity-60'
+                              }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-xs capitalize text-slate-700 dark:text-slate-300">
+                                {setting.toggle.replace(/([A-Z])/g, ' $1')}
+                              </span>
+                            </div>
                             <ToggleSwitch
                               enabled={setting.value}
-                              size="xs"
+                              size="sm"
                               disabled={!setting.toggleEnabled}
                               onClick={() => handleToggleSetting(setting.toggle, setting.value)}
                             />
                           </div>
                         ))}
                       </div>
-
-                      {/* Quick Actions were promoted to top-level tabs (menu names). */}
                     </div>
                   </div>
                 )}
@@ -813,6 +839,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                     <col style={{ width: '100px' }} />
                                     <col style={{ width: '90px' }} />
                                     <col style={{ width: '60px' }} />
+                                    <col style={{ width: '60px' }} />
                                     <col style={{ width: '70px' }} />
                                     <col style={{ width: '70px' }} />
                                     <col style={{ width: '70px' }} />
@@ -834,6 +861,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                       <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Share%</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Bet</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Close</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Manual</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Margin</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Status</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">C.Margin</th>
@@ -958,6 +986,23 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                           {/* Close Out Toggle */}
                                           <td className="px-2 py-2 text-center">
                                             <ToggleSwitch enabled={transformedUser.closeOut} onClick={() => handleChildUserToggle(transformedUser.id, 'closeOut')} size="xs" disabled={!transformedUser.closeOutEnabled} />
+                                          </td>
+
+                                          {/* Manual Order Toggle */}
+                                          <td className="px-2 py-2 text-center">
+                                         <ToggleSwitch
+      enabled={transformedUser.manualOrder}
+      size="xs"
+      disabled={!transformedUser.manualOrderEnabled}
+      onClick={() => {
+        // Force an extra check
+        if (!transformedUser.manualOrderEnabled) {
+          console.warn("Attempted to toggle a disabled setting!");
+          return;
+        }
+        handleChildUserToggle(transformedUser.id, 'manualOrder');
+      }}
+    />
                                           </td>
 
                                           {/* Margin Toggle */}

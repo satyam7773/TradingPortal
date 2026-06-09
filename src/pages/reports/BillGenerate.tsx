@@ -5,8 +5,28 @@ import userManagementService from '../../services/userManagementService';
 import toast from 'react-hot-toast';
 
 const BillGenerate: React.FC = () => {
-    const [fromDate, setFromDate] = useState(new Date().toISOString().split('T')[0]);
+    const getMondayOfCurrentWeek = () => {
+        const d = new Date();
+        // Get current day (0=Sun, 1=Mon, ..., 6=Sat)
+        const day = d.getDay();
+
+        // Subtract days to get to Monday (if Sunday, subtract 6)
+        const diff = d.getDate() - (day === 0 ? 6 : day - 1);
+        d.setDate(diff);
+
+        // Format manually to YYYY-MM-DD in local time
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are 0-11
+        const dayOfMonth = String(d.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${dayOfMonth}`;
+    };
+
+    // Use it in your state:
+    const [fromDate, setFromDate] = useState(getMondayOfCurrentWeek);
     const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
+
+
     const [userId, setUserId] = useState<number>(0);
     const [select, setSelect] = useState<'PDF' | 'EXCEL'>('PDF');
     const [pdfType, setPdfType] = useState<'REGULAR' | 'ADVANCE' | null>('REGULAR');
@@ -19,7 +39,7 @@ const BillGenerate: React.FC = () => {
                 const userData = localStorage.getItem('userData')
                 const user = userData ? JSON.parse(userData) : null
                 const loggedInUserId = user?.userId
-                const resp = await userManagementService.fetchOwnUsers(loggedInUserId);
+                const resp = await userManagementService.fetchOwnUsersforBillGenerate(loggedInUserId);
                 if (resp?.data) setUsers(resp.data);
             } catch (error) {
                 toast.error('Failed to load users');
@@ -34,7 +54,13 @@ const BillGenerate: React.FC = () => {
         [users]
     );
 
-    const handleDownload = async () => {
+    const handleDownload = async (isPreview: boolean = false) => {
+        // 1. Validation
+        if (!userId || userId === 0) {
+            toast.error('Please select a user before generating the report.');
+            return;
+        }
+
         try {
             const payload = {
                 fromDate,
@@ -47,12 +73,31 @@ const BillGenerate: React.FC = () => {
             const response = await userManagementService.generateBillingReport(payload);
 
             if (response?.responseCode === '0') {
-                const linkSource = `data:application/octet-stream;base64,${response.data}`;
-                const downloadLink = document.createElement("a");
-                downloadLink.href = linkSource;
-                downloadLink.download = `Bill_${fromDate}_${toDate}.${select.toLowerCase()}`;
-                downloadLink.click();
-                toast.success('Download started');
+                const byteCharacters = atob(response.data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {
+                    type: select === 'PDF' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+                const url = URL.createObjectURL(blob);
+
+                if (isPreview && select === 'PDF') {
+                    window.open(url, '_blank');
+                } else {
+                    const downloadLink = document.createElement("a");
+                    downloadLink.href = url;
+
+
+                    // Replace it with this logic:
+                    const extension = select === 'EXCEL' ? 'xlsx' : 'pdf';
+                    downloadLink.download = `Bill_${fromDate}_${toDate}.${extension}`;
+
+                    downloadLink.click();
+                }
+                toast.success(isPreview ? 'Opening preview...' : 'Download started');
             } else {
                 toast.error(response?.responseMessage || 'Failed to generate report');
             }
@@ -103,8 +148,23 @@ const BillGenerate: React.FC = () => {
                                     </select>
                                 </div>
                             )}
-                            <div className="flex gap-2 pt-2">
+                            {/* <div className="flex gap-2 pt-2">
                                 <button onClick={handleDownload} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md">Submit</button>
+                            </div> */}
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={() => handleDownload(true)}
+                                    className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-semibold text-sm transition shadow-md"
+                                >
+                                    Preview
+                                </button>
+                                <button
+                                    onClick={() => handleDownload(false)}
+                                    className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md"
+                                >
+                                    Download
+                                </button>
                             </div>
                         </div>
                     }

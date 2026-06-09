@@ -77,7 +77,7 @@ const Positions: React.FC = () => {
 
   const userDataStr = localStorage.getItem("userData");
   const userData = userDataStr ? JSON.parse(userDataStr) : null;
-  const loggedInUserId = userData?.userId || 31;
+  const loggedInUserId = userData?.userId;
   const isAdminUser =
     userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3;
   const orderModal = useOrderModal(isAdminUser);
@@ -217,7 +217,7 @@ const Positions: React.FC = () => {
         setLiveTicks((prev) => {
           const nextTicks = { ...prev };
           incomingFeedArray.forEach((item) => {
-            nextTicks[Number(item.insToken)] = item;
+            nextTicks[Number(item?.insToken)] = item;
           });
           return nextTicks;
         });
@@ -295,14 +295,7 @@ const Positions: React.FC = () => {
       if (targetUserIds && targetUserIds.length > 0) {
         uids = targetUserIds;
       }
-      // FALLBACK: Use state-based filters
-      // else if (selectedUserId !== 0) {
-      //   uids = [selectedUserId];
-      // } else {
-      //   uids = users.filter((u) => u.id !== 0).map((u) => u.id);
-      //   if (uids.length === 0) uids = [loggedInUserId];
-      // }
-
+   
       const response =
         await userManagementService.fetchUserPositionsForExchange(
           exchange,
@@ -493,12 +486,12 @@ const Positions: React.FC = () => {
     if (targetType === "BUY") {
       orderModal.setBuyOrderQuantity(p.quantity.toString());
       orderModal.setBuyOrderPrice(p.averagePrice.toString());
-      orderModal.setBuyOrderType("LIMIT");
+      orderModal.setBuyOrderType("MARKET");
       orderModal.openBuyModal({ token: p.token || 0, config: mergedConfig });
     } else {
       orderModal.setSellOrderQuantity(p.quantity.toString());
       orderModal.setSellOrderPrice(p.averagePrice.toString());
-      orderModal.setSellOrderType("LIMIT");
+      orderModal.setSellOrderType("MARKET");
       orderModal.openSellModal({ token: p.token || 0, config: mergedConfig });
     }
   };
