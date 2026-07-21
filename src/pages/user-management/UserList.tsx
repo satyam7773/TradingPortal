@@ -17,6 +17,7 @@ import { navigateWithScrollToTop } from '../../utils/navigation';
 import CarryForwardMarginModal from './CarryForwardMarginModal';
 import MarginSquareOffModal from './MarginSquareOffModal';
 import TradeDurationRankModal from './TradeDurationRankModal';
+import ExchangewiseLotLimitModal from './ExchangewiseLotLimitModal';
 
 interface UserData {
   id: string;
@@ -125,6 +126,8 @@ const UserList: React.FC = () => {
   const { addTab, tabs, removeTab } = useTabs();
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [selectedUserForDuration, setSelectedUserForDuration] = useState<any>(null);
+  const [showExchangewiseLotLimitModal, setShowExchangewiseLotLimitModal] = useState(false);
+  const [selectedUserForExchangewiseLotLimit, setSelectedUserForExchangewiseLotLimit] = useState<any>(null);
 
   const clearUserListCache = useCallback(() => {
     sessionStorage.removeItem(USER_LIST_CACHE_KEY);
@@ -1251,6 +1254,18 @@ const UserList: React.FC = () => {
         />
       )}
 
+      {/* Exchangewise Lot Limit Modal */}
+      {showExchangewiseLotLimitModal && selectedUserForExchangewiseLotLimit && (
+        <ExchangewiseLotLimitModal
+          isOpen={showExchangewiseLotLimitModal}
+          user={selectedUserForExchangewiseLotLimit}
+          onClose={() => {
+            setShowExchangewiseLotLimitModal(false);
+            setSelectedUserForExchangewiseLotLimit(null);
+          }}
+        />
+      )}
+
       {/* Action Menu Portal */}
       {openActionMenu && actionMenuPosition && actionMenuUserId && createPortal(
         <div
@@ -1408,7 +1423,19 @@ const UserList: React.FC = () => {
                       className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>⏱️</span> Intraday SquareOff
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForExchangewiseLotLimit(user);
+                          setShowExchangewiseLotLimitModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>🏢</span> Exchangewise Lot Limit
                     </button>
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">

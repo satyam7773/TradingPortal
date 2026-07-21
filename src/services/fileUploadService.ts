@@ -1,6 +1,8 @@
 import { apiClient } from './apiClient'
 
 export type FileReaderType = 'OPTION' | 'FUTURE'
+export type ExchangeType = 'DEFAULT' | 'MCX'
+export type FileFormat = 'CSV' | 'EXCEL'
 
 interface FileUploadResponse {
   responseCode?: string
@@ -10,36 +12,47 @@ interface FileUploadResponse {
 
 class FileUploadService {
   /**
-   * Upload a CSV file for quote data
-   * @param file - CSV file to upload
-   * @param fileReaderType - Type of file reader: OPTION or FUTURE
+   * Upload a CSV or EXCEL file for quote data
+   * @param file - CSV or EXCEL file to upload
+   * @param fileReaderType - Type of file reader: OPTION or FUTURE (for DEFAULT exchange)
+   * @param exchangeType - Exchange type: DEFAULT or MCX
+   * @param fileFormat - File format: CSV or EXCEL
    */
   async uploadBhaavCopyFile(
     file: File,
-    fileReaderType: FileReaderType
+    fileReaderType: FileReaderType,
+    exchangeType: ExchangeType = 'DEFAULT',
+    fileFormat: FileFormat = 'CSV'
   ): Promise<FileUploadResponse> {
     try {
       if (!file) {
         throw new Error('No file provided')
       }
 
-      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-        throw new Error('Only CSV files are allowed')
+      // Validate file format
+      const isValidFormat = this.validateFileFormat(file, fileFormat)
+      if (!isValidFormat.valid) {
+        throw new Error(isValidFormat.error)
       }
 
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('type', fileFormat)
 
-      const response = await fetch(
-        `https://api-staging.rivoplus.live/quotes/api/v1/bhaav-copy?fileReaderType=${fileReaderType}`,
-        {
-          method: 'POST',
-          body: formData,
-          headers: {
-            // Don't set Content-Type header - browser will set it automatically with boundary
-          }
+      let url: string
+      if (exchangeType === 'MCX') {
+        url = 'https://kite.rivoplus.live/api/v1/bhaav-copy/mcx'
+      } else {
+        url = `https://api-staging.rivoplus.live/quotes/api/v1/bhaav-copy?fileReaderType=${fileReaderType}`
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          // Don't set Content-Type header - browser will set it automatically with boundary
         }
-      )
+      })
 
       if (!response.ok) {
         const text = await response.text()
@@ -73,7 +86,38 @@ class FileUploadService {
   }
 
   /**
-   * Validate file before upload
+   * Validate file format (CSV or EXCEL)
+   */
+  validateFileFormat(file: File, format: FileFormat): { valid: boolean; error?: string } {
+    if (!file) {
+      return { valid: false, error: 'No file selected' }
+    }
+
+    const maxSize = 50 * 1024 * 1024 // 50MB
+    if (file.size > maxSize) {
+      return { valid: false, error: 'File size must be less than 50MB' }
+    }
+
+    if (format === 'CSV') {
+      if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+        return { valid: false, error: 'File must be a valid CSV file' }
+      }
+    } else if (format === 'EXCEL') {
+      const excelMimeTypes = [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ]
+      const isExcelFile = file.name.endsWith('.xls') || file.name.endsWith('.xlsx') || excelMimeTypes.includes(file.type)
+      if (!isExcelFile) {
+        return { valid: false, error: 'File must be a valid Excel file (.xls or .xlsx)' }
+      }
+    }
+
+    return { valid: true }
+  }
+
+  /**
+   * Validate file before upload (legacy method for CSV only)
    */
   validateFile(file: File): { valid: boolean; error?: string } {
     if (!file) {

@@ -11,9 +11,24 @@ class GroupService {
    * Create new group
    */
   async createGroup(data: { groupName: string; exchangeId: number }): Promise<any> {
+    const userDataStr = localStorage.getItem('userData')
+    const userData = userDataStr ? JSON.parse(userDataStr) : { userId: 31 }
+    const userId = userData?.userId || 31
+    
+    const timestamp = Date.now().toString()
+    
+    const payload = {
+      requestTimestamp: timestamp,
+      userId: userId,
+      data: {
+        groupName: data.groupName,
+        exchangeId: data.exchangeId,
+      }
+    }
+    
     const response = await apiClient.post<{ data: any }>(
       this.baseUrl,
-      data
+      payload
     )
     return response.data
   }
@@ -114,6 +129,18 @@ class GroupService {
       'user/api/quantity/group/exchange-wise'
     )
     return response
+  }
+
+  /**
+   * Fetch groups exchange-wise dynamically based on user context
+   * POST endpoint returning groups assigned/allowed for a specific user ID
+   */
+  async getGroupsByExchangeWiseUserSpecific(data: { requestTimestamp: number; userId: number }): Promise<any> {
+    const response = await apiClient.post<{ responseCode: string; responseMessage: string; data: any }>(
+      'user/api/quantity/group/exchange-wise/v1',
+      data
+    )
+    return response.data
   }
 }
 

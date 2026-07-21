@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { ArrowUpRight, ArrowDownLeft, Search, Clock, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 
 interface TradeData {
   tradeId: number
@@ -80,19 +81,32 @@ const Trades: React.FC = () => {
   }
 
   const loggedInUserId = getLoggedInUserId()
-  const [selectedUserId, setSelectedUserId] = useState<number>(loggedInUserId)
-  const [selectedExchange, setSelectedExchange] = useState<string>('')
+  const [selectedUserId, setSelectedUserId] = useState<number>(0)
+  const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges')
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
-
+  const [selectedStatus, setSelectedStatus] = useState<string>('All')
+  const [selectedOrderType, setSelectedOrderType] = useState<string>('All')
+  const [selectedSide, setSelectedSide] = useState<string>('Both')
+  
   const today = new Date();
   const [fromDate, setFromDate] = useState<string>(today.toLocaleDateString('en-CA'));
   const [toDate, setToDate] = useState<string>(today.toLocaleDateString('en-CA'));
+  const [liveMode, setLiveMode] = useState(false)
+  const [timeEnabled, setTimeEnabled] = useState(false)
+  const [fromTime, setFromTime] = useState<string>('00:00:00')
+  const [toTime, setToTime] = useState<string>('23:59:59')
+
+  // Advanced filters
+  const [ipDevFilter, setIpDevFilter] = useState<string>('Default')
+  const [durationMin, setDurationMin] = useState<string>('60')
+  const [pnlMin, setPnlMin] = useState<string>('10.000')
 
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [tradesData, setTradesData] = useState<TradeData[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [exchanges, setExchanges] = useState<any[]>([])
+  const [symbols, setSymbols] = useState<any[]>([])
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [totalRecords, setTotalRecords] = useState(0)
@@ -100,6 +114,14 @@ const Trades: React.FC = () => {
   const pageSize = 10
 
   const isFetchingRef = useRef(false);
+
+  const userOptions = useMemo(() => [
+    ...users.map(u => ({ id: u.userId, name: u.userName }))
+  ], [users]);
+
+  const symbolOptions = useMemo(() => [
+    ...symbols.map(s => ({ id: String(s.token), name: s.tradeSymbol || s }))
+  ], [symbols]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -110,10 +132,15 @@ const Trades: React.FC = () => {
           setUsers(usersResponse.data)
         }
         const exchangesResponse = await userManagementService.fetchExchanges()
-        if (Array.isArray(exchangesResponse)) {
+        if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
           setExchanges(exchangesResponse)
-          if (exchangesResponse.length > 0) {
-            setSelectedExchange(exchangesResponse[0].name)
+          const defaultExchange = exchangesResponse[0].name
+          setSelectedExchange(defaultExchange)
+          
+          // Fetch symbols for the default exchange on page load (like in Positions)
+          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
+          if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+            setSymbols(symbolsResponse.data)
           }
         }
       } catch (error: any) {
@@ -125,11 +152,32 @@ const Trades: React.FC = () => {
     loadInitialData()
   }, [])
 
+  // Function to fetch symbols for a specific exchange
+  const fetchSymbolsForExchange = async (exchangeName: string) => {
+    if (!exchangeName || exchangeName === 'All Exchanges') {
+      setSymbols([])
+      return
+    }
+    try {
+      const response = await userManagementService.fetchSymbols(exchangeName)
+      if (response?.responseCode === '0' && Array.isArray(response.data)) {
+        setSymbols(response.data)
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // Fetch symbols when exchange changes
   useEffect(() => {
-    if (!initialLoading && exchanges.length > 0 && selectedExchange) {
+    fetchSymbolsForExchange(selectedExchange)
+  }, [selectedExchange])
+
+  useEffect(() => {
+    if (!initialLoading) {
       handleView(0);
     }
-  }, [initialLoading, exchanges]);
+  }, [initialLoading]);
 
   const handleView = async (page: number = 0) => {
     setLoading(true)
@@ -138,23 +186,41 @@ const Trades: React.FC = () => {
         from: fromDate,
         to: toDate,
         page: page,
-        size: pageSize,
-        userId: selectedUserId
+        time: timeEnabled,
+        fromTime: timeEnabled ? fromTime : '00:00:00',
+        toTime: timeEnabled ? toTime : '23:59:59',
+        exchange: selectedExchange !== 'All Exchanges' ? selectedExchange : 'All Exchanges',
+        status: selectedStatus !== 'All' ? selectedStatus : 'All',
+        orderType: selectedOrderType !== 'All' ? selectedOrderType : 'All',
+        side: selectedSide !== 'Both' ? selectedSide : 'Both'
       }
-      if (selectedExchange && selectedExchange !== 'All Exchanges') requestData.exchange = selectedExchange
-      if (selectedSymbol) requestData.tradeSymbol = selectedSymbol
 
-      const response = await userManagementService.fetchTrades(loggedInUserId, requestData)
+      // Pass tradeSymbol when symbol is selected (without token)
+      if (selectedSymbol) {
+        requestData.tradeSymbol = selectedSymbol
+      }
+
+      const response = await userManagementService.fetchTrades(selectedUserId || loggedInUserId, requestData)
 
       if (response?.responseCode === '0') {
-        const tradesList = response.data?.trades || response.data?.content || []
-        setTradesData(tradesList)
-        setTotalRecords(response.data?.size || 0)
-        setTotalPages(Math.ceil((response.data?.size || 0) / pageSize))
+        const tradesList = response.data?.trades || response.data?.content || response.data || []
+        const totalSize = response.data?.size || (Array.isArray(tradesList) ? tradesList.length : 0)
+        setTradesData(Array.isArray(tradesList) ? tradesList : [])
+        setTotalRecords(totalSize)
+        setTotalPages(Math.ceil(totalSize / pageSize))
         setCurrentPage(page)
+      } else {
+        // Clear table on error
+        setTradesData([])
+        setTotalRecords(0)
+        setTotalPages(0)
+        toast.error(response?.responseMessage || 'Failed to fetch trades')
       }
     } catch (error: any) {
       setTradesData([])
+      setTotalRecords(0)
+      setTotalPages(0)
+      toast.error('Error fetching trades')
     } finally {
       setLoading(false)
     }
@@ -227,21 +293,45 @@ const Trades: React.FC = () => {
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">To :</label>
                 <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500" />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Username :</label>
-                <select value={selectedUserId} onChange={(e) => setSelectedUserId(parseInt(e.target.value))} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
-                  {users.map((user) => (<option key={user.userId} value={user.userId}>{user.userName}</option>))}
-                </select>
-              </div>
+              <SearchableSelect
+                label="Username :"
+                items={userOptions}
+                selectedId={selectedUserId}
+                onSelect={(userId) => setSelectedUserId(Number(userId))}
+                placeholder="Search user..."
+              />
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
                 <select value={selectedExchange} onChange={(e) => setSelectedExchange(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
                   {exchanges.map((ex) => (<option key={ex.name} value={ex.name}>{ex.name}</option>))}
                 </select>
               </div>
+              <div className="space-y-2">
+                {selectedSymbol && (
+                  <button
+                    onClick={() => {
+                      console.log('Clearing symbol...');
+                      setSelectedSymbol('');
+                      setTradesData([]);
+                      setTotalRecords(0);
+                      setTotalPages(0);
+                    }}
+                    className="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition float-right mb-2"
+                  >
+                    Clear
+                  </button>
+                )}
+                <SearchableSelect
+                  label="Symbol :"
+                  items={symbolOptions}
+                  selectedId={selectedSymbol}
+                  onSelect={(id) => setSelectedSymbol(String(id))}
+                  placeholder="Search symbol..."
+                />
+              </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => handleView(0)} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md">View</button>
-                <button onClick={() => { }} className="flex-1 px-4 py-2 bg-slate-700 text-white rounded font-semibold text-sm transition">Clear</button>
+                <button onClick={() => { setSelectedUserId(loggedInUserId); setSelectedExchange(exchanges[0]?.name || ''); setSelectedSymbol(''); setFromDate(today.toLocaleDateString('en-CA')); setToDate(today.toLocaleDateString('en-CA')); setSelectedStatus('All'); setSelectedOrderType('All'); setSelectedSide('Both'); }} className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition">Clear</button>
               </div>
             </div>
           }

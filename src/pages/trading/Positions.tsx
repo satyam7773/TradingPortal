@@ -87,10 +87,18 @@ const Positions: React.FC = () => {
   // Memoized user options for the SearchableSelect
   const userOptions = useMemo(
     () => users.map((u) => ({
-      id: u.userId, name: u.
-        userName
+      id: u.userId, name: u.userName
     })),
     [users],
+  );
+
+  // Memoized symbol options for the SearchableSelect
+  const symbolOptions = useMemo(
+    () => symbols.map((s) => ({
+      id: s.tradeSymbol || s,
+      name: s.tradeSymbol || s
+    })),
+    [symbols],
   );
 
   const maxAvailableQuantityRef = useRef<number>(999999);
@@ -349,7 +357,14 @@ const Positions: React.FC = () => {
 
         if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
           setExchanges(exchangesResponse);
-          setSelectedExchange(exchangesResponse[0].name);
+          const defaultExchange = exchangesResponse[0].name;
+          setSelectedExchange(defaultExchange);
+          
+          // Fetch symbols for the default exchange on page load
+          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange);
+          if (symbolsResponse?.responseCode === "0" && Array.isArray(symbolsResponse.data)) {
+            setSymbols(symbolsResponse.data);
+          }
         }
 
         const fullConfig = ConfigManager.getFullConfig();
@@ -557,8 +572,14 @@ const Positions: React.FC = () => {
                 <select
                   value={selectedExchange}
                   onChange={(e) => {
-                    setSelectedExchange(e.target.value);
-                    fetchSymbolsForExchange(e.target.value);
+                    const newExchange = e.target.value;
+                    setSelectedExchange(newExchange);
+                    // Only fetch symbols if not "All Exchanges"
+                    if (newExchange !== "All Exchanges") {
+                      fetchSymbolsForExchange(newExchange);
+                    } else {
+                      setSymbols([]);
+                    }
                   }}
                   className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none"
                 >
@@ -570,27 +591,20 @@ const Positions: React.FC = () => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  Symbol :
-                </label>
-                <select
-                  value={selectedSymbol}
-                  onChange={(e) => {
-                    setSelectedSymbol(e.target.value);
+                <SearchableSelect
+                  label="Symbol :"
+                  items={symbolOptions}
+                  selectedId={selectedSymbol}
+                  onSelect={(symbol) => {
+                    setSelectedToken(null);
+                    setSelectedSymbol(symbol as string);
                     const found = symbols.find(
-                      (s) => s.tradeSymbol === e.target.value,
+                      (s) => (s.tradeSymbol || s) === symbol
                     );
                     setSelectedToken(found?.token || null);
                   }}
-                  className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none"
-                >
-                  <option value="">All Scripts</option>
-                  {symbols.map((s) => (
-                    <option key={s.token} value={s.tradeSymbol}>
-                      {s.tradeSymbol}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Search symbol..."
+                />
               </div>
               <div className="flex gap-2 pt-2">
                 <button
@@ -602,8 +616,13 @@ const Positions: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
+                    const allExchangesValue = 'All Exchanges';
+                    setSelectedExchange(allExchangesValue);
                     setSelectedSymbol("");
-                    handleView();
+                    setSelectedToken(null);
+                    
+                    // Fetch symbols for All Exchanges
+                    fetchSymbolsForExchange(allExchangesValue);
                   }}
                   className="flex-1 px-4 py-2 bg-slate-700 text-white rounded font-semibold text-sm transition"
                 >

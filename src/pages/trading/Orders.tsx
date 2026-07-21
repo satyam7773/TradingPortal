@@ -61,6 +61,14 @@ const Orders: React.FC = () => {
     }));
   }, [users]);
 
+  // --- Adapt symbols array for SearchableSelect ---
+  const selectableSymbols = useMemo(() => {
+    return symbols.map(s => ({
+      id: String(s.token),
+      name: s.tradeSymbol || s
+    }));
+  }, [symbols]);
+
   // --- Core Fetch Logic ---
   const handleFetchOrders = async (pageOverride?: number, customId?: number | string, customEx?: string) => {
     const userIdToUse = customId !== undefined ? customId : selectedUserId;
@@ -68,6 +76,8 @@ const Orders: React.FC = () => {
 
     setLoading(true)
     const targetPage = pageOverride !== undefined ? pageOverride : currentPage;
+
+    console.log('🔍 SelectedSymbol value:', selectedSymbol, 'Type:', typeof selectedSymbol);
 
     try {
       const response = await userManagementService.fetchOrders(
@@ -141,6 +151,10 @@ const Orders: React.FC = () => {
   const handleExchangeChange = async (name: string) => {
     setSelectedExchange(name);
     setSelectedSymbol('');
+    if (name === 'All Exchanges') {
+      setSymbols([]);
+      return;
+    }
     try {
       const res = await userManagementService.fetchSymbols(name);
       if (res?.responseCode === '0') setSymbols(res.data);
@@ -265,15 +279,48 @@ const Orders: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Trade Symbol :</label>
-                  <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500">
-                    <option value="">All Symbols</option>
-                    {symbols.map(s => <option key={s.token} value={s.tradeSymbol}>{s.tradeSymbol}</option>)}
-                  </select>
+                  <SearchableSelect
+                    label="Trade Symbol :"
+                    items={selectableSymbols}
+                    selectedId={selectedSymbol}
+                    onSelect={(id) => setSelectedSymbol(String(id))}
+                    placeholder="Search symbol..."
+                  />
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => handleFetchOrders()} disabled={loading || initialLoading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-md">
                     {loading ? 'Loading...' : 'View'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const allExchangesValue = 'All Exchanges';
+                      setSelectedUserId(loggedInUserId);
+                      setSelectedExchange(allExchangesValue);
+                      setSelectedSymbol('');
+                      setFromDate(today);
+                      setToDate(today);
+                      setOrdersData(null);
+                      setCurrentPage(0);
+                      
+                      // Fetch symbols for All Exchanges
+                      userManagementService.fetchSymbols(allExchangesValue).then(res => {
+                        let symbolsData = res;
+                        // Handle both auto-unwrapped (array) and non-unwrapped (object with data) responses
+                        if (res?.responseCode === '0' && res.data) {
+                          symbolsData = res.data;
+                        }
+                        if (Array.isArray(symbolsData) && symbolsData.length > 0) {
+                          setSymbols(symbolsData);
+                        } else {
+                          setSymbols([]);
+                        }
+                      }).catch(() => {
+                        setSymbols([]);
+                      });
+                    }}
+                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition"
+                  >
+                    Clear
                   </button>
                 </div>
               </div>

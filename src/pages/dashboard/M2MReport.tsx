@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { BarChart3, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 
 interface M2MData {
   userId: number
@@ -30,6 +31,10 @@ const M2MProfitLoss: React.FC = () => {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+
+  const userOptions = useMemo(() => [
+    ...users.map(u => ({ id: u.userId, name: u.userName }))
+  ], [users])
 
   // 1. Fetch users on mount
   useEffect(() => {
@@ -113,20 +118,13 @@ const M2MProfitLoss: React.FC = () => {
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">M2M Filters</h3>
                 
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Username :</label>
-                  <select
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
-                  >
-                    {users.map(user => (
-                      <option key={user.userId} value={user.userId}>
-                        {user.userName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableSelect
+                  label="Username :"
+                  items={userOptions}
+                  selectedId={selectedUserId}
+                  onSelect={(userId) => setSelectedUserId(Number(userId))}
+                  placeholder="Search user..."
+                />
 
                 <div className="flex gap-2 pt-2">
                   <button

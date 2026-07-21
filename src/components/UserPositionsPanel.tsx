@@ -17,9 +17,11 @@ interface UserPositionsPanelProps {
   username: string;
   userId?: string | number;
   roleId?: any;
+  user?: any
 }
 
-const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId }) => {
+const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId, user }) => {
+  console.log('user', user?.userSettings?.userInfo)
   // --- State (mostly copied from Positions.tsx) ---
   const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges');
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
@@ -32,9 +34,20 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
-  const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>('addOrder');
+
+  
+
+    const isManualOrderEnabled =
+  user?.userSettings?.userInfo?.find(
+    (item: any) => item.toggle === 'manualOrder'
+  )?.value ?? false;
+
+  const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>(
+    isManualOrderEnabled ? 'addOrder' : 'cfMarginSquareOff'
+  );
+
   const displayRoleId = roleId;
-  console.log('displayRoleId',displayRoleId,username)
+  console.log('displayRoleId', displayRoleId, username)
   const isClient = Number(displayRoleId) === 4 || displayRoleId === 'Client';
   const feedUnsubscribeRef = useRef<(() => void) | null>(null);
   const selectedFeedUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -58,6 +71,14 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     if (type === 'BUY') orderModal.setIsDraggingBuy(true);
     else orderModal.setIsDraggingSell(true);
   };
+
+ useEffect(() => {
+  setTab(
+    isManualOrderEnabled
+      ? 'addOrder'
+      : 'cfMarginSquareOff'
+  );
+}, [isManualOrderEnabled]);
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -136,7 +157,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           });
         }
 
-        await handleView(exchangesResponse?.[0]?.name || 'All Exchanges', userId ? [Number(userId)] : []);
+
+        if (isManualOrderEnabled) {
+          await handleView(
+            exchangesResponse?.[0]?.name || 'All Exchanges',
+            userId ? [Number(userId)] : []
+          );
+        }
       } finally {
         setLoading(false);
       }
@@ -146,7 +173,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       unsubscribeCurrentFeed();
     };
     // eslint-disable-next-line
-  }, [userId, tab]);
+  }, [userId, tab, isManualOrderEnabled]);
 
   // --- Fetch symbols when exchange changes ---
   useEffect(() => {
@@ -206,7 +233,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     });
   }, [unsubscribeCurrentFeed]);
 
+  
   const setupLivePositionFeed = useCallback(async (positionsList: any[]) => {
+    if (!isManualOrderEnabled) return;
     if (!userId) return;
     const userIdStr = String(userId);
     const tokens = positionsList.filter(p => p.token).map(p => p.token!.toString());
@@ -216,10 +245,15 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     } else {
       establishStompSubscription(userIdStr, tokens);
     }
-  }, [establishStompSubscription, userId]);
+  }, [establishStompSubscription, userId, isManualOrderEnabled]);
 
   // --- View handler (copied from Positions.tsx, but always uses userId) ---
   const handleView = async (targetExchange?: string, targetUserIds?: number[], ignoreSelectedSymbol = false, targetToken?: number) => {
+    if (!isManualOrderEnabled) {
+    setFilteredPositions([]);
+    return;
+  }
+
     const exchange = targetExchange || selectedExchange;
     if (!exchange) return;
     setLoading(true);
@@ -247,6 +281,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- Memoized user options for SearchableSelect ---
   const userOptions = useMemo(() => users.map(u => ({ id: u.id, name: u.name })), [users]);
+
+  // Memoize script items to prevent SearchableSelect from re-rendering constantly
+  const scriptItems = useMemo(() => symbols.map(s => ({ id: s.token, name: s.tradeSymbol })), [symbols]);
 
   // --- Stats ---
   const stats = useMemo(() => ({
@@ -279,6 +316,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- Ensure live quote feed includes the selected script token ---
   useEffect(() => {
+    if (!isManualOrderEnabled) return;
     if (!selectedToken || !userId) return;
     const userIdStr = String(userId);
     const tokenString = String(selectedToken);
@@ -333,8 +371,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     return () => {
       if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [selectedToken, userId]);
 
+  }, [selectedToken, userId, isManualOrderEnabled]);
   const selectedTick = selectedToken ? liveTicks[selectedToken] : null;
   const buyPriceDisplay = selectedTick?.ask ? Number(selectedTick.ask).toFixed(2) : '--';
   const sellPriceDisplay = selectedTick?.bid ? Number(selectedTick.bid).toFixed(2) : '--';
@@ -402,7 +440,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
     const symbolItem = symbols.find(s => s.token === selectedToken);
     const config = instrumentConfigRef.current[selectedToken] || symbolItem || {};
-    const exchange = config?.exchange || symbolItem?.exchangeName ;
+    const exchange = config?.exchange || symbolItem?.exchangeName;
     const tradeSymbol = selectedSymbol || symbolItem?.tradeSymbol || symbolItem?.instrumentName || '';
 
     if (!orderType) {
@@ -452,29 +490,29 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     try {
       const response = buySell === 'Buy'
         ? await orderService.placeBuyOrder(
-            loggedInUserId,
-            recipientUserId,
-            exchange,
-            tradeSymbol,
-            selectedToken,
-            finalQuantity,
-            Number(finalPrice),
-            finalLotValue,
-            orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
-            'MANUAL_ORDER'
-          )
+          loggedInUserId,
+          recipientUserId,
+          exchange,
+          tradeSymbol,
+          selectedToken,
+          finalQuantity,
+          Number(finalPrice),
+          finalLotValue,
+          orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
+          'MANUAL_ORDER'
+        )
         : await orderService.placeSellOrder(
-            loggedInUserId,
-            recipientUserId,
-            exchange,
-            tradeSymbol,
-            selectedToken,
-            finalQuantity,
-            Number(finalPrice),
-            finalLotValue,
-            orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
-            'MANUAL_ORDER'
-          );
+          loggedInUserId,
+          recipientUserId,
+          exchange,
+          tradeSymbol,
+          selectedToken,
+          finalQuantity,
+          Number(finalPrice),
+          finalLotValue,
+          orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
+          'MANUAL_ORDER'
+        );
 
       if (response?.responseCode === '0') {
         toast.success(`Manual order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast });
@@ -492,12 +530,19 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const filters = (
     <div className="space-y-4 p-4">
       <div className="flex gap-2 mb-2">
-        <button
-          className={`flex-1 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'addOrder' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
-          onClick={() => setTab('addOrder')}
-        >
-          Add Order
-        </button>
+        {user.manualOrderEnabled
+          && (
+
+            <button
+              className={`flex-1 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'addOrder' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+              onClick={() => setTab('addOrder')}
+            >
+              Add Order
+            </button>
+          )
+        }
+
+
         <button
           className={`flex-1 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'cfMarginSquareOff' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
           onClick={() => setTab('cfMarginSquareOff')}
@@ -505,94 +550,132 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           CF Margin Square Off
         </button>
       </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">User :</label>
-        <input type="text" value={username} disabled className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 text-sm text-slate-800 dark:text-slate-200" />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Script Name :</label>
-        <select value={selectedSymbol} onChange={e => { setSelectedSymbol(e.target.value); const found = symbols.find(s => s.tradeSymbol === e.target.value); setSelectedToken(found?.token || null); }} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
-          <option value="">Select Script</option>
-          {symbols.map(s => <option key={s.token} value={s.tradeSymbol}>{s.tradeSymbol}</option>)}
-        </select>
-      </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-       
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-3 text-center">
-          <div className="text-xs uppercase font-semibold text-emerald-700 dark:text-emerald-300">Buy</div>
-          <div className="mt-2 text-2xl font-bold text-emerald-800 dark:text-emerald-200">{buyPriceDisplay}</div>
-        </div>
-         <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-center">
-          <div className="text-xs uppercase font-semibold text-red-700 dark:text-red-300">Sell</div>
-          <div className="mt-2 text-2xl font-bold text-red-800 dark:text-red-200">{sellPriceDisplay}</div>
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Buy/Sell :</label>
-        <select value={buySell} onChange={e => setBuySell(e.target.value as 'Buy' | 'Sell')} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
-          <option value="Buy">Buy</option>
-          <option value="Sell">Sell</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Order Type :</label>
-        <select value={orderType} onChange={e => handleOrderTypeChange(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
-          <option value="Market">Market</option>
-          <option value="Limit">Limit</option>
-          <option value="SL">Stop Loss</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Qty :</label>
-        <input type="number" value={qty} onChange={e => setQty(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Rate By :</label>
-        <select
-          value={rateBy}
-          disabled={!isRateByEnabled}
-          onChange={e => {
-            const v = e.target.value;
-            setRateBy(v);
-            if (v === 'Manual Price') {
-              setPrice('');
-            } else {
-              // restore market tick if available
-              const tick = selectedToken ? liveTicks[selectedToken] : null;
-              const next = buySell === 'Buy' ? tick?.ask : tick?.bid;
-              setPrice(next != null ? Number(next).toFixed(2) : '');
-            }
-          }}
-          className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm ${!isRateByEnabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-        >
-          <option value="Market Price">Market Price</option>
-          <option value="Manual Price">Manual Price</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Price :</label>
-        <input
-          type="number"
-          value={price}
-          onChange={e => setPrice(e.target.value)}
-          disabled={!isPriceEditable}
-          className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 text-sm ${!isPriceEditable ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-700'}`}
-        />
-      </div>
-      <div className="flex gap-2 pt-2">
-        <button
-          onClick={handleManualOrderSubmit}
-          disabled={loading || !isClient}
-          className={`flex-1 px-4 py-2 rounded font-semibold text-sm transition shadow-md ${isClient ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-400 text-gray-200 cursor-not-allowed'}`}
-        >
-          Submit
-        </button>
-        <button onClick={() => { resetManualOrderForm(); handleView(undefined, undefined, false, 0); }} className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-600 text-white rounded font-semibold text-sm transition">Clear</button>
-      </div>
-      {!isClient && (
-        <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">Only for client users can place manual orders.</div>
+
+
+      {isManualOrderEnabled && (
+
+        <>
+
+
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">User :</label>
+            <input type="text" value={username} disabled className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-gray-100 dark:bg-slate-700 text-sm text-slate-800 dark:text-slate-200" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <label className="block text-xs font-semibold flex-1">Script Name :</label>
+              {selectedToken && (
+                <button
+                  onClick={() => {
+                    setSelectedSymbol('');
+                    setSelectedToken(null);
+                  }}
+                  className="text-xs px-2 py-0.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <SearchableSelect
+              label=""
+              items={scriptItems}
+              selectedId={selectedToken || 0}
+              onSelect={(tokenId, symbolName) => {
+                if (tokenId === 0) {
+                  setSelectedSymbol('');
+                  setSelectedToken(null);
+                } else {
+                  setSelectedSymbol(symbolName);
+                  setSelectedToken(Number(tokenId));
+                }
+              }}
+              placeholder="Search script..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-3 text-center">
+              <div className="text-xs uppercase font-semibold text-emerald-700 dark:text-emerald-300">Buy</div>
+              <div className="mt-2 text-2xl font-bold text-emerald-800 dark:text-emerald-200">{buyPriceDisplay}</div>
+            </div>
+            <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-3 py-3 text-center">
+              <div className="text-xs uppercase font-semibold text-red-700 dark:text-red-300">Sell</div>
+              <div className="mt-2 text-2xl font-bold text-red-800 dark:text-red-200">{sellPriceDisplay}</div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Buy/Sell :</label>
+            <select value={buySell} onChange={e => setBuySell(e.target.value as 'Buy' | 'Sell')} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
+              <option value="Buy">Buy</option>
+              <option value="Sell">Sell</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Order Type :</label>
+            <select value={orderType} onChange={e => handleOrderTypeChange(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm">
+              <option value="Market">Market</option>
+              <option value="Limit">Limit</option>
+              <option value="SL">Stop Loss</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Qty :</label>
+            <input type="number" value={qty} onChange={e => setQty(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Rate By :</label>
+            <select
+              value={rateBy}
+              disabled={!isRateByEnabled}
+              onChange={e => {
+                const v = e.target.value;
+                setRateBy(v);
+                if (v === 'Manual Price') {
+                  setPrice('');
+                } else {
+                  // restore market tick if available
+                  const tick = selectedToken ? liveTicks[selectedToken] : null;
+                  const next = buySell === 'Buy' ? tick?.ask : tick?.bid;
+                  setPrice(next != null ? Number(next).toFixed(2) : '');
+                }
+              }}
+              className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm ${!isRateByEnabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              <option value="Market Price">Market Price</option>
+              <option value="Manual Price">Manual Price</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Price :</label>
+            <input
+              type="number"
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              disabled={!isPriceEditable}
+              className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 text-sm ${!isPriceEditable ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-700'}`}
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={handleManualOrderSubmit}
+              disabled={loading || !isClient}
+              className={`flex-1 px-4 py-2 rounded font-semibold text-sm transition shadow-md ${isClient ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-400 text-gray-200 cursor-not-allowed'}`}
+            >
+              Submit
+            </button>
+            <button onClick={() => { resetManualOrderForm(); handleView(undefined, undefined, false, 0); }} className="flex-1 px-4 py-2 bg-gray-400 dark:bg-slate-600 text-white rounded font-semibold text-sm transition">Clear</button>
+          </div>
+          {!isClient && (
+            <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">Only for client users can place manual orders.</div>
+          )}
+
+        </>
+
       )}
+
     </div>
+
   );
 
   // --- Buy/Sell modal and close selected logic from Positions page ---
@@ -643,13 +726,32 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     if (isSuccess) orderModal.closeSellModal();
   };
 
+  const getPnLColor = (pnl: number) => {
+    if (pnl > 0) return 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20';
+    if (pnl < 0) return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20';
+    return 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/30';
+  };
+
+  const getCMPColor = (ltp: number | null, avg: number) => {
+    if (!ltp) return 'text-blue-600 dark:text-blue-400';
+    return ltp >= avg
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : 'text-red-600 dark:text-red-400';
+  };
+
   const handleCloseSelectedPositions = async () => {
+
+    const userData = localStorage.getItem('userData')
+    const user = userData ? JSON.parse(userData) : null
+    const loggedInUserId = user?.userId
+
+
     if (selectedPositions.size === 0) return;
     if (!window.confirm(`Are you sure you want to close the ${selectedPositions.size} selected position(s)?`)) return;
     try {
       setLoading(true);
       const payload = {
-        userId: userId,
+        userId: loggedInUserId,
         requestTimestamp: new Date().getTime().toString(),
         deviceId: "WEB",
         tradeOrderMethod: "WEB",
@@ -662,7 +764,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       });
       const result = await response.json();
       if (result?.responseCode === '0' || result?.status === 'success') {
-        toast.success("Selected positions closed successfully");
+        // toast.success("Selected positions closed successfully");
         setSelectedPositions(new Set());
         handleView();
       } else {
@@ -675,6 +777,15 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     }
   };
 
+  useEffect(() => {
+  if (!isManualOrderEnabled) {
+    unsubscribeCurrentFeed();
+    setFilteredPositions([]);
+    setPositionData(null);
+    setSelectedPositions(new Set());
+  }
+}, [isManualOrderEnabled, unsubscribeCurrentFeed]);
+
   // --- Table and content (now matches Positions page) ---
   return (
     <FilterLayout
@@ -683,6 +794,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       storageKey="userPositions:showFilters"
     >
       <div className="flex flex-col h-full bg-white/70 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg backdrop-blur-sm overflow-hidden">
+       
+       {isManualOrderEnabled && (
+       
         <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-r from-white/80 via-blue-50/80 to-white/80 dark:from-slate-800/80 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><Briefcase className="w-7 h-7 text-blue-500" /> Positions</h1>
@@ -694,7 +808,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           </div>
         </div>
-        {selectedPositions.size > 0 && (
+       )}
+        {isManualOrderEnabled && selectedPositions.size > 0 && (
           <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
             <span className="text-sm font-bold text-red-700 dark:text-red-300">{selectedPositions.size} positions selected</span>
             <button onClick={handleCloseSelectedPositions} disabled={loading} className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow-sm">
@@ -703,9 +818,11 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           </div>
         )}
         <div className="flex-1 overflow-auto scrollbar-thin">
-          {tab === 'addOrder' && (
+          {isManualOrderEnabled && tab === 'addOrder' && (
             loading ? (
-              <div className="h-full flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" /></div>
+              <div className="h-full flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
+              </div>
             ) : (
               <table className="w-full border-collapse min-w-max">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
@@ -742,9 +859,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                       <td className="px-6 py-4 text-left"><span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${p.position === 'BUY' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-red-600 border-red-200 bg-red-50'}`}>{p.position}</span></td>
                       <td className={`px-6 py-4 text-left font-bold ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`}>{p.tradeSymbol}</td>
                       <td className="px-6 py-4 text-center font-bold text-sm">{p.quantity}</td>
-                      <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice}</td>
-                      <td className="px-6 py-4 text-right font-mono text-sm font-bold">{p.ltp ?? '-'}</td>
-                      <td className="px-6 py-4 text-right font-mono text-sm font-bold">{p.pnl}</td>
+                      <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${getCMPColor(p.ltp, p.averagePrice)}`}>{p.ltp?.toFixed(2) || '0.00'}</td>
+                      <td className={`px-6 py-4 text-right font-mono text-sm font-bold rounded-lg ${getPnLColor(p.pnl)}`}>{p.pnl.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>

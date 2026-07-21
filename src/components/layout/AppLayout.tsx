@@ -321,10 +321,10 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({
           <ThemeToggle variant="icon" size="sm" />
           <button 
             onClick={handleProfileClick}
-            className="w-10 h-10 rounded-xl bg-gradient-to-r from-brand-primary/15 to-brand-secondary/15 hover:from-brand-primary hover:to-brand-primary-hover hover:text-white flex items-center justify-center text-brand-primary transition-all duration-300 hover:scale-110 cursor-pointer text-sm font-bold border-2 border-brand-primary/30 hover:border-white shadow-lg hover:shadow-xl transform"
-            title={isFirstLogin ? "Click to Access Full Menu" : "User Menu"}
+            className="px-3 h-10 rounded-xl bg-gradient-to-r from-brand-primary/15 to-brand-secondary/15 hover:from-brand-primary hover:to-brand-primary-hover hover:text-white flex items-center justify-center text-brand-primary transition-all duration-300 hover:scale-110 cursor-pointer text-xs font-bold border-2 border-brand-primary/30 hover:border-white shadow-lg hover:shadow-xl transform max-w-[120px] truncate"
+            title={isFirstLogin ? "Click to Access Full Menu" : `${user?.username || 'User'} - User Menu`}
           >
-            U
+            {user?.username || 'User'}
           </button>
         </div>
       </div>

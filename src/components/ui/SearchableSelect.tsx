@@ -23,7 +23,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   useEffect(() => {
     const activeItem = items.find(item => item.id === selectedId);
-    if (activeItem) setSearchTerm(activeItem.name);
+    if (activeItem) {
+      setSearchTerm(activeItem.name);
+    } else if (!selectedId) {
+      setSearchTerm('');
+    }
   }, [selectedId, items]);
 
   useEffect(() => {

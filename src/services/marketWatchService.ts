@@ -519,6 +519,89 @@ class MarketWatchService {
   }
 
   /**
+   * Subscribe to MTM (Mark-to-Market) updates
+   * Subscribes to /app/mtm with userId and listens on /queue/mtm/{userId}
+   */
+  subscribeToMTM(userId: string, onMTMUpdate: (data: any) => void): () => void {
+    const subscriptionKey = `mtm-${userId}`
+    
+    // Store the callback
+    if (!this.mtmCallbacks) {
+      this.mtmCallbacks = new Map()
+    }
+    this.mtmCallbacks.set(userId, onMTMUpdate)
+
+    if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+      console.log(`📊 Subscribing to MTM updates for user: ${userId}`)
+      
+      // Send SUBSCRIBE frame to /queue/mtm/{userId}
+      const frame = `SUBSCRIBE\nid:sub-queue-mtm-${userId}\ndestination:/queue/mtm/${userId}\nack:auto\n\n\0`
+      this.socket.send(frame)
+      
+      this.subscribedUsers.add(subscriptionKey)
+      this.lastReceivedTimePerQueue.set(`/queue/mtm/${userId}`, Date.now())
+      
+      // Send request to /app/mtm with userId
+      const payload = JSON.stringify({ userId: parseInt(userId) })
+      const sendFrame = `SEND\ndestination:/app/mtm\ncontent-type:application/json\ncontent-length:${payload.length}\n\n${payload}\0`
+      this.socket.send(sendFrame)
+      console.log(`📤 MTM request sent for userId: ${userId}`)
+    } else {
+      console.warn(`⚠️ Socket not ready for MTM subscription`)
+    }
+
+    // Return unsubscribe function
+    return () => this.unsubscribeFromMTM(userId)
+  }
+
+  /**
+   * Unsubscribe from MTM updates
+   */
+  unsubscribeFromMTM(userId: string): void {
+    const subscriptionKey = `mtm-${userId}`
+    
+    if (this.socket && this.socket.readyState === WebSocket.OPEN && this.stompConnected) {
+      console.log(`🔌 Unsubscribing from MTM for user: ${userId}`)
+      const frame = `UNSUBSCRIBE\nid:sub-queue-mtm-${userId}\n\n\0`
+      this.socket.send(frame)
+    }
+    
+    this.subscribedUsers.delete(subscriptionKey)
+    this.lastReceivedTimePerQueue.delete(`/queue/mtm/${userId}`)
+    
+    if (this.mtmCallbacks) {
+      this.mtmCallbacks.delete(userId)
+    }
+  }
+
+  /**
+   * Process MTM message from STOMP (called from _processStompFrames)
+   */
+  processMTMMessage(destination: string, body: string): void {
+    try {
+      // Extract userId from destination like /queue/mtm/526
+      const match = destination.match(/\/queue\/mtm\/(\d+)/)
+      if (!match) return
+
+      const userId = match[1]
+      console.log(`📊 MTM update received for userId: ${userId}`, body)
+      
+      const data = JSON.parse(body)
+      
+      // Call the registered callback
+      if (this.mtmCallbacks && this.mtmCallbacks.has(userId)) {
+        const callback = this.mtmCallbacks.get(userId)
+        if (callback) callback(data)
+      }
+    } catch (error) {
+      console.error('Error processing MTM message:', error, body)
+    }
+  }
+
+  // Track MTM callbacks per userId
+  private mtmCallbacks: Map<string, (data: any) => void> | null = null
+
+  /**
    * Send STOMP DISCONNECT frame
    */
   private _sendStompDisconnect(): void {
@@ -606,6 +689,13 @@ class MarketWatchService {
           // Update last received time for health check (Flutter pattern)
           const destination = headers['destination'] || 'unknown'
           this._updateLastReceivedTime(destination)
+          
+          // Check if this is an MTM message
+          if (destination.startsWith('/queue/mtm/')) {
+            console.log('📊 Detected MTM message, routing to MTM processor')
+            this.processMTMMessage(destination, body)
+            break
+          }
           
           // Check if this is an order update message
           if (destination.startsWith('/queue/positions/')) {

@@ -832,6 +832,47 @@ class UserManagementService {
     }
   }
 
+  async fetchUserWisePositions(
+    exchange: string,
+    token: number,
+    userId: number,
+  ): Promise<any> {
+    const userDataStr = localStorage.getItem("userData");
+    // const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+    // const userId = storedUserData?.userId || 2
+
+    const data: any = {
+      userId,
+    };
+
+    // Only add exchange if not empty (not "All Exchanges")
+    if (exchange) {
+      data.exchange = exchange;
+    }
+
+    // Only add token if not 0 (not "All Symbols")
+    if (token !== 0) {
+      data.token = token;
+    }
+
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId,
+      data,
+    };
+
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/userWisePositions",
+        request,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch positions:", error);
+      throw error;
+    }
+  }
+
   /**
    * Fetch trades for a user
    * POST /oms/trades
@@ -846,6 +887,7 @@ class UserManagementService {
       to?: string;
       exchange?: string;
       page?: number;
+      userId?:number;
       tradeSymbol?: string;
     } = {},
   ): Promise<any> {
@@ -855,6 +897,7 @@ class UserManagementService {
         from: params.from || new Date().toISOString().split("T")[0],
         to: params.to || new Date().toISOString().split("T")[0],
         exchange: params.exchange || "",
+        userId: params.userId !== undefined ? params.userId : 0,
         page: params.page || 0,
         tradeSymbol: params.tradeSymbol || "",
       },
@@ -1180,7 +1223,12 @@ class UserManagementService {
   }
 
   async fetchSettlement(
-    payload: { from: string; to: string; opening: "WITH" | "WITHOUT",searchUserId: number },
+    payload: {
+      from: string;
+      to: string;
+      opening: "WITH" | "WITHOUT";
+      searchUserId: number;
+    },
     userId: number,
   ): Promise<any> {
     try {
@@ -1225,6 +1273,34 @@ class UserManagementService {
       return response;
     } catch (error) {
       console.error("❌ Failed to fetch user groups:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch groups for a master user by exchange (includes count and default flag)
+   * POST: https://api-staging.rivoplus.live/user/api/v1/portal/exchange/userId
+   */
+  async fetchGroupListByExchange(
+    loggedInUserId: number,
+    targetUserId: number,
+    exchangeId: number,
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/api/v1/portal/exchange/userId",
+        {
+          userId: loggedInUserId,
+          requestTimestamp: Date.now(),
+          data: {
+            requestedForUserId: targetUserId,
+            exchangeId: exchangeId,
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch group list by exchange:", error);
       throw error;
     }
   }
@@ -1299,6 +1375,129 @@ class UserManagementService {
         data: payload,
       },
     );
+  }
+
+  /**
+   * Fetch Exchangewise Lot Limit settings
+   * POST: /user/portal/exchangeLotLimit
+   */
+  async fetchExchangewiseLotLimit(userId: number): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/portal/exchangeLotLimit",
+        {
+          userId,
+          requestTimestamp: "",
+          data: "",
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch Exchangewise Lot Limit:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update Exchangewise Lot Limit settings
+   * POST: /user/portal/updateExchangeLotLimit
+   */
+  async updateExchangewiseLotLimit(
+    userId: number,
+    exchanges: any[],
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/portal/updateExchangeLotLimit",
+        {
+          userId,
+          requestTimestamp: "",
+          data: exchanges,
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to update Exchangewise Lot Limit:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch users assigned to a group
+   * GET: https://api-staging.rivoplus.live/user/api/v1/portal/quantity-groups/users?groupId=20&parentId=829
+   */
+  async fetchGroupUsers(groupId: number, parentId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(
+        `https://api-staging.rivoplus.live/user/api/v1/portal/quantity-groups/users?groupId=${groupId}&parentId=${parentId}`,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch group users:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch available groups dropdown for user reassignment
+   * POST: https://api-staging.rivoplus.live/user/api/v1/portal/users/groups/dropdown
+   */
+  async fetchGroupsDropdown(
+    loggedInUserId: number,
+    targetUserId: number,
+    exchangeId: number,
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/api/v1/portal/users/groups/dropdown",
+        {
+          userId: loggedInUserId,
+          requestTimestamp: Date.now(),
+          data: {
+            requestedForUserId: targetUserId,
+            exchangeId: exchangeId,
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch groups dropdown:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Replace users from one group to another
+   * POST: https://api-staging.rivoplus.live/user/api/v1/portal/assign/users/group
+   */
+  async replaceUsersGroup(
+    loggedInUserId: number,
+    exchangeId: number,
+    replaceableGroupId: number,
+    currentGroupId: number,
+    requestedForUserIds: number[],
+    parentId: number,
+  ): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        "https://api-staging.rivoplus.live/user/api/v1/portal/assign/users/group",
+        {
+          userId: loggedInUserId,
+          requestTimestamp: Date.now(),
+          data: {
+            exchangeId: exchangeId,
+            replaceableGroupId: replaceableGroupId,
+            currentGroupId: currentGroupId,
+            requestedForUserIds: requestedForUserIds,
+            parentId: parentId,
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to replace users group:", error);
+      throw error;
+    }
   }
 }
 

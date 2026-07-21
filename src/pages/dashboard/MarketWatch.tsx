@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
-import { motion, AnimatePresence, Reorder } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2, Plus } from 'lucide-react'
 import { createPortal } from 'react-dom'
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import marketWatchService from '../../services/marketWatchService'
 import watchlistService from '../../services/watchlistService'
 import watchlistTabsService, { type WatchlistTab } from '../../services/watchlistTabsService'
@@ -144,25 +145,24 @@ const TableRow = memo(({
   const isEvenRow = instrument.insToken % 2 === 0
 
   return (
-    <Reorder.Item
-      value={instrument}
-      id={instrument.insToken.toString()}
-      as="tr"
-      className={`hover:bg-slate-700 transition-colors active:cursor-grabbing cursor-grab ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'
-        }`}
-    >
-      {/* Actions */}
-      <td className={`px-3 py-2 text-center sticky left-0 z-10 ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}>
-        <button
-          onClick={(e) => {
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-            onActionMenuOpen(instrument.insToken, { x: rect.right, y: rect.bottom })
-          }}
-          className="action-menu-trigger text-slate-300 hover:text-slate-100 transition-colors p-1 rounded hover:bg-slate-700"
+    <Draggable draggableId={instrument.insToken.toString()} index={index}>
+      {(provided, snapshot) => (
+        <tr
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          className={`hover:bg-slate-700 transition-colors ${snapshot.isDragging ? 'bg-blue-700' : ''} ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`}
         >
-          <MoreVertical className="w-4 h-4" />
-        </button>
-      </td>
+          <td className={`px-3 py-2 text-center sticky left-0 z-10 ${isEvenRow ? 'bg-slate-800' : 'bg-slate-850'}`} {...provided.dragHandleProps}>
+            <button
+              onClick={(e) => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                onActionMenuOpen(instrument.insToken, { x: rect.right, y: rect.bottom })
+              }}
+              className="action-menu-trigger text-slate-300 hover:text-slate-100 transition-colors p-1 rounded hover:bg-slate-700 cursor-grab active:cursor-grabbing"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          </td>
 
       {/* Buy Button Column */}
       <td className="px-2 py-2 text-center">
@@ -223,7 +223,9 @@ const TableRow = memo(({
       <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.low.toFixed(2)}</span></td>
       <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.close.toFixed(2)}</span></td>
       <td className="px-4 py-2 text-right"><span className="text-slate-400 text-xs font-mono whitespace-nowrap">{lastTradedTime}</span></td>
-    </Reorder.Item>
+        </tr>
+      )}
+    </Draggable>
   )
 })
 
@@ -455,36 +457,49 @@ const MarketWatch: React.FC = () => {
     return filtered;
   }, [feedData, selectedTabTokens, deletingToken, watchlist]);
 
-  const handleReorderSave = (reorderedFeedList: FeedInstrument[]) => {
-    // 1. Update UI state instantly so drag animations remain fluid
-    setFeedData(reorderedFeedList);
+  const handleReorderSave = (result: DropResult) => {
+    const { source, destination, draggableId } = result
+    
+    // If dropped outside a droppable zone
+    if (!destination) return
+    
+    // If dropped in same position
+    if (source.index === destination.index) return
 
-    // 2. Clear any pending API execution timers (Debounce)
+    // Reorder the local state
+    const newList = Array.from(filteredFeedData)
+    const draggedItem = newList[source.index]
+    newList.splice(source.index, 1)
+    newList.splice(destination.index, 0, draggedItem)
+
+    // Update UI immediately so drag animations remain fluid
+    setFeedData(newList)
+
+    // Clear any pending API execution timers (Debounce)
     if (reorderTimeoutRef.current) {
-      clearTimeout(reorderTimeoutRef.current);
+      clearTimeout(reorderTimeoutRef.current)
     }
 
-    // 3. Set a 500ms timer. The API will fire ONLY after the user stops moving the row.
+    // Set a 500ms timer. The API will fire ONLY after the user stops moving the row.
     reorderTimeoutRef.current = setTimeout(async () => {
       try {
-        const userData = localStorage.getItem('userData');
-        if (!userData || !selectedTabId) return;
-        const user = JSON.parse(userData);
-        const userId = user.userId;
+        const userData = localStorage.getItem('userData')
+        if (!userData || !selectedTabId) return
+        const user = JSON.parse(userData)
+        const userId = user.userId
 
-        const selectedTab = watchlistTabs.find(tab => tab.tabId === selectedTabId);
-        if (!selectedTab || !Array.isArray(selectedTab.watchList)) return;
+        const selectedTab = watchlistTabs.find(tab => tab.tabId === selectedTabId)
+        if (!selectedTab || !Array.isArray(selectedTab.watchList)) return
 
-        const reorderedIds = reorderedFeedList
+        const reorderedIds = newList
           .map(feedItem => {
-            const match = selectedTab.watchList.find(w => w.token === feedItem.insToken);
-            return match ? match.id : null;
+            const match = selectedTab.watchList.find(w => w.token === feedItem.insToken)
+            return match ? match.id : null
           })
-          .filter((id): id is number => id !== null);
+          .filter((id): id is number => id !== null)
 
-        if (reorderedIds.length === 0) return;
+        if (reorderedIds.length === 0) return
 
-        console.log("📤 Sending single reorder sync packet to backend...");
         const response = await fetch('https://api-staging.rivoplus.live/user/watchlist/reorder', {
           method: 'POST',
           headers: {
@@ -499,23 +514,22 @@ const MarketWatch: React.FC = () => {
               watchListTabId: selectedTabId
             }
           }),
-        });
+        })
 
-        const result = await response.json();
+        const result = await response.json()
         if (result.responseCode === '0') {
-          toast.success('Watchlist order saved successfully');
-          // Crucial: refresh state tabs so the structural cache stays synced
-          await fetchWatchlistTabs();
+          toast.success('Watchlist order updated')
+          await fetchWatchlistTabs()
         } else {
-          toast.error(result.responseMessage || 'Failed to save order sequence');
+          toast.error(result.responseMessage || 'Failed to save order')
         }
       } catch (error) {
-        console.error('❌ Failed to reorder watchlist:', error);
-        toast.error('Network error saving list order');
+        console.error('Error updating watchlist order:', error)
+        toast.error('Failed to update watchlist')
+        setFeedData(filteredFeedData)
       }
-    }, 500); // 500ms window wrapper
-  };
-
+    }, 500)
+  }
 
   // Throttle price change updates
   const [throttledPriceChanges, setThrottledPriceChanges] = useState<Record<number, PriceChange>>({})
@@ -1008,7 +1022,7 @@ const MarketWatch: React.FC = () => {
           // Optimize: Only update changed instruments
           setFeedData(prevData => {
             // Create a map for fast lookup
-            const dataMap = new Map(data.map(item => [item.insToken, item]))
+            const dataMap = new Map(data.map(item => [item?.insToken, item]))
 
             // Track price changes for animations
             const changes: Record<number, PriceChange> = {}
@@ -1669,30 +1683,31 @@ const MarketWatch: React.FC = () => {
               </div>
 
             </div>
-            {/* Single Scrollable Table Container with Sticky Header */}
-            <div className="flex-1 overflow-auto min-h-0" style={{ maxHeight: 'calc(100vh - 350px)' }}>
-              {/* Fixed Table Header */}
-              <table className="w-full table-fixed border-collapse">
-                <colgroup>
-                  <col style={{ width: `${columnWidths.actions}px` }} />
-                  <col style={{ width: `${columnWidths.buyBtn}px` }} />
-                  <col style={{ width: `${columnWidths.sellBtn}px` }} />
-                  <col style={{ width: `${columnWidths.exchange}px` }} />
-                  <col style={{ width: `${columnWidths.symbol}px` }} />
-                  <col style={{ width: `${columnWidths.expiry}px` }} />
-                  <col style={{ width: `${columnWidths.buyQty}px` }} />
-                  <col style={{ width: `${columnWidths.buyPrice}px` }} />
-                  <col style={{ width: `${columnWidths.sellPrice}px` }} />
-                  <col style={{ width: `${columnWidths.sellQty}px` }} />
-                  <col style={{ width: `${columnWidths.ltp}px` }} />
-                  <col style={{ width: `${columnWidths.netChange}px` }} />
-                  <col style={{ width: `${columnWidths.open}px` }} />
-                  <col style={{ width: `${columnWidths.high}px` }} />
-                  <col style={{ width: `${columnWidths.low}px` }} />
-                  <col style={{ width: `${columnWidths.close}px` }} />
-                  <col style={{ width: `${columnWidths.ltt}px` }} />
-                </colgroup>
-                <thead>
+            {/* Scrollable table wrapper with fixed header */}
+            <DragDropContext onDragEnd={handleReorderSave}>
+              <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 scrollbar-thin scrollbar-thumb-blue-400 dark:scrollbar-thumb-blue-600" style={{ maxHeight: 'calc(100vh - 350px)' }}>
+                {/* Fixed Table Header */}
+                <table className="w-full table-fixed border-collapse">
+              <colgroup>
+                <col style={{ width: `${columnWidths.actions}px` }} />
+                <col style={{ width: `${columnWidths.buyBtn}px` }} />
+                <col style={{ width: `${columnWidths.sellBtn}px` }} />
+                <col style={{ width: `${columnWidths.exchange}px` }} />
+                <col style={{ width: `${columnWidths.symbol}px` }} />
+                <col style={{ width: `${columnWidths.expiry}px` }} />
+                <col style={{ width: `${columnWidths.buyQty}px` }} />
+                <col style={{ width: `${columnWidths.buyPrice}px` }} />
+                <col style={{ width: `${columnWidths.sellPrice}px` }} />
+                <col style={{ width: `${columnWidths.sellQty}px` }} />
+                <col style={{ width: `${columnWidths.ltp}px` }} />
+                <col style={{ width: `${columnWidths.netChange}px` }} />
+                <col style={{ width: `${columnWidths.open}px` }} />
+                <col style={{ width: `${columnWidths.high}px` }} />
+                <col style={{ width: `${columnWidths.low}px` }} />
+                <col style={{ width: `${columnWidths.close}px` }} />
+                <col style={{ width: `${columnWidths.ltt}px` }} />
+              </colgroup>
+              <thead>
                   <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600 sticky top-0 z-10">
                     <th className="px-3 py-3 text-center text-xs font-bold text-white uppercase tracking-wider sticky left-0 bg-slate-800 z-10 relative">
                       Actions
@@ -1815,33 +1830,40 @@ const MarketWatch: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <Reorder.Group
-                  axis="y"
-                  values={filteredFeedData}
-                  onReorder={handleReorderSave}
-                  as="tbody"
-                  className="divide-y divide-slate-700 bg-slate-900"
-                >
-                  {filteredFeedData.map((instrument, index) => (
-                    <TableRow
-                      key={instrument.insToken}
-                      instrument={instrument}
-                      index={index}
-                      config={instrumentConfigRef.current[instrument.insToken]}
-                      changes={throttledPriceChanges[instrument.insToken] || {}}
-                      onActionMenuOpen={(token, position) => {
-                        setActionMenuToken(token)
-                        setActionMenuPosition(position)
+                <Droppable droppableId="watchlist" type="ITEM">
+                  {(provided, snapshot) => (
+                    <tbody
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className="divide-y divide-slate-700 bg-slate-900"
+                      style={{
+                        ...provided.droppableProps.style
                       }}
-                      onBuyClick={onDirectBuyClick}
-                      onSellClick={onDirectSellClick}
-                      deletingToken={deletingToken}
-                    />
-                  ))}
-                </Reorder.Group>
+                    >
+                      {filteredFeedData.map((instrument, index) => (
+                        <TableRow
+                          key={instrument.insToken}
+                          instrument={instrument}
+                          index={index}
+                          config={instrumentConfigRef.current[instrument.insToken]}
+                          changes={throttledPriceChanges[instrument.insToken] || {}}
+                          onActionMenuOpen={(token, position) => {
+                            setActionMenuToken(token)
+                            setActionMenuPosition(position)
+                          }}
+                          onBuyClick={onDirectBuyClick}
+                          onSellClick={onDirectSellClick}
+                          deletingToken={deletingToken}
+                        />
+                      ))}
+                      {provided.placeholder}
+                    </tbody>
+                  )}
+                </Droppable>
               </table>
-            </div>
-          </motion.div>
+              </div>
+            </DragDropContext>
+            </motion.div>
         )}
 
         {/* Action Menu Popup */}

@@ -53,7 +53,7 @@ const validationSchema = Yup.object({
   })
 })
 
-// Initial form values with dummy data for testing
+// Initial form values
 const initialValues = {
   accountName: '',
   userType: '',
@@ -65,7 +65,7 @@ const initialValues = {
   city: '',
   credit: 0,
   remark: '',
-  changePasswordOnFirstLogin: false,
+  changePasswordOnFirstLogin: true,
   autoSquareOff: false,
   addMaster: false,
   pnlSharing: '',
@@ -87,79 +87,13 @@ const initialValues = {
   }
 }
 
-// User type options - will be dynamically set based on logged-in user's role
-const getUserTypeOptions = (roleId: number) => {
-  // roleId: 1 = super_admin, 2 = admin, 3 = master
-  if (roleId === 1) {
-    // Super admin can create admin and master
-    return [
-      { value: 'admin', label: 'Admin', icon: User, description: 'Administrative access' },
-      { value: 'master', label: 'Master', icon: User, description: 'Master account' },
-    ]
-  } else if (roleId === 2) {
-    // Admin can create master and client
-    return [
-      { value: 'master', label: 'Master', icon: User, description: 'Master account' },
-      { value: 'client', label: 'Client', icon: User, description: 'Regular trading client' },
-    ]
-  } else if (roleId === 3) {
-    // Master can create master and client
-    return [
-      { value: 'master', label: 'Master', icon: User, description: 'Master account' },
-      { value: 'client', label: 'Client', icon: User, description: 'Regular trading client' },
-    ]
-  }
-
-  // Default: only client
-  return [
-    { value: 'client', label: 'Client', icon: User, description: 'Regular trading client' },
-  ]
-}
-
-// Exchange data
 const exchangeData = [
-  {
-    key: 'nse',
-    name: 'NSE',
-    fullName: 'National Stock Exchange',
-    defaultGroup: 'NSE_DEFAULT',
-    color: 'bg-blue-500'
-  },
-  {
-    key: 'mcx',
-    name: 'MCX',
-    fullName: 'Multi Commodity Exchange',
-    defaultGroup: 'MCX_2_LOT',
-    color: 'bg-purple-500'
-  },
-  {
-    key: 'sgx',
-    name: 'SGX',
-    fullName: 'Singapore Exchange',
-    defaultGroup: 'SGX_500',
-    color: 'bg-purple-500'
-  },
-  {
-    key: 'cds',
-    name: 'CDS',
-    fullName: 'Currency Derivatives',
-    defaultGroup: 'CDS_25_Lot',
-    color: 'bg-orange-500'
-  },
-  {
-    key: 'callput',
-    name: 'CALLPUT',
-    fullName: 'Options Trading',
-    defaultGroup: 'CALLPUT_10_Lot',
-    color: 'bg-indigo-500'
-  },
-  {
-    key: 'others',
-    name: 'OTHERS',
-    fullName: 'Other Instruments',
-    defaultGroup: 'OTHERS_250',
-    color: 'bg-gray-500'
-  }
+  { key: 'nse', name: 'NSE', fullName: 'National Stock Exchange', defaultGroup: 'NSE_DEFAULT', color: 'bg-blue-500' },
+  { key: 'mcx', name: 'MCX', fullName: 'Multi Commodity Exchange', defaultGroup: 'MCX_2_LOT', color: 'bg-purple-500' },
+  { key: 'sgx', name: 'SGX', fullName: 'Singapore Exchange', defaultGroup: 'SGX_500', color: 'bg-purple-500' },
+  { key: 'cds', name: 'CDS', fullName: 'Currency Derivatives', defaultGroup: 'CDS_25_Lot', color: 'bg-orange-500' },
+  { key: 'callput', name: 'CALLPUT', fullName: 'Options Trading', defaultGroup: 'CALLPUT_10_Lot', color: 'bg-indigo-500' },
+  { key: 'others', name: 'OTHERS', fullName: 'Other Instruments', defaultGroup: 'OTHERS_250', color: 'bg-gray-500' }
 ]
 
 const CreateNewUser: React.FC = () => {
@@ -188,6 +122,7 @@ const CreateNewUser: React.FC = () => {
   const [editingUser, setEditingUser] = useState<any>(null)
   const [selectedUserAllowedExchanges, setSelectedUserAllowedExchanges] = useState<string[]>([])
   const [selectedUserAllowedExchangeCount, setSelectedUserAllowedExchangeCount] = useState(0)
+  const [selectedUserHighLowTradeLimit, setSelectedUserHighLowTradeLimit] = useState<{ nse: boolean; mcx: boolean; sgx: boolean; cds: boolean; callput: boolean }>({ nse: false, mcx: false, sgx: false, cds: false, callput: false })
   const [isFetchingSelectedUserDetails, setIsFetchingSelectedUserDetails] = useState(false)
   const [exchangeGroups, setExchangeGroups] = useState<{ [key: string]: any[] }>({})
   const [groupsLoading, setGroupsLoading] = useState(false)
@@ -241,9 +176,7 @@ const CreateNewUser: React.FC = () => {
         'At least one exchange must be enabled',
         function (exchangesValues) {
           if (!exchangesValues) return false;
-
           return Object.entries(exchangesValues).some(([key, config]: [string, any]) => {
-            // Ensure it respects your filtering mechanism `isExchangeAllowed`
             const allowed = !forUserAccount || selectedUserAllowedExchanges.length === 0 || selectedUserAllowedExchanges.includes(key);
             return allowed && config?.enabled === true;
           });
@@ -266,103 +199,132 @@ const CreateNewUser: React.FC = () => {
     })
   }
 
-  // Fetch user config on component mount
+  // Fetch groups dynamically based on a clean target UserId
+  const fetchExchangeGroupsForUser = async (userId: number) => {
+    try {
+      setGroupsLoading(true)
+      const requestPayload = {
+        requestTimestamp: Date.now(),
+        userId: userId
+      }
+      
+      const response = await groupService.getGroupsByExchangeWiseUserSpecific(requestPayload);
+      const actualData = response?.data ? response.data : response;
+
+      if (actualData) {
+        const groups: { [key: string]: any[] } = {}
+        Object.entries(actualData).forEach(([exchangeName, groupList]: [string, any]) => {
+          if (Array.isArray(groupList)) {
+            // FIX: Filter out backend duplicates using an index filter mapping loop
+            groups[exchangeName.toLowerCase()] = groupList.filter(
+              (item, index, self) => self.findIndex(g => g.groupId === item.groupId) === index
+            )
+          }
+        })
+        setExchangeGroups(groups)
+        return groups
+      }
+      return {}
+    } catch (error) {
+      console.error('❌ Error fetching exchange-wise user groups:', error)
+      toast.error('Failed to update exchange group configuration layout options.')
+      return {}
+    } finally {
+      setGroupsLoading(false)
+    }
+  }
+
+  // Fetch initial user config on mount
   useEffect(() => {
     let isMounted = true;
 
     const fetchUserConfig = async () => {
       if (!isMounted || configFetchedRef.current) return;
-
       configFetchedRef.current = true;
 
       try {
         setConfigLoading(true)
         setConfigError(null)
-        console.log('🔄 [CreateNewUser] Fetching user config...');
-        // Get userId from localStorage
+        
         const userDataStr = localStorage.getItem('userData')
         if (!userDataStr) {
           throw new Error('User data not found in localStorage')
         }
         const userData = JSON.parse(userDataStr)
         const userId = userData.userId || 2
-        const roleId = userData.roleId || 2
 
         const config = await userManagementService.fetchUserConfig(userId)
-        console.log('✅ [CreateNewUser] User config fetched successfully');
 
         if (!isMounted) return;
 
         setUserConfig(config)
-        setOriginalUserConfig(config) // Store original config for restoration
+        setOriginalUserConfig(config)
 
-        // Build user type options based on addMaster field from API
         const options = []
         if (config.addMaster) {
-          // If addMaster is true, allow creating both master and client
           options.push(
             { value: 'master', label: 'Master', icon: User, description: 'Master account' },
             { value: 'client', label: 'Client', icon: User, description: 'Regular trading client' }
           )
         } else {
-          // If addMaster is false, only allow creating client
-          options.push(
-            { value: 'client', label: 'Client', icon: User, description: 'Regular trading client' }
-          )
+          options.push({ value: 'client', label: 'Client', icon: User, description: 'Regular trading client' })
         }
         setUserTypeOptions(options)
         setAvailableUserTypes(options)
 
         if (!isEditMode) {
-          // Only auto-select first user and patch initial values in create mode
-          // Patch initialValues.exchanges from allowedExchanges
+          let currentFetchedGroups = await fetchExchangeGroupsForUser(userId);
           let patchedExchanges = { ...initialValues.exchanges }
           if (config.allowedExchanges && Array.isArray(config.allowedExchanges)) {
             config.allowedExchanges.forEach((ex) => {
               const key = ex.name.toLowerCase() as keyof typeof patchedExchanges
               if (key in patchedExchanges) {
+                const availableExchangeArray = currentFetchedGroups[key] || [];
+                const defaultGroupIdFallback = availableExchangeArray.length > 0 ? String(availableExchangeArray[0].groupId) : '';
+
                 patchedExchanges[key] = {
                   ...patchedExchanges[key],
                   enabled: false,
                   turnoverBrk: false,
                   symbolBrk: false,
-                  group: ex.groupId ? String(ex.groupId) : patchedExchanges[key].group
+                  group: ex.groupId ? String(ex.groupId) : defaultGroupIdFallback
                 }
               }
             })
           }
 
-          // Auto-select first user by default
           const firstUser = config.userList?.[0]
           if (firstUser) {
             const firstUsername = firstUser.username
-            // Set form initial values with first user selected
+            
+            const subGroups = await fetchExchangeGroupsForUser(firstUser.userId);
+            
+            exchangeData.forEach((ex) => {
+              const subExchangeGroupList = subGroups[ex.key] || [];
+              if (subExchangeGroupList.length > 0 && patchedExchanges[ex.key as keyof typeof patchedExchanges]) {
+                patchedExchanges[ex.key as keyof typeof patchedExchanges].group = String(subExchangeGroupList[0].groupId);
+              }
+            });
+
             const initialFormValues = {
               ...initialValues,
               accountName: firstUsername,
               exchanges: patchedExchanges || initialValues.exchanges
             }
             setFormInitialValues(initialFormValues)
-            // Update selected user state
             setSelectedUserRole(firstUser.roleId)
             setSelectedUserId(firstUser.userId)
             setSearchQuery(firstUsername)
-            // Update user config with first user's data
             setUserConfig(prev => ({
               ...(prev || config),
               pnlSharing: firstUser.pnlSharing || 100,
               brokeragePercentage: firstUser.brkSharing || 100,
               credits: firstUser.credits || 0
             }))
-            // If admin (roleId 2) is selected, show only master option
             if (firstUser.roleId === 2) {
-              const masterOnlyOption = [
-                { value: 'master', label: 'Master', icon: User, description: 'Master account' }
-              ]
-              setAvailableUserTypes(masterOnlyOption)
+              setAvailableUserTypes([{ value: 'master', label: 'Master', icon: User, description: 'Master account' }])
             }
           } else {
-            // Fallback if no users available
             setFormInitialValues({
               ...initialValues,
               exchanges: patchedExchanges || initialValues.exchanges
@@ -388,12 +350,9 @@ const CreateNewUser: React.FC = () => {
   // Load editing user data when in edit mode
   useEffect(() => {
     if (isEditMode && editingUserId) {
-      // Find the current tab and get the cached user data
       const currentTab = tabs.find(tab => tab.path.includes(`userId=${editingUserId}`))
-
       if (currentTab?.cacheData?.formData?.editingUserData) {
-        const userData = currentTab.cacheData.formData.editingUserData
-        setEditingUser(userData)
+        setEditingUser(currentTab.cacheData.formData.editingUserData)
       }
     }
   }, [isEditMode, editingUserId, tabs])
@@ -408,9 +367,6 @@ const CreateNewUser: React.FC = () => {
             const apiUserData = response.data.userInfo
             const userSettings = response.data.userSettings
 
-            console.log(response, 'response data')
-
-            // Extract marginSquareOff from userSettings.userInfo array
             let marginSquareOffValue = false
             if (userSettings?.userInfo && Array.isArray(userSettings.userInfo)) {
               const marginSquareOffToggle = userSettings.userInfo.find((item: any) => item.toggle === 'marginSquareOff')
@@ -419,11 +375,12 @@ const CreateNewUser: React.FC = () => {
               }
             }
 
-            // Map API response to editingUser format
+            await fetchExchangeGroupsForUser(parseInt(editingUserId));
+
             setEditingUser({
               name: apiUserData.name,
               username: apiUserData.username,
-              roleId: 3, // Will be overridden by userProfile.roleId if available
+              roleId: 3,
               mobileNumber: apiUserData.mobileNumber,
               city: apiUserData.city,
               mobile: apiUserData.mobileNumber,
@@ -448,11 +405,6 @@ const CreateNewUser: React.FC = () => {
     }
   }, [isEditMode, editingUserId, editingUser])
 
-  // Fetch exchange groups when component loads
-  useEffect(() => {
-    fetchExchangeGroupsForAll()
-  }, [])
-
   // Compute patched form initial values using useMemo
   const patchedFormInitialValues = React.useMemo(() => {
     if (isEditMode && editingUser && userConfig && !configLoading) {
@@ -465,19 +417,20 @@ const CreateNewUser: React.FC = () => {
         callput: { enabled: false, turnoverBrk: false, symbolBrk: false, group: '', highLowLimit: false },
         others: { enabled: false, turnoverBrk: false, symbolBrk: false, group: '', highLowLimit: false }
       };
+      
       allowedExchangesArr.forEach((ex: any) => {
         const key = ex.name?.toLowerCase();
         if (key && exchangesObj.hasOwnProperty(key)) {
-          // Check if this key belongs to the permanently locked turnover columns
           const isLockedTurnover = ['nse', 'sgx', 'others'].includes(key);
+
+          const fallbackArr = exchangeGroups[key] || [];
+          const matchedGroupIdValue = ex.groupId ? String(ex.groupId) : (fallbackArr.length > 0 ? String(fallbackArr[0].groupId) : '');
 
           exchangesObj[key] = {
             enabled: true,
-            // Force true for locked rows, otherwise use API value
             turnoverBrk: isLockedTurnover ? true : !!ex.turnover,
-            // Force false for locked rows, otherwise calculate from API value
             symbolBrk: isLockedTurnover ? false : (!!ex.turnover ? false : !!ex.lot),
-            group: ex.groupName ? ex.groupName : '',
+            group: matchedGroupIdValue,
             highLowLimit: false
           };
         }
@@ -534,14 +487,13 @@ const CreateNewUser: React.FC = () => {
       return patched;
     }
     return formInitialValues;
-  }, [isEditMode, editingUser, userConfig, configLoading, formInitialValues]);
+  }, [isEditMode, editingUser, userConfig, configLoading, formInitialValues, exchangeGroups]);
 
   // Handler for when user selects an account from dropdown
   const handleAccountChange = async (username: string, setFieldValue: any) => {
     setFieldValue('accountName', username)
 
     if (!username) {
-      // If cleared, reset to default - restore original userConfig values
       setSelectedUserRole(null)
       setSelectedUserId(null)
       setAvailableUserTypes(userTypeOptions)
@@ -549,14 +501,12 @@ const CreateNewUser: React.FC = () => {
       setSelectedUserAllowedExchanges([])
       setSelectedUserAllowedExchangeCount(0)
 
-      // Restore original userConfig
       if (originalUserConfig) {
         setUserConfig(originalUserConfig)
       }
       return
     }
 
-    // Find the selected user in userList
     const selectedUser = userConfig?.userList?.find(user => user.username === username)
 
     if (selectedUser) {
@@ -564,7 +514,6 @@ const CreateNewUser: React.FC = () => {
       setSelectedUserRole(selectedRoleId)
       setSelectedUserId(selectedUser.userId)
 
-      // Update userConfig with selected user's pnlSharing and brkSharing values
       if (userConfig) {
         setUserConfig({
           ...userConfig,
@@ -574,51 +523,76 @@ const CreateNewUser: React.FC = () => {
         })
       }
 
-      // If admin (roleId 2) is selected, show only master option
       if (selectedRoleId === 2) {
-        const masterOnlyOption = [
-          { value: 'master', label: 'Master', icon: User, description: 'Master account' }
-        ]
-        setAvailableUserTypes(masterOnlyOption)
+        setAvailableUserTypes([{ value: 'master', label: 'Master', icon: User, description: 'Master account' }])
         setFieldValue('userType', 'master')
       } else {
-        // For other roles, show all available options
         setAvailableUserTypes(userTypeOptions)
         setFieldValue('userType', '')
       }
 
-      // Fetch selected user details to get allowed exchanges
       try {
         setIsFetchingSelectedUserDetails(true)
+        
+        const freshSubGroups = await fetchExchangeGroupsForUser(selectedUser.userId);
+
         const detailsResponse = await userManagementService.fetchUserDetails(selectedUser.userId)
         const userInfo = detailsResponse?.data?.userInfo
         const allowed = userInfo?.allowedExchanges || []
         let allowedKeys = Array.isArray(allowed)
-          ? allowed
-            .map((ex: any) => (ex?.name || '').toString().toLowerCase())
-            .filter((name: string) => name)
+          ? allowed.map((ex: any) => (ex?.name || '').toString().toLowerCase()).filter((name: string) => name)
           : []
 
-        // Fallback to comma-separated exchanges string if allowedExchanges is empty
         if (allowedKeys.length === 0 && typeof userInfo?.exchanges === 'string') {
-          allowedKeys = userInfo.exchanges
-            .split(',')
-            .map((name) => name.trim().toLowerCase())
-            .filter((name: string) => name)
+          allowedKeys = userInfo.exchanges.split(',').map((name: string) => name.trim().toLowerCase()).filter((name: string) => name)
         }
 
         setSelectedUserAllowedExchanges(allowedKeys)
         setSelectedUserAllowedExchangeCount(allowedKeys.length)
 
-        // Disable exchanges not allowed for the selected user
+        // Check addMaster flag from fetched user details and update available user types
+        const userAddMaster = userInfo?.addMaster ?? false
+        if (!userAddMaster) {
+          // If addMaster is false, only allow client type
+          const clientOnlyOption = [{ value: 'client', label: 'Client', icon: User, description: 'Regular trading client' }]
+          setAvailableUserTypes(clientOnlyOption)
+          setFieldValue('userType', 'client')
+        }
+
         exchangeData.forEach((ex) => {
           const allowedForUser = allowedKeys.length === 0 || allowedKeys.includes(ex.key)
+          const targetedGroupArray = freshSubGroups[ex.key] || [];
+          const defaultIdString = targetedGroupArray.length > 0 ? String(targetedGroupArray[0].groupId) : '';
+
           if (!allowedForUser) {
             setFieldValue(`exchanges.${ex.key}.enabled`, false)
             setFieldValue(`exchanges.${ex.key}.turnoverBrk`, false)
             setFieldValue(`exchanges.${ex.key}.symbolBrk`, false)
+            setFieldValue(`exchanges.${ex.key}.group`, '')
+          } else {
+            setFieldValue(`exchanges.${ex.key}.group`, defaultIdString);
           }
         })
+
+        // Reset and populate High/Low Trade Limit checkboxes
+        let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
+        
+        const highLowTradeLimit = userInfo?.highLowTradeLimit || '';
+        if (highLowTradeLimit) {
+          const highArr = Array.isArray(highLowTradeLimit)
+            ? highLowTradeLimit
+            : String(highLowTradeLimit).split(',');
+          
+          highArr.forEach((ex: string) => {
+            const key = ex.trim().toLowerCase();
+            if (key === 'nse' || key === 'mcx' || key === 'sgx' || key === 'cds' || key === 'callput') {
+              highTradeLimitObj[key as keyof typeof highTradeLimitObj] = true;
+            }
+          });
+        }
+        
+        // Store in state instead of directly setting form values
+        setSelectedUserHighLowTradeLimit(highTradeLimitObj);
       } catch (error) {
         console.error('❌ Error fetching selected user details:', error)
         setSelectedUserAllowedExchanges([])
@@ -632,6 +606,7 @@ const CreateNewUser: React.FC = () => {
       setAvailableUserTypes(userTypeOptions)
       setSelectedUserAllowedExchanges([])
       setSelectedUserAllowedExchangeCount(0)
+      setSelectedUserHighLowTradeLimit({ nse: false, mcx: false, sgx: false, cds: false, callput: false })
     }
   }
 
@@ -647,10 +622,6 @@ const CreateNewUser: React.FC = () => {
       setUsernameError(null)
 
       const response = await userManagementService.checkUsername(username)
-
-      console.log('✅ Username validation response:', response)
-
-      // Check response code - if "0" or "1000" means valid/available
       const code = response?.responseCode ?? response?.data?.responseCode ?? null
       const message = response?.responseMessage ?? response?.data?.responseMessage ?? 'Username validation failed'
 
@@ -674,46 +645,8 @@ const CreateNewUser: React.FC = () => {
     return selectedUserAllowedExchanges.includes(key)
   }
 
-  // Fetch groups for all exchanges
-  const fetchExchangeGroupsForAll = async () => {
+  const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
     try {
-      setGroupsLoading(true)
-      const response = await groupService.getGroupsByExchangeWise()
-
-      if (response?.responseCode === '0' && response?.data) {
-        const groups: { [key: string]: any[] } = {}
-
-        // Process each exchange and store full group objects
-        Object.entries(response.data).forEach(([exchangeName, groupList]: [string, any]) => {
-          if (Array.isArray(groupList)) {
-            groups[exchangeName.toLowerCase()] = groupList
-          }
-        })
-
-        setExchangeGroups(groups)
-      }
-    } catch (error) {
-      console.error('❌ Error fetching exchange groups:', error)
-      toast.error('Failed to fetch exchange groups')
-    } finally {
-      setGroupsLoading(false)
-    }
-  }
-
-  // Helper function to get groupId from selected group name
-  const getGroupIdFromName = (exchangeKey: string, groupName: string): number | null => {
-    const groups = exchangeGroups[exchangeKey]
-    if (!groups || !Array.isArray(groups)) return null
-
-    const group = groups.find((g: any) => g.groupName === groupName)
-    return group?.groupId || null
-  }
-
- const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
-    try {
-      console.log('Form Submitted:', values)
-
-      // 1. Mandatory Brokerage Guard: Ensure all enabled exchanges have at least one brokerage type selected
       const enabledExchangesWithoutBrokerage = Object.entries(values.exchanges)
         .filter(([key, exchange]: [string, any]) => isExchangeAllowed(key) && exchange.enabled)
         .filter(([key, exchange]: [string, any]) => !exchange.turnoverBrk && !exchange.symbolBrk)
@@ -721,52 +654,44 @@ const CreateNewUser: React.FC = () => {
 
       if (enabledExchangesWithoutBrokerage.length > 0) {
         toast.error(`Please select either Turnover or Symbol Brokerage for: ${enabledExchangesWithoutBrokerage.join(', ')}`);
-        return; // Absolute stop to prevent invalid submission
+        return;
       }
 
-      // 2. Check if there's a username validation error (Create Mode only)
       if (!isEditMode && usernameError) {
         toast.error('Please fix username validation errors before submitting')
         return
       }
 
-      // 3. Validate that all enabled and allowed exchanges have a group selected (only for clients, not masters)
       if (values.userType === 'client') {
         const enabledExchangesWithoutGroup = Object.entries(values.exchanges)
           .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled && !exchange.group)
           .map(([key]) => key.toUpperCase())
 
         if (enabledExchangesWithoutGroup.length > 0) {
-          toast.error(`Please select groups for: ${enabledExchangesWithoutGroup.join(', ')}`)
-          return
+          toast.error(`Please select groups for: ${enabledExchangesWithoutGroup.join(', ')}`);
+          return;
         }
       }
 
       if (isEditMode && editingUser) {
-        // ==========================================================
-        // EDIT MODE - Use editUserDetails API
-        // ==========================================================
         const userDataStr = localStorage.getItem('userData')
         const userData = userDataStr ? JSON.parse(userDataStr) : null
         const parentUserId = userData?.userId || 2
 
-        // Prepare allowedExchanges array from form values - only include allowed and enabled exchanges
         const allowedExchanges = Object.entries(values.exchanges)
           .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled)
           .map(([key, exchange]) => ({
             name: key.toUpperCase(),
             turnover: exchange.turnoverBrk,
             lot: exchange.symbolBrk,
-            groupId: exchange.group ? getGroupIdFromName(key, exchange.group) : null
+            groupId: exchange.group ? Number(exchange.group) : null
           }))
 
-        // Prepare highLowTradeLimit
         const highLowTradeLimit = Object.entries(values.highTradeLimit)
           .filter(([key, isEnabled]) => isEnabled)
           .map(([key]) => key.toUpperCase())
           .join(',')
 
-        // Build update payload - only include editable fields from API spec
         const updatePayload = {
           name: values.name,
           mobileNumber: values.mobileNumber,
@@ -781,54 +706,38 @@ const CreateNewUser: React.FC = () => {
           marginSquareOff: values.autoSquareOff
         }
 
-        console.log('📤 Update User API Payload:', updatePayload)
-
         const response = await userManagementService.editUserDetails(parentUserId, parseInt(editingUserId!), updatePayload)
-
-        console.log('✅ API Response:', response)
 
         if (response?.responseCode === '0' || response?.responseCode === '1000') {
           toast.success(response?.responseMessage || 'User updated successfully!')
-
-          // Clear userList cache so it refetches fresh data
           sessionStorage.removeItem('userListCache')
           sessionStorage.removeItem('userListCacheTime')
 
-          // Close the current tab
           const currentTab = tabs.find(tab => tab.path.includes(`userId=${editingUserId}`))
           if (currentTab) {
             removeTab(currentTab.id)
           }
-
-          // Navigate back immediately
           navigateWithScrollToTop(navigate, '/dashboard/user-list')
         } else {
           toast.error(response?.responseMessage || 'Failed to update user')
         }
       } else {
-        // ==========================================================
-        // CREATE MODE - Original logic
-        // ==========================================================
-        // Map userType to roleId (3 = master, 4 = client)
         const roleId = values.userType === 'master' ? 3 : 4
 
-        // Prepare allowedExchanges array from form values - only include allowed and enabled exchanges
         const allowedExchanges = Object.entries(values.exchanges)
           .filter(([key, exchange]) => isExchangeAllowed(key) && exchange.enabled)
           .map(([key, exchange]) => ({
             name: key.toUpperCase(),
             turnover: exchange.turnoverBrk,
             lot: exchange.symbolBrk,
-            groupId: exchange.group ? getGroupIdFromName(key, exchange.group) : null
+            groupId: exchange.group ? Number(exchange.group) : null
           }))
 
-        // Prepare highLowTradeLimit from High Trade Limit section (when admin account is selected)
         const highLowTradeLimit = Object.entries(values.highTradeLimit)
           .filter(([key, isEnabled]) => isEnabled)
           .map(([key]) => key.toUpperCase())
           .join(',')
 
-        // Prepare API payload
         const apiPayload = {
           userType: roleId,
           name: values.name,
@@ -846,41 +755,25 @@ const CreateNewUser: React.FC = () => {
           allowedExchanges
         }
 
-        console.log('📤 API Payload:', apiPayload)
-
-        // Call API with the selected user's ID (or fallback to logged-in user's ID)
         const response = await userManagementService.createUser(apiPayload, selectedUserId)
 
-        console.log('✅ API Response:', response)
-
-        // Check response code - "0" or "1000" is success, anything else is error
         if (response?.responseCode === '0' || response?.responseCode === '1000') {
           toast.success(response?.responseMessage || 'User created successfully!')
-
-          // Clear userList cache so it refetches fresh data
           sessionStorage.removeItem('userListCache')
           sessionStorage.removeItem('userListCacheTime')
-
-          // Clear the form and reset to initial values
           resetForm()
-
-          // Reset the selectedUserRole, selectedUserId and availableUserTypes
           setSelectedUserRole(null)
           setSelectedUserId(null)
           setAvailableUserTypes(userTypeOptions)
-
-          // Optionally navigate back after a short delay to show the success message
           setTimeout(() => {
             navigateWithScrollToTop(navigate, '/dashboard')
           }, 1500)
         } else {
-          // Handle API error response
           toast.error(response?.responseMessage || 'Failed to create user')
         }
       }
     } catch (error: any) {
       console.error('❌ Error:', error)
-      // Check if error response has the standard format
       const errorData = error.response?.data
       const errorMessage = errorData?.responseMessage || error.message || 'Failed to process request'
       toast.error(errorMessage)
@@ -891,15 +784,10 @@ const CreateNewUser: React.FC = () => {
     <div className="min-h-screen bg-bg-primary">
       <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <div className="mb-2">
             <h1 className="text-2xl font-bold text-text-primary">
               {isEditMode ? `Update User - ${editingUser?.username || ''}` : 'Create New User'}
-
             </h1>
             <p className="text-text-secondary text-sm">
               {isEditMode ? 'Update user account details and exchange permissions' : 'Set up a new trading account with exchange permissions'}
@@ -909,11 +797,7 @@ const CreateNewUser: React.FC = () => {
 
         {/* Loading State */}
         {configLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-surface-primary border border-border-primary rounded-2xl p-8 text-center"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-surface-primary border border-border-primary rounded-2xl p-8 text-center">
             <div className="flex justify-center mb-4">
               <div className="w-8 h-8 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
             </div>
@@ -923,11 +807,7 @@ const CreateNewUser: React.FC = () => {
 
         {/* Error State */}
         {configError && !configLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-6"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-6">
             <div className="flex items-start gap-3">
               <div className="text-red-500 mt-1">⚠️</div>
               <div>
@@ -938,11 +818,12 @@ const CreateNewUser: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Success State - Show form and config */}
+        {/* Success State */}
         {!configLoading && userConfig && (
           <Formik
-            key={isEditMode ? `edit-${editingUserId}` : 'create'}
-            enableReinitialize={isEditMode}
+            // Key handles cache state reset and prevents stale layout components matching conflicts
+            key={isEditMode ? `edit-${editingUserId}-${Object.keys(exchangeGroups).length}` : `create-${Object.keys(exchangeGroups).length}`}
+            enableReinitialize={true} 
             initialValues={patchedFormInitialValues}
             validationSchema={getValidationSchema()}
             validateOnChange={true}
@@ -950,26 +831,16 @@ const CreateNewUser: React.FC = () => {
             onSubmit={handleSubmit}
           >
             {({ values, errors, touched, setFieldValue, isValid, validateForm }: any) => {
-              // Debug: Log what Formik received and what it has
-              React.useEffect(() => {
-                console.log('🎨 [Formik Render] Current values in form:', {
-                  credit: values.credit,
-                  remark: values.remark,
-                  username: values.username,
-                  name: values.name
-                })
-                console.log('🎨 [Formik Render] patchedFormInitialValues passed to Formik:', {
-                  credit: patchedFormInitialValues.credit,
-                  remark: patchedFormInitialValues.remark,
-                  username: patchedFormInitialValues.username,
-                  name: patchedFormInitialValues.name
-                })
-              }, [values.credit, values.remark, values.username, values.name])
-
-              // Re-validate when selectedUserRole or availableUserTypes change
               React.useEffect(() => {
                 validateForm()
               }, [selectedUserRole, availableUserTypes.length, validateForm])
+
+              // Update High Trade Limit values when a user is selected
+              React.useEffect(() => {
+                if (!isEditMode && selectedUserHighLowTradeLimit) {
+                  setFieldValue('highTradeLimit', selectedUserHighLowTradeLimit);
+                }
+              }, [selectedUserHighLowTradeLimit, isEditMode, setFieldValue])
 
               const visibleExchangeData = forUserAccount && selectedUserAllowedExchanges.length > 0
                 ? exchangeData.filter((ex) => isExchangeAllowed(ex.key))
@@ -977,13 +848,9 @@ const CreateNewUser: React.FC = () => {
 
               return (
                 <Form className="space-y-6">
-                  {/* Account Selection - Hidden in Edit Mode */}
+                  {/* Account Selection */}
                   {!isEditMode && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-surface-primary border border-border-primary rounded-2xl p-6"
-                    >
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-primary border border-border-primary rounded-2xl p-6">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-8 h-8 bg-brand-primary/20 rounded-lg flex items-center justify-center">
                           <User className="w-4 h-4 text-brand-primary" />
@@ -1003,7 +870,6 @@ const CreateNewUser: React.FC = () => {
                                 onChange={(e) => {
                                   const checked = e.target.checked
                                   setForUserAccount(checked)
-                                  // If disabled now (unchecked), reset to first option
                                   if (!checked) {
                                     const defaultAccount = userConfig?.userList && userConfig.userList.length > 0 ? userConfig.userList[0].username : ''
                                     setFieldValue('accountName', defaultAccount)
@@ -1026,7 +892,6 @@ const CreateNewUser: React.FC = () => {
                               }}
                               onFocus={() => setShowDropdown(true)}
                               onBlur={() => {
-                                // Delay to allow click on dropdown item
                                 setTimeout(() => setShowDropdown(false), 200)
                               }}
                               placeholder="Search user..."
@@ -1035,7 +900,6 @@ const CreateNewUser: React.FC = () => {
                             />
                             <RefreshCw className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
 
-                            {/* Dropdown */}
                             {showDropdown && forUserAccount && userConfig?.userList && (
                               <div className="absolute z-10 w-full mt-1 bg-surface-secondary border border-border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto">
                                 {userConfig.userList
@@ -1061,9 +925,7 @@ const CreateNewUser: React.FC = () => {
                                   user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                   user.name.toLowerCase().includes(searchQuery.toLowerCase())
                                 ).length === 0 && (
-                                    <div className="px-4 py-2 text-text-secondary text-sm">
-                                      No users found
-                                    </div>
+                                    <div className="px-4 py-2 text-text-secondary text-sm">No users found</div>
                                   )}
                               </div>
                             )}
@@ -1074,31 +936,25 @@ const CreateNewUser: React.FC = () => {
                           {({ field, meta, form }: any) => {
                             return (
                               <div>
-                                <label className="block text-xs text-text-secondary mb-1">
-                                  Select Type
-                                </label>
+                                <label className="block text-xs text-text-secondary mb-1">Select Type</label>
                                 <select
                                   value={field.value}
                                   onChange={(e) => {
                                     const newValue = e.target.value
                                     form.setFieldValue('userType', newValue)
-
-                                    // Immediately update exchanges based on user type
                                     if (!isEditMode) {
-                                      // Both master and client have the same exchange settings
                                       form.setFieldValue('exchanges', {
-                                        nse: { enabled: false, turnoverBrk: true, symbolBrk: false, group: '', highLowLimit: false },
-                                        mcx: { enabled: false, turnoverBrk: true, symbolBrk: false, group: '', highLowLimit: false },
-                                        sgx: { enabled: false, turnoverBrk: true, symbolBrk: false, group: '', highLowLimit: false },
-                                        cds: { enabled: false, turnoverBrk: false, symbolBrk: true, group: '', highLowLimit: false },
-                                        callput: { enabled: false, turnoverBrk: false, symbolBrk: true, group: '', highLowLimit: false },
-                                        others: { enabled: false, turnoverBrk: true, symbolBrk: false, group: '', highLowLimit: false }
+                                        nse: { enabled: false, turnoverBrk: true, symbolBrk: false, group: values?.exchanges?.nse?.group || '', highLowLimit: false },
+                                        mcx: { enabled: false, turnoverBrk: true, symbolBrk: false, group: values?.exchanges?.mcx?.group || '', highLowLimit: false },
+                                        sgx: { enabled: false, turnoverBrk: true, symbolBrk: false, group: values?.exchanges?.sgx?.group || '', highLowLimit: false },
+                                        cds: { enabled: false, turnoverBrk: false, symbolBrk: true, group: values?.exchanges?.cds?.group || '', highLowLimit: false },
+                                        callput: { enabled: false, turnoverBrk: false, symbolBrk: true, group: values?.exchanges?.callput?.group || '', highLowLimit: false },
+                                        others: { enabled: false, turnoverBrk: true, symbolBrk: false, group: values?.exchanges?.others?.group || '', highLowLimit: false }
                                       })
                                     }
                                   }}
                                   disabled={availableUserTypes.length === 0}
-                                  className={`w-full h-12 px-4 py-3 bg-surface-secondary border border-border-primary rounded-lg text-text-primary focus:ring-2 focus:ring-brand-primary ${availableUserTypes.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                                    }`}
+                                  className={`w-full h-12 px-4 py-3 bg-surface-secondary border border-border-primary rounded-lg text-text-primary focus:ring-2 focus:ring-brand-primary ${availableUserTypes.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                   <option value="">Select user type</option>
                                   {availableUserTypes.map(opt => (
@@ -1117,12 +973,7 @@ const CreateNewUser: React.FC = () => {
                   )}
 
                   {/* User Details */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="bg-surface-primary border border-border-primary rounded-2xl p-6"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-surface-primary border border-border-primary rounded-2xl p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
                         <User className="w-4 h-4 text-purple-500" />
@@ -1240,7 +1091,6 @@ const CreateNewUser: React.FC = () => {
                         )}
                       </Field>
 
-                      {/* Credit Field - Hidden in Edit Mode */}
                       {!isEditMode && (
                         <Field name="credit">
                           {({ field, meta }: any) => {
@@ -1260,20 +1110,10 @@ const CreateNewUser: React.FC = () => {
                                   onBlur={field.onBlur}
                                   name={field.name}
                                   onKeyDown={(e) => {
-                                    // 1. Block Keyboard Up and Down arrow keys
-                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                                      e.preventDefault();
-                                    }
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
                                   }}
-                                  onWheel={(e) => {
-                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
-                                    e.currentTarget.blur();
-                                  }}
-                                  error={
-                                    isExceeding
-                                      ? `Cannot exceed available credit of ${availableCredit}`
-                                      : meta.touched && meta.error ? meta.error : ''
-                                  }
+                                  onWheel={(e) => e.currentTarget.blur()}
+                                  error={isExceeding ? `Cannot exceed available credit of ${availableCredit}` : meta.touched && meta.error ? meta.error : ''}
                                   isValid={field.value !== '' && field.value !== 0 && !meta.error && !isExceeding}
                                   min="0"
                                   step="1"
@@ -1302,34 +1142,23 @@ const CreateNewUser: React.FC = () => {
                     </div>
                   </motion.div>
 
-                  {/* Partnership Share Detail - Only show when userType is master */}
+                  {/* Partnership Share Detail */}
                   {values.userType === 'master' && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                      className="bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-red-500/10 border-2 border-purple-500/30 rounded-2xl p-6"
-                    >
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-red-500/10 border-2 border-purple-500/30 rounded-2xl p-6">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
                           <CreditCard className="w-5 h-5 text-white" />
                         </div>
-                        <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">
-                          Partnership Share Detail
-                        </h3>
+                        <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">Partnership Share Detail</h3>
                       </div>
 
-                      {/* PROFIT & LOSS SHARING */}
                       <div className="mb-6">
-                        <label className="block text-sm font-semibold text-text-primary mb-3 uppercase tracking-wide">
-                          Profit & Loss Sharing*
-                        </label>
+                        <label className="block text-sm font-semibold text-text-primary mb-3 uppercase tracking-wide">Profit & Loss Sharing*</label>
                         <Field name="pnlSharing">
                           {({ field, meta }: any) => {
                             const availablePnl = userConfig?.pnlSharing || 100
                             const currentValue = field.value ?? 0
                             const isExceeding = currentValue > availablePnl
-                            const remaining = availablePnl - currentValue
 
                             return (
                               <div>
@@ -1338,39 +1167,19 @@ const CreateNewUser: React.FC = () => {
                                   placeholder="Enter Profit & Loss sharing"
                                   value={field.value ?? ''}
                                   onChange={field.onChange}
-                                  onKeyDown={(e) => {
-                                    // Block Up and Down arrow keys
-                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                  onWheel={(e) => {
-                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
-                                    e.currentTarget.blur();
-                                  }}
+                                  onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                                  onWheel={(e) => e.currentTarget.blur()}
                                   onBlur={(e) => {
                                     field.onBlur(e)
-                                    // Trigger validation on blur only if truly empty (not zero)
-                                    if (field.value === '' || field.value === null || field.value === undefined) {
-                                      setTimeout(() => field.onBlur(e), 0)
-                                    }
+                                    if (field.value === '' || field.value === null || field.value === undefined) setTimeout(() => field.onBlur(e), 0);
                                   }}
                                   name={field.name}
                                   min="0"
                                   step="0.01"
-                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error)
-                                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                                    : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'
-                                    }`}
+                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error) ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'}`}
                                 />
-                                {isExceeding && (
-                                  <div className="mt-1 text-xs text-red-400">
-                                    Cannot exceed available P&L sharing of {availablePnl}
-                                  </div>
-                                )}
-                                {meta.touched && meta.error && !isExceeding && (
-                                  <div className="mt-1 text-xs text-red-400">{meta.error}</div>
-                                )}
+                                {isExceeding && <div className="mt-1 text-xs text-red-400">Cannot exceed available P&L sharing of {availablePnl}</div>}
+                                {meta.touched && meta.error && !isExceeding && <div className="mt-1 text-xs text-red-400">{meta.error}</div>}
                               </div>
                             )
                           }}
@@ -1383,68 +1192,41 @@ const CreateNewUser: React.FC = () => {
                           </div>
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Remaining</p>
-                            <p className={`text-2xl font-bold ${(values.pnlSharing || 0) > (userConfig?.pnlSharing || 100)
-                              ? 'text-red-500'
-                              : 'text-text-primary'
-                              }`}>
+                            <p className={`text-2xl font-bold ${(values.pnlSharing || 0) > (userConfig?.pnlSharing || 100) ? 'text-red-500' : 'text-text-primary'}`}>
                               {((userConfig?.pnlSharing || 100) - (values.pnlSharing || 0)).toFixed(2)}
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      {/* BRK SHARING */}
                       <div>
-                        <label className="block text-sm font-semibold text-text-primary mb-3 uppercase tracking-wide">
-                          BRK Sharing*
-                        </label>
+                        <label className="block text-sm font-semibold text-text-primary mb-3 uppercase tracking-wide">BRK Sharing*</label>
                         <Field name="brokerageSharing">
                           {({ field, meta }: any) => {
                             const availableBrokerage = userConfig?.brokeragePercentage || 100
                             const currentValue = field.value ?? 0
                             const isExceeding = currentValue > availableBrokerage
-                            const remaining = availableBrokerage - currentValue
 
                             return (
                               <div>
                                 <input
                                   type="number"
                                   placeholder="Enter Brokerage sharing"
-                                  onKeyDown={(e) => {
-                                    // Block Up and Down arrow keys
-                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                                      e.preventDefault();
-                                    }
-                                  }}
+                                  onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                   value={field.value ?? ''}
                                   onChange={field.onChange}
-                                  onWheel={(e) => {
-                                    // 2. Block Mouse wheel / Trackpad scrolling from changing numbers
-                                    e.currentTarget.blur();
-                                  }}
+                                  onWheel={(e) => e.currentTarget.blur()}
                                   onBlur={(e) => {
                                     field.onBlur(e)
-                                    // Trigger validation on blur only if truly empty (not zero)
-                                    if (field.value === '' || field.value === null || field.value === undefined) {
-                                      setTimeout(() => field.onBlur(e), 0)
-                                    }
+                                    if (field.value === '' || field.value === null || field.value === undefined) setTimeout(() => field.onBlur(e), 0);
                                   }}
                                   name={field.name}
                                   min="0"
                                   step="0.01"
-                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error)
-                                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                                    : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'
-                                    }`}
+                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error) ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'}`}
                                 />
-                                {isExceeding && (
-                                  <div className="mt-1 text-xs text-red-400">
-                                    Cannot exceed available brokerage of {availableBrokerage}
-                                  </div>
-                                )}
-                                {meta.touched && meta.error && !isExceeding && (
-                                  <div className="mt-1 text-xs text-red-400">{meta.error}</div>
-                                )}
+                                {isExceeding && <div className="mt-1 text-xs text-red-400">Cannot exceed available brokerage of {availableBrokerage}</div>}
+                                {meta.touched && meta.error && !isExceeding && <div className="mt-1 text-xs text-red-400">{meta.error}</div>}
                               </div>
                             )
                           }}
@@ -1457,10 +1239,7 @@ const CreateNewUser: React.FC = () => {
                           </div>
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Remaining</p>
-                            <p className={`text-2xl font-bold ${(values.brokerageSharing || 0) > (userConfig?.brokeragePercentage || 100)
-                              ? 'text-red-500'
-                              : 'text-text-primary'
-                              }`}>
+                            <p className={`text-2xl font-bold ${(values.brokerageSharing || 0) > (userConfig?.brokeragePercentage || 100) ? 'text-red-500' : 'text-text-primary'}`}>
                               {((userConfig?.brokeragePercentage || 100) - (values.brokerageSharing || 0)).toFixed(2)}
                             </p>
                           </div>
@@ -1470,12 +1249,7 @@ const CreateNewUser: React.FC = () => {
                   )}
 
                   {/* Exchange Settings */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="bg-surface-primary border border-border-primary rounded-2xl p-6"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-surface-primary border border-border-primary rounded-2xl p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
                         <TrendingUp className="w-4 h-4 text-purple-500" />
@@ -1484,32 +1258,26 @@ const CreateNewUser: React.FC = () => {
                         <h3 className="text-lg font-semibold text-text-primary">Exchange Settings</h3>
                         {forUserAccount && (
                           <p className="text-xs text-text-secondary mt-1">
-                            {isFetchingSelectedUserDetails
-                              ? 'Loading allowed exchanges…'
-                              : `Allowed exchanges: ${selectedUserAllowedExchangeCount}`}
+                            {isFetchingSelectedUserDetails ? 'Loading allowed exchanges…' : `Allowed exchanges: ${selectedUserAllowedExchangeCount}`}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    {/* Master View - Only Exchange Selection */}
                     {values.userType === 'master' ? (
                       <div>
                         <div className="flex items-center justify-end mb-3">
-                          {/* Select All Toggle */}
                           <div className="flex items-center gap-3">
                             <span className="text-sm text-text-secondary">Select All</span>
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
                                 className="sr-only peer"
-                                checked={visibleExchangeData.every((ex) => values.exchanges[ex.key as keyof typeof values.exchanges].enabled)}
+                                checked={visibleExchangeData.every((ex) => values?.exchanges?.[ex.key]?.enabled)}
                                 onChange={(e) => {
                                   const checked = e.target.checked
                                   visibleExchangeData.forEach((ex) => {
-                                    if (isExchangeAllowed(ex.key)) {
-                                      setFieldValue(`exchanges.${ex.key}.enabled`, checked)
-                                    }
+                                    if (isExchangeAllowed(ex.key)) setFieldValue(`exchanges.${ex.key}.enabled`, checked);
                                   })
                                 }}
                               />
@@ -1520,10 +1288,7 @@ const CreateNewUser: React.FC = () => {
 
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                           {visibleExchangeData.map((exchange) => (
-                            <div
-                              key={exchange.key}
-                              className="bg-surface-secondary border border-border-primary rounded-lg p-4 hover:border-brand-primary transition-all"
-                            >
+                            <div key={exchange.key} className="bg-surface-secondary border border-border-primary rounded-lg p-4 hover:border-brand-primary transition-all">
                               <div className="flex items-center gap-3 mb-3">
                                 <div className={`w-10 h-10 ${exchange.color} rounded-lg flex items-center justify-center`}>
                                   <span className="text-white text-sm font-bold">{exchange.name.slice(0, 2)}</span>
@@ -1533,7 +1298,6 @@ const CreateNewUser: React.FC = () => {
                                   <div className="text-xs text-text-secondary">{exchange.fullName}</div>
                                 </div>
                               </div>
-
                               <div className="flex items-center justify-center gap-2">
                                 <label className="flex items-center gap-2 cursor-pointer">
                                   <span className="text-sm text-text-secondary">Enable</span>
@@ -1541,7 +1305,7 @@ const CreateNewUser: React.FC = () => {
                                     <input
                                       type="checkbox"
                                       className="sr-only peer"
-                                      checked={values.exchanges[exchange.key as keyof typeof values.exchanges].enabled}
+                                      checked={!!values?.exchanges?.[exchange.key]?.enabled}
                                       onChange={(e) => setFieldValue(`exchanges.${exchange.key}.enabled`, e.target.checked)}
                                       disabled={!isExchangeAllowed(exchange.key)}
                                     />
@@ -1554,7 +1318,6 @@ const CreateNewUser: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      /* Client/Admin View - Full Exchange Settings Table */
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
@@ -1566,13 +1329,11 @@ const CreateNewUser: React.FC = () => {
                                     <input
                                       type="checkbox"
                                       className="sr-only peer"
-                                      checked={visibleExchangeData.every((ex) => values.exchanges[ex.key as keyof typeof values.exchanges].enabled)}
+                                      checked={visibleExchangeData.every((ex) => !!values?.exchanges?.[ex.key]?.enabled)}
                                       onChange={(e) => {
                                         const checked = e.target.checked
                                         visibleExchangeData.forEach((ex) => {
-                                          if (isExchangeAllowed(ex.key)) {
-                                            setFieldValue(`exchanges.${ex.key}.enabled`, checked)
-                                          }
+                                          if (isExchangeAllowed(ex.key)) setFieldValue(`exchanges.${ex.key}.enabled`, checked);
                                         })
                                       }}
                                     />
@@ -1586,12 +1347,16 @@ const CreateNewUser: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody className="space-y-2">
-                            {visibleExchangeData.map((exchange) => (
-                              <tr key={exchange.key} className="hover:bg-surface-hover transition-colors">
-                                <td className="py-4 px-2">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 ${exchange.color} rounded-lg flex items-center justify-center`}>
-                                      <span className="text-white text-xs font-bold">{exchange.name.slice(0, 2)}</span>
+                            {visibleExchangeData.map((exchange) => {
+                              const currentSelectedValue = values?.exchanges?.[exchange.key]?.group;
+                              const currentGroupArray = exchangeGroups[exchange.key] || [];
+
+                              return (
+                                <tr key={exchange.key} className="hover:bg-surface-hover transition-colors">
+                                  <td className="py-4 px-2">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-8 h-8 ${exchange.color} rounded-lg flex items-center justify-center`}>
+                                        <span className="text-white text-xs font-bold">{exchange.name.slice(0, 2)}</span>
                                     </div>
                                     <div>
                                       <div className="font-medium text-text-primary text-sm">{exchange.name}</div>
@@ -1604,35 +1369,31 @@ const CreateNewUser: React.FC = () => {
                                     <input
                                       type="checkbox"
                                       className="sr-only peer"
-                                      checked={values.exchanges[exchange.key as keyof typeof values.exchanges].enabled}
+                                      checked={!!values?.exchanges?.[exchange.key]?.enabled}
                                       onChange={(e) => setFieldValue(`exchanges.${exchange.key}.enabled`, e.target.checked)}
                                       disabled={!isExchangeAllowed(exchange.key)}
                                     />
                                     <div className="relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
                                   </label>
                                 </td>
+
                                 {/* Turnover Brk. Cell */}
                                 <td className="py-4 px-2 text-center">
                                   <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                       type="checkbox"
                                       className="sr-only peer"
-                                      checked={!!values.exchanges[exchange.key.toLowerCase()]?.turnoverBrk}
+                                      checked={!!values?.exchanges?.[exchange.key.toLowerCase()]?.turnoverBrk}
                                       onChange={(e) => {
                                         const key = exchange.key.toLowerCase();
-
-                                        // 1. Guard check: If this exchange is unallowed, stop everything
                                         if (!isExchangeAllowed(key)) return;
 
-                                        // 2. Strong structural guard: If Symbol Brk is a disabled column type, 
-                                        // Turnover Brk MUST remain true permanently in both create and edit modes.
                                         if (['nse', 'sgx', 'others'].includes(key)) {
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, true);
                                           setFieldValue(`exchanges.${key}.symbolBrk`, false);
                                           return;
                                         }
 
-                                        // Standard Radio-like logic for editable rows (MCX, CDS, CALLPUT)
                                         if (!e.target.checked) {
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, false);
                                           setFieldValue(`exchanges.${key}.symbolBrk`, true);
@@ -1653,17 +1414,12 @@ const CreateNewUser: React.FC = () => {
                                     <input
                                       type="checkbox"
                                       className="sr-only peer"
-                                      checked={!!values.exchanges[exchange.key.toLowerCase()]?.symbolBrk}
+                                      checked={!!values?.exchanges?.[exchange.key.toLowerCase()]?.symbolBrk}
                                       onChange={(e) => {
                                         const key = exchange.key.toLowerCase();
-
-                                        // 1. Guard check: Reject clicks if column is disabled or unallowed (applies to both modes)
-                                        const isColumnDisabled =
-                                          ['nse', 'sgx', 'others'].includes(key) ||
-                                          !isExchangeAllowed(key);
-
+                                        const isColumnDisabled = ['nse', 'sgx', 'others'].includes(key) || !isExchangeAllowed(key);
+                                          
                                         if (isColumnDisabled) {
-                                          // Re-enforce safety lock states explicitly 
                                           if (['nse', 'sgx', 'others'].includes(key)) {
                                             setFieldValue(`exchanges.${key}.turnoverBrk`, true);
                                             setFieldValue(`exchanges.${key}.symbolBrk`, false);
@@ -1671,7 +1427,6 @@ const CreateNewUser: React.FC = () => {
                                           return;
                                         }
 
-                                        // Standard Radio-like logic for editable rows (MCX, CDS, CALLPUT)
                                         if (!e.target.checked) {
                                           setFieldValue(`exchanges.${key}.symbolBrk`, false);
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, true);
@@ -1680,50 +1435,42 @@ const CreateNewUser: React.FC = () => {
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, false);
                                         }
                                       }}
-                                      disabled={
-                                        ['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) ||
-                                        !isExchangeAllowed(exchange.key.toLowerCase())
-                                      }
+                                      disabled={['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) || !isExchangeAllowed(exchange.key.toLowerCase())}
                                     />
-                                    <div className={`relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600 ${['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) ? 'opacity-30' : ''
-                                      }`}></div>
+                                    <div className={`relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600 ${['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) ? 'opacity-30' : ''}`}></div>
                                   </label>
                                 </td>
 
-
                                 <td className="py-4 px-2">
                                   <select
-                                    value={values.exchanges[exchange.key as keyof typeof values.exchanges].group}
-                                    onChange={(e) =>
-                                      setFieldValue(`exchanges.${exchange.key}.group`, e.target.value)
-                                    }
+                                    value={currentSelectedValue ? String(currentSelectedValue) : ''}
+                                    onChange={(e) => {
+                                      setFieldValue(`exchanges.${exchange.key}.group`, e.target.value);
+                                    }}
                                     disabled={!isExchangeAllowed(exchange.key) || groupsLoading}
                                     className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded-lg text-text-primary text-sm focus:ring-1 focus:ring-brand-primary focus:border-transparent transition-all"
                                   >
                                     <option value="">{groupsLoading ? 'Loading groups...' : 'Select Group'}</option>
-                                    {exchangeGroups[exchange.key]?.map((group: any) => (
-                                      <option key={group.groupId} value={group.groupName}>
+                                    {currentGroupArray.map((group: any, idx: number) => (
+                                      // FIX: Appending unique loop index mapping inside option element key completely satisfies React identity checks!
+                                      <option key={`${group.groupId}-${idx}`} value={String(group.groupId)}>
                                         {group.groupName}
                                       </option>
                                     ))}
                                   </select>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                     )}
                   </motion.div>
 
-                  {/* High Trade Limit - For Admin, Master, and Client accounts */}
-                  {(selectedUserRole === 2 || values.userType === 'master' || values.userType === 'client' || (isEditMode && (editingUser?.roleId === 3 || editingUser?.roleId === 4) && editingUser?.highLowTradeLimit)) && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.27 }}
-                      className="bg-surface-primary border border-border-primary rounded-2xl p-6"
-                    >
+                  {/* High Trade Limit */}
+                  {(selectedUserRole === 2 || values.userType === 'master' || values.userType === 'client' || (!isEditMode && selectedUserId && selectedUserRole) || (isEditMode && (editingUser?.roleId === 3 || editingUser?.roleId === 4) && editingUser?.highLowTradeLimit)) && (
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="bg-surface-primary border border-border-primary rounded-2xl p-6">
                       <div className="flex items-center justify-between gap-3 mb-6">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
@@ -1736,9 +1483,7 @@ const CreateNewUser: React.FC = () => {
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={exchangeData.filter(ex => ex.key !== 'others').every(
-                                ex => values.highTradeLimit[ex.key as keyof typeof values.highTradeLimit]
-                              )}
+                              checked={exchangeData.filter(ex => ex.key !== 'others').every(ex => !!values?.highTradeLimit?.[ex.key])}
                               onChange={(e) => {
                                 const newHighTradeLimit = { ...values.highTradeLimit }
                                 exchangeData.filter(ex => ex.key !== 'others').forEach(ex => {
@@ -1760,10 +1505,8 @@ const CreateNewUser: React.FC = () => {
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
-                                checked={values.highTradeLimit[exchange.key as keyof typeof values.highTradeLimit] || false}
-                                onChange={(e) =>
-                                  setFieldValue(`highTradeLimit.${exchange.key}`, e.target.checked)
-                                }
+                                checked={!!values?.highTradeLimit?.[exchange.key]}
+                                onChange={(e) => setFieldValue(`highTradeLimit.${exchange.key}`, e.target.checked)}
                                 className="sr-only peer"
                               />
                               <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
@@ -1775,12 +1518,7 @@ const CreateNewUser: React.FC = () => {
                   )}
 
                   {/* Additional Settings */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="bg-surface-primary border border-border-primary rounded-2xl p-6"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-surface-primary border border-border-primary rounded-2xl p-6">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                         <Key className="w-4 h-4 text-emerald-500" />
@@ -1789,7 +1527,6 @@ const CreateNewUser: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Change Password On First Login - Hidden in Edit Mode */}
                       {!isEditMode && (
                         <div className="flex items-center justify-between p-4 bg-surface-secondary rounded-lg border border-border-primary">
                           <div className="flex items-center gap-3">
@@ -1797,12 +1534,8 @@ const CreateNewUser: React.FC = () => {
                               <Key className="w-4 h-4 text-blue-500" />
                             </div>
                             <div>
-                              <label className="text-sm font-medium text-text-primary cursor-pointer">
-                                Change Password On First Login
-                              </label>
-                              <p className="text-xs text-text-secondary mt-1">
-                                User will be required to change password on first login
-                              </p>
+                              <label className="text-sm font-medium text-text-primary cursor-pointer">Change Password On First Login</label>
+                              <p className="text-xs text-text-secondary mt-1">User will be required to change password on first login</p>
                             </div>
                           </div>
                           <input
@@ -1814,7 +1547,6 @@ const CreateNewUser: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Auto Square Off - Only for Client */}
                       {values.userType === 'client' && (
                         <div className="flex items-center justify-between p-4 bg-surface-secondary rounded-lg border border-border-primary">
                           <div className="flex items-center gap-3">
@@ -1822,12 +1554,8 @@ const CreateNewUser: React.FC = () => {
                               <RefreshCw className="w-4 h-4 text-red-500" />
                             </div>
                             <div>
-                              <label className="text-sm font-medium text-text-primary cursor-pointer">
-                                Auto Square Off
-                              </label>
-                              <p className="text-xs text-text-secondary mt-1">
-                                Automatically square off positions at market close
-                              </p>
+                              <label className="text-sm font-medium text-text-primary cursor-pointer">Auto Square Off</label>
+                              <p className="text-xs text-text-secondary mt-1">Automatically square off positions at market close</p>
                             </div>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
@@ -1842,7 +1570,6 @@ const CreateNewUser: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Add Master - Only for Master */}
                       {values.userType === 'master' && (
                         <div className="flex items-center justify-between p-4 bg-surface-secondary rounded-lg border border-border-primary">
                           <div className="flex items-center gap-3">
@@ -1850,12 +1577,8 @@ const CreateNewUser: React.FC = () => {
                               <User className="w-4 h-4 text-purple-500" />
                             </div>
                             <div>
-                              <label className="text-sm font-medium text-text-primary cursor-pointer">
-                                Add Master
-                              </label>
-                              <p className="text-xs text-text-secondary mt-1">
-                                Allow this user to create master accounts
-                              </p>
+                              <label className="text-sm font-medium text-text-primary cursor-pointer">Add Master</label>
+                              <p className="text-xs text-text-secondary mt-1">Allow this user to create master accounts</p>
                             </div>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
@@ -1873,23 +1596,7 @@ const CreateNewUser: React.FC = () => {
                   </motion.div>
 
                   {/* Action Buttons */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 }}
-                    className="flex items-center justify-between gap-4 pt-6"
-                  >
-                    {/* <div className="text-xs text-text-secondary flex items-center gap-4">
-                      <span>2/11/2025 12:06:32</span>
-                      <span>v1.1.2.28</span>
-                      <div className="flex items-center gap-2">
-                        <span>PL: -478.65</span>
-                        <span>BK: 33.36</span>
-                        <span>OTHER: 0.00</span>
-                        <span>BAL: -445.29</span>
-                      </div>
-                    </div> */}
-
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="flex items-center justify-between gap-4 pt-6">
                     <div className="flex items-center gap-4">
                       <button
                         type="button"
@@ -1901,7 +1608,7 @@ const CreateNewUser: React.FC = () => {
                       <button
                         type="submit"
                         disabled={!isValid || (!isEditMode && usernameError !== null)}
-                        className="px-8 py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-purple-600 disabled:hover:via-pink-600 disabled:hover:to-red-600"
+                        className="px-8 py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isEditMode ? 'Update User' : 'Save'}
                       </button>

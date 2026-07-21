@@ -131,7 +131,7 @@ class OrderUpdateService {
     const subInfo = `${instrumentInfo}\nQty: ${displayQty}${priceDisplay}`;
 
     const toastOptions = (bg: string) => ({
-      duration: order.status === OrderStatus.REJECTED ? 8000 : 4000,
+      duration: 3000,
       style: { ...commonStyle, background: bg },
     });
 

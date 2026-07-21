@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { BarChart3, FileWarning, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 
 interface RejectionLogData {
   createdAt: string
@@ -63,7 +64,15 @@ const RejectionLog: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 10
 
-  // Load initial data (users and exchanges)
+  const userOptions = useMemo(() => [
+    ...users.map(u => ({ id: u.userId, name: u.userName }))
+  ], [users])
+
+  const symbolOptions = useMemo(() => [
+    ...symbols.map(s => ({ id: String(s.token), name: s.tradeSymbol || s }))
+  ], [symbols])
+
+  // Load initial data (users, exchanges, and symbols for default exchange)
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -74,7 +83,20 @@ const RejectionLog: React.FC = () => {
         ])
 
         if (usersResponse?.responseCode === '0') setUsers(usersResponse.data)
-        if (Array.isArray(exchangesResponse)) setExchanges(exchangesResponse)
+        
+        if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
+          setExchanges(exchangesResponse)
+          const defaultExchange = exchangesResponse[0].name
+          setSelectedExchange(defaultExchange)
+          setSelectedUserId(loggedInUserId)
+          
+          // Fetch symbols for the default exchange on page load (like in Trades/Positions)
+          const symbolsResponse = await userManagementService.fetchTradeSymbolsReport('SINGLE', defaultExchange)
+          if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+            const exchangeData = symbolsResponse.data.find((item: ExchangeGroup) => item.exchange === defaultExchange)
+            setSymbols(exchangeData ? exchangeData.symbols : [])
+          }
+        }
       } catch (error) {
         toast.error('Failed to load initial data')
       } finally {
@@ -115,10 +137,10 @@ const RejectionLog: React.FC = () => {
   }, [selectedExchange]);
 
   useEffect(() => {
-  if (users.length > 0 && exchanges.length > 0) {
-    handleView(1);
-  }
-}, [users, exchanges]);
+    if (!initialLoading && selectedExchange) {
+      handleView(1)
+    }
+  }, [initialLoading])
 
   const handleView = async (page: number = 1) => {
     setLoading(true)
@@ -154,10 +176,11 @@ const RejectionLog: React.FC = () => {
   }
 
   const handleClear = () => {
+    const defaultExchange = exchanges.length > 0 ? exchanges[0].name : ''
     setFromDate(today)
     setToDate(today)
-    setSelectedUserId(0)
-    setSelectedExchange('')
+    setSelectedUserId(loggedInUserId)
+    setSelectedExchange(defaultExchange)
     setSelectedToken('')
     setLogResponse(null)
     setCurrentPage(1)
@@ -199,19 +222,13 @@ const RejectionLog: React.FC = () => {
 
               {/* Main Filter Section - EXACTLY like Orders Page */}
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">User :</label>
-                  <select
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
-                  >
-                    {/* <option value="0">All Users</option> */}
-                    {users.map(user => (
-                      <option key={user.userId} value={user.userId}>{user.userName}</option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableSelect
+                  label="User :"
+                  items={userOptions}
+                  selectedId={selectedUserId}
+                  onSelect={(userId) => setSelectedUserId(Number(userId))}
+                  placeholder="Search user..."
+                />
 
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
@@ -225,17 +242,24 @@ const RejectionLog: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Symbol :</label>
-                  <select
-                    value={selectedToken}
-                    onChange={(e) => setSelectedToken(e.target.value)}
-                    className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
+                {selectedToken && (
+                  <button
+                    onClick={() => {
+                      setSelectedToken('')
+                      setLogResponse(null)
+                    }}
+                    className="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition float-right mb-2"
                   >
-                    <option value="">Select Symbol</option>
-                    {symbols.map(s => <option key={s.token} value={s.token}>{s.tradeSymbol}</option>)}
-                  </select>
-                </div>
+                    Clear
+                  </button>
+                )}
+                <SearchableSelect
+                  label="Symbol :"
+                  items={symbolOptions}
+                  selectedId={selectedToken}
+                  onSelect={(id) => setSelectedToken(String(id))}
+                  placeholder="Search symbol..."
+                />
 
                 <div className="flex gap-2 pt-2">
                   <button

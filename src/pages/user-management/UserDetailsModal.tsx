@@ -3,6 +3,7 @@ import { tabLoaders } from './user-details-tabs';
 import UserDetailsTab from './UserDetailsTab';
 import IntradaySquareOffModal from './IntradaySquareOffModal';
 import MarketTradeRightsModal from './MarketTradeRightsModal';
+import ExchangewiseLotLimitModal from './ExchangewiseLotLimitModal';
 import { createPortal } from 'react-dom';
 import { User, Edit, X, Shield, Settings, Clock, MoreHorizontal, Lock, Share2, AlertCircle } from 'lucide-react';
 import { userManagementService } from '../../services';
@@ -177,6 +178,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const [creditError, setCreditError] = useState('');
   const [selectedUserForMarketTradeRights, setSelectedUserForMarketTradeRights] = useState<any>(null);
   const [showMarketTradeRightsModal, setShowMarketTradeRightsModal] = useState(false);
+  const [showExchangewiseLotLimitModal, setShowExchangewiseLotLimitModal] = useState(false);
+  const [selectedUserForExchangewiseLotLimit, setSelectedUserForExchangewiseLotLimit] = useState<any>(null);
   const actionMenuRef = React.useRef<HTMLDivElement>(null);
   const actionMenuButtonRefs = React.useRef<{ [key: string]: HTMLButtonElement | null }>({});
   // removed activeMenuName; we use activeTab for dynamic menu tabs
@@ -1070,7 +1073,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
                 {/* Positions Tab */}
                 {activeTab === 'positions' && (
-                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} />
+                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} user={userDetails}/>
                 )}
 
                 {/* Trades Tab */}
@@ -1250,7 +1253,17 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 >
                   <span>⏱️</span> Intraday SquareOff
                 </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                <button
+                  onClick={() => {
+                    const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                    if (selectedUser) {
+                      setSelectedUserForExchangewiseLotLimit(transformChildUser(selectedUser));
+                      setShowExchangewiseLotLimitModal(true);
+                    }
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                   <span>🏢</span> Exchangewise Lot Limit
                 </button>
                 <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
@@ -1652,6 +1665,16 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           }}
           onSave={async () => {
             // Optionally refetch user details if needed
+          }}
+        />
+      )}
+      {showExchangewiseLotLimitModal && selectedUserForExchangewiseLotLimit && (
+        <ExchangewiseLotLimitModal
+          isOpen={showExchangewiseLotLimitModal}
+          user={selectedUserForExchangewiseLotLimit}
+          onClose={() => {
+            setShowExchangewiseLotLimitModal(false);
+            setSelectedUserForExchangewiseLotLimit(null);
           }}
         />
       )}

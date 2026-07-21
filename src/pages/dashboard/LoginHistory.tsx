@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authService } from '../../services/authService'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 
 interface LoginHistoryRecord {
   loginHistoryId: number
@@ -38,7 +39,12 @@ const LoginHistory: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<string>('')
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [users, setUsers] = useState<any[]>([])
+  const [initialLoading, setInitialLoading] = useState(true)
   const pageSize = 10
+
+  const userOptions = useMemo(() => [
+    ...users.map(u => ({ id: u.id, name: u.name }))
+  ], [users])
 
   useEffect(() => {
     // Load users on mount
@@ -47,12 +53,16 @@ const LoginHistory: React.FC = () => {
 
   const loadUsers = async () => {
     try {
+      setInitialLoading(true)
       const response = await userManagementService.fetchUserClientsForTrade()
       if (response?.data) {
         setUsers(response.data)
       }
     } catch (error) {
       console.error('Error loading users:', error)
+      toast.error('Failed to load users')
+    } finally {
+      setInitialLoading(false)
     }
   }
 
@@ -112,6 +122,7 @@ const LoginHistory: React.FC = () => {
     setFromDate('')
     setToDate('')
     setSelectedUser('')
+    setSelectedUserId(null)
     setLoginHistory([])
     setCurrentPage(0)
   }
@@ -216,8 +227,10 @@ const LoginHistory: React.FC = () => {
     if (newPage >= 0 && newPage < totalPages) {
       setCurrentPage(newPage)
       
-      // Refetch data for new page
-      if (searchTerm.trim().length >= 1) {
+      // Refetch data for new page - must match handleView logic
+      if (selectedUserId) {
+        fetchUserLoginHistoryByUserId(newPage)
+      } else if (searchTerm.trim().length >= 1) {
         fetchSearchLoginHistory(searchTerm, newPage)
       } else if (fromDate && toDate) {
         fetchUserLoginHistoryByDateRange(newPage)
@@ -264,34 +277,22 @@ const LoginHistory: React.FC = () => {
                 />
               </div>
 
-              {/* User Dropdown */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">User :</label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setSelectedUser(value)
-                    if (value === '') {
-                      setSelectedUserId(null)
-                    } else {
-                      const userData = users.find(u => u.name === value)
-                      setSelectedUserId(userData?.id || null)
-                    }
-                  }}
-                  className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">All Users</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.name}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* User SearchableSelect */}
+              <SearchableSelect
+                label="User :"
+                items={userOptions}
+                selectedId={selectedUserId || ''}
+                onSelect={(userId) => {
+                  const id = Number(userId)
+                  setSelectedUserId(id)
+                  const userData = users.find(u => u.id === id)
+                  setSelectedUser(userData?.name || '')
+                }}
+                placeholder="Search user..."
+              />
 
               {/* Search */}
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Search :</label>
                 <input
                   type="text"
@@ -300,13 +301,13 @@ const LoginHistory: React.FC = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                 />
-              </div>
+              </div> */}
 
               {/* Buttons */}
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={handleView}
-                  disabled={loading}
+                  disabled={loading || initialLoading}
                   className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition"
                 >
                   {loading ? 'Loading...' : 'View'}

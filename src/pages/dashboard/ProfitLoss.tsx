@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
 import { X, Briefcase, Search, ArrowLeft } from 'lucide-react'
 import FilterLayout from '../../components/FilterLayout'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 import userManagementService from '../../services/userManagementService'
+import marketWatchService from '../../services/marketWatchService'
 
 // --- Interfaces ---
 interface PnLData {
@@ -21,7 +23,20 @@ const ProfitLoss: React.FC = () => {
     return userData?.userId;
   }
 
+  const getRoleId = (): number | null => {
+    const userDataStr = localStorage.getItem('userData')
+    const userData = userDataStr ? JSON.parse(userDataStr) : null
+    return userData?.roleId || null
+  }
+
   const loggedInUserId = getLoggedInUserId()
+  const roleId = getRoleId()
+  
+  // ROLE DEFINITIONS
+  const isAdminOnly = roleId === 1 || roleId === 2 // Strict Admin
+  const isAdminOrMaster = roleId === 1 || roleId === 2 || roleId === 3 // Admin + Master
+  const isClient = roleId === 4
+
   const [userFilterType, setUserFilterType] = useState<'ALL' | 'SINGLE'>('ALL')
   const [selectedUserId, setSelectedUserId] = useState<number | string>(loggedInUserId)
   
@@ -30,6 +45,15 @@ const ProfitLoss: React.FC = () => {
   const [pnlTotals, setPnlTotals] = useState({ realised: 0, m2m: 0, total: 0 })
   
   const [users, setUsers] = useState<any[]>([])
+  
+  // Memoized user options for the SearchableSelect
+  const userOptions = useMemo(
+    () => users.map((u) => ({
+      id: u.userId,
+      name: u.userName
+    })),
+    [users]
+  )
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
 
@@ -162,6 +186,97 @@ const ProfitLoss: React.FC = () => {
     loadInitialData()
   }, [])
 
+  // Setup MTM live socket subscription (ONLY for Clients)
+  useEffect(() => {
+    let mtmUnsubscribe: (() => void) | null = null
+
+    const setupMTMSubscription = async () => {
+      // Only setup MTM subscription for Clients (roleId === 4)
+      if (!isClient) {
+        console.log(`⏭️  Skipping MTM subscription - User role is not Client (roleId: ${roleId})`)
+        return
+      }
+
+      if (!loggedInUserId) {
+        console.log('❌ No logged-in user, skipping MTM subscription')
+        return
+      }
+
+      try {
+        // Connect to socket if not already connected
+        if (!marketWatchService.isConnected()) {
+          console.log('🔌 Socket not connected, attempting to connect...')
+          await marketWatchService.connect()
+        }
+
+        const userIdStr = loggedInUserId.toString()
+        console.log(`📊 Setting up MTM subscription for CLIENT user: ${userIdStr}`)
+
+        // Subscribe to MTM updates
+        mtmUnsubscribe = marketWatchService.subscribeToMTM(userIdStr, (mtmData) => {
+          console.log('📊 MTM Live Update Received:', mtmData, 'Type:', typeof mtmData)
+          
+          // Handle different MTM data formats from socket
+          if (mtmData === null || mtmData === undefined) {
+            console.log('⚠️ Empty MTM data received')
+            return
+          }
+
+          // Case 1: Data is a simple number (just M2M value)
+          if (typeof mtmData === 'number') {
+            console.log(`💰 Updating M2M to: ${mtmData}`)
+            setPnlTotals(prev => ({ ...prev, m2m: mtmData, total: prev.realised + mtmData }))
+            console.log('✅ M2M value updated from live socket')
+            return
+          }
+
+          // Case 2: Data is an object with m2m, realised, etc
+          if (typeof mtmData === 'object' && !Array.isArray(mtmData)) {
+            const { m2m, realised } = mtmData
+            if (m2m !== undefined || realised !== undefined) {
+              setPnlTotals(prev => {
+                const newRealised = realised !== undefined ? realised : prev.realised
+                const newM2M = m2m !== undefined ? m2m : prev.m2m
+                const newTotal = newRealised + newM2M
+                console.log(`💰 Updating totals - Realised: ${newRealised}, M2M: ${newM2M}, Total: ${newTotal} (realised + m2m)`)
+                return {
+                  realised: newRealised,
+                  m2m: newM2M,
+                  total: newTotal
+                }
+              })
+              console.log('✅ Totals updated from live socket')
+              return
+            }
+          }
+
+          // Case 3: Data is an array (existing format with detailed rows)
+          if (Array.isArray(mtmData)) {
+            const { tableRows, totals } = processPnLResponse(mtmData)
+            setPnlTableData(tableRows)
+            setPnlTotals(totals)
+            console.log('✅ P&L data updated from live socket:', totals)
+            return
+          }
+
+          console.warn('⚠️ Unknown MTM data format:', mtmData)
+        })
+      } catch (error) {
+        console.error('❌ Error setting up MTM subscription:', error)
+      }
+    }
+
+    setupMTMSubscription()
+
+    // Cleanup on unmount
+    return () => {
+      if (mtmUnsubscribe) {
+        console.log('🧹 Cleaning up MTM subscription')
+        mtmUnsubscribe()
+      }
+    }
+  }, [loggedInUserId, isClient])
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
@@ -171,30 +286,46 @@ const ProfitLoss: React.FC = () => {
           filters={
             <div className="space-y-4 p-4">
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Username :</label>
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedUserId(val);
+                {selectedUserId && selectedUserId !== loggedInUserId && (
+                  <button
+                    onClick={() => {
+                      setSelectedUserId(loggedInUserId);
+                      setUserFilterType('ALL');
+                    }}
+                    className="text-xs px-2 py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition float-right mb-2"
+                  >
+                    Clear
+                  </button>
+                )}
+                <SearchableSelect
+                  label="Username :"
+                  items={userOptions}
+                  selectedId={selectedUserId}
+                  onSelect={(id) => {
+                    setSelectedUserId(id);
                     setUserFilterType('SINGLE');
                   }}
-                  className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {users.map(u => <option key={u.userId} value={u.userId}>{u.userName}</option>)}
-                </select>
+                  placeholder="Search username..."
+                />
               </div>
 
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">Auto Refresh</label>
-                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                  {/* UI Label updated to read "Every 5s" */}
-                  <span className="text-[10px] text-slate-500 italic">Every 5s</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" checked={autoRefresh} onChange={() => setAutoRefresh(!autoRefresh)} />
-                    <div className="w-9 h-5 bg-slate-300 dark:bg-slate-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                  </label>
-                </div>
+                {isClient ? (
+                  <div className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                    <span className="text-[10px] text-green-700 dark:text-green-300 font-semibold">✓ Live Data Enabled</span>
+                    <span className="text-[9px] text-green-600 dark:text-green-400 italic">Real-time updates via socket</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                    {/* UI Label updated to read "Every 5s" */}
+                    <span className="text-[10px] text-slate-500 italic">Every 5s</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={autoRefresh} onChange={() => setAutoRefresh(!autoRefresh)} />
+                      <div className="w-9 h-5 bg-slate-300 dark:bg-slate-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-2">
