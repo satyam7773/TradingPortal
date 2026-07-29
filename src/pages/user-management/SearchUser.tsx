@@ -21,6 +21,23 @@ interface TreeNodeProps {
   onUserDoubleClick: (userId: number) => void;
 }
 
+// Helper function to check if a node or any of its descendants match the search term
+const nodeMatchesSearch = (node: UserNode, searchTerm: string): boolean => {
+  if (!searchTerm) return true;
+  
+  const displayName = node.username || node.name;
+  if (displayName.toLowerCase().includes(searchTerm.toLowerCase())) {
+    return true;
+  }
+  
+  // Recursively check if any child matches
+  if (node.children && node.children.length > 0) {
+    return node.children.some((child) => nodeMatchesSearch(child, searchTerm));
+  }
+  
+  return false;
+};
+
 const TreeNode: React.FC<TreeNodeProps> = ({ node, level, searchTerm, onUserDoubleClick }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -30,8 +47,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, level, searchTerm, onUserDoub
   const displayName = node.username || node.name;
   const matchesSearch = !searchTerm || 
     displayName.toLowerCase().includes(searchTerm.toLowerCase());
-
-  if (!matchesSearch && !hasChildren) return null;
+  
+  // Show this node if it matches OR if any descendant matches
+  const shouldShowNode = nodeMatchesSearch(node, searchTerm);
+  
+  if (!shouldShowNode) return null;
+  
+  // Auto-expand when searching if this node doesn't match but has children that do
+  const shouldAutoExpand = searchTerm && !matchesSearch && hasChildren;
 
   return (
     <div>
@@ -44,7 +67,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, level, searchTerm, onUserDoub
             onClick={() => setIsExpanded(!isExpanded)}
             className="mr-2 p-0.5 hover:bg-blue-100 dark:hover:bg-slate-600 rounded"
           >
-            {isExpanded ? (
+            {isExpanded || shouldAutoExpand ? (
               <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             ) : (
               <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -56,13 +79,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, level, searchTerm, onUserDoub
         
         <span
           onDoubleClick={() => onUserDoubleClick(node.id)}
-          className="text-sm text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 cursor-pointer"
+          className={`text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 cursor-pointer ${
+            matchesSearch 
+              ? 'text-gray-800 dark:text-gray-200 font-medium' 
+              : 'text-gray-600 dark:text-gray-400'
+          }`}
         >
           {displayName} {node.roleName && <span className="text-gray-500 dark:text-gray-400">({node.roleName.toUpperCase()})</span>}
         </span>
       </div>
 
-      {isExpanded && hasChildren && (
+      {(isExpanded || shouldAutoExpand) && hasChildren && (
         <div>
           {node.children.map((child) => (
             <TreeNode

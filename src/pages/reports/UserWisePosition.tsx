@@ -159,7 +159,7 @@ const UserWisePosition: React.FC = () => {
         const user = userData ? JSON.parse(userData) : null;
         const loggedInUserId = user?.userId;
         const usersResponse =
-          await userManagementService.fetchOwnUsers(loggedInUserId);
+          await userManagementService.fetchOwnUsersForUserwisePosition(loggedInUserId);
 
 
         const exchangesResponse = await userManagementService.fetchExchanges();
@@ -792,12 +792,12 @@ const UserWisePosition: React.FC = () => {
                 icon={AlertCircle}
                 color="bg-blue-500"
               /> */}
-              <StatCard
+              {/* <StatCard
                 label="Brokerage"
                 value={`${positionData.brokerage?.toFixed(2) || '0'}`}
                 icon={AlertCircle}
                 color="bg-orange-500"
-              />
+              /> */}
               <StatCard
                 label="Positions"
                 value={`${positionData.positions?.length || '0'}`}

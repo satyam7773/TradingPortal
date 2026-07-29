@@ -5,6 +5,7 @@
 import React from "react";
 import toast from "react-hot-toast";
 import { marketWatchService } from "./marketWatchService";
+import balanceService from "./balanceService";
 
 export enum OrderStatus {
   APPROVED = "APPROVED",
@@ -107,6 +108,12 @@ class OrderUpdateService {
       const orderUpdate: OrderUpdate = JSON.parse(sanitizedData);
       this.showOrderNotification(orderUpdate);
       this.orderCallbacks.forEach((callback) => callback(orderUpdate));
+      
+      // Refresh balance when order update arrives - positions may have changed
+      console.log('🔄 Order update received, refreshing balance...')
+      balanceService.refreshBalance().catch(error => {
+        console.error('❌ Failed to refresh balance on order update:', error)
+      })
     } catch (error) {
       console.error("Error parsing order update:", error);
     }

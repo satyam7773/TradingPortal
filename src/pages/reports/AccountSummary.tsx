@@ -64,7 +64,7 @@ const AccountSummary: React.FC = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [users, setUsers] = useState<any[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-    const pageSize = 10;
+    const pageSize = 100;
 
     // Get logged in user ID
     const userDataStr = localStorage.getItem('userData');

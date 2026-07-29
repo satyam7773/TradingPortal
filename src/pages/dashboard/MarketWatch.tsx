@@ -1021,8 +1021,9 @@ const MarketWatch: React.FC = () => {
         if (Array.isArray(data)) {
           // Optimize: Only update changed instruments
           setFeedData(prevData => {
-            // Create a map for fast lookup
-            const dataMap = new Map(data.map(item => [item?.insToken, item]))
+            // Filter out null/undefined items and create a map for fast lookup
+            const validData = data.filter(item => item && item.insToken !== null && item.insToken !== undefined)
+            const dataMap = new Map(validData.map(item => [item.insToken, item]))
 
             // Track price changes for animations
             const changes: Record<number, PriceChange> = {}
@@ -1067,9 +1068,11 @@ const MarketWatch: React.FC = () => {
             })
 
             // Add any new instruments not in previous data
-            const newInstruments = Array.from(dataMap.values())
+            const newInstruments = Array.from(dataMap.values()).filter(item => item && item.insToken !== null)
             newInstruments.forEach(item => {
-              previousPricesRef.current[item.insToken] = item
+              if (item) {
+                previousPricesRef.current[item.insToken] = item
+              }
             })
 
             // Update price changes if any

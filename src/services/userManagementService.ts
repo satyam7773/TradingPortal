@@ -935,6 +935,40 @@ class UserManagementService {
     }
   }
 
+    async fetchOwnUsersForUserwisePosition(userId: number): Promise<any> {
+    const request = {
+      userId,
+    };
+
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/positions/fetchUsers",
+        request,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch own users:", error);
+      throw error;
+    }
+  }
+
+
+  async fetchOwnUsersForUserwiseforManageTrades(userId: number): Promise<any> {
+    const request = {
+      userId,
+    };
+
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/trades/fetchUsers",
+        request,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch own users:", error);
+      throw error;
+    }
+  }
   /**
    * Fetch own users (for user dropdown)
    */

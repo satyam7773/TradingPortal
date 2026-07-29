@@ -211,7 +211,7 @@ const ManageTraders: React.FC = () => {
         setInitialLoading(true);
 
         // Fetch users
-        const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId);
+        const usersResponse = await userManagementService.fetchOwnUsersForUserwiseforManageTrades(loggedInUserId);
         if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
           setUsers(usersResponse.data);
         }
@@ -669,8 +669,8 @@ const ManageTraders: React.FC = () => {
 
                         {/* Type (BUY/SELL) */}
                         <td className="px-4 py-3 text-center">
-                          <span className={`text-xs font-bold ${typeColorClass}`}>
-                            {trade.type === 'BUY' ? 'Buy' : 'Sell'}
+                          <span className={`text-xs font-bold ${trade.type?.toUpperCase().startsWith('BUY') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {trade.type}
                           </span>
                         </td>
 

@@ -393,6 +393,7 @@ const CreateNewUser: React.FC = () => {
               changePasswordFirstLogin: apiUserData.changePasswordFirstLogin,
               allowedExchanges: apiUserData.allowedExchanges,
               highLowTradeLimit: apiUserData.highLowTradeLimit,
+              parentHighLowTradeLimit: apiUserData.parentHighLowTradeLimit,
               marginSquareOff: marginSquareOffValue,
               ...(response.data.userProfile && { roleId: response.data.userProfile.roleId })
             })
@@ -445,10 +446,11 @@ const CreateNewUser: React.FC = () => {
 
       let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
 
-      if (editingUser.highLowTradeLimit) {
-        const highArr = Array.isArray(editingUser.highLowTradeLimit)
-          ? editingUser.highLowTradeLimit
-          : String(editingUser.highLowTradeLimit).split(',');
+      // Use parentHighLowTradeLimit to respect parent's restrictions
+      if (editingUser.parentHighLowTradeLimit) {
+        const highArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+          ? editingUser.parentHighLowTradeLimit
+          : String(editingUser.parentHighLowTradeLimit).split(',');
 
         highArr.forEach((ex: string) => {
           const key = ex.trim().toLowerCase();
@@ -574,10 +576,11 @@ const CreateNewUser: React.FC = () => {
           }
         })
 
-        // Reset and populate High/Low Trade Limit checkboxes
+        // Reset and populate High/Low Trade Limit checkboxes using parentHighLowTradeLimit
         let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
         
-        const highLowTradeLimit = userInfo?.highLowTradeLimit || '';
+        // Use parentHighLowTradeLimit to respect parent's restrictions
+        const highLowTradeLimit = userInfo?.parentHighLowTradeLimit || '';
         if (highLowTradeLimit) {
           const highArr = Array.isArray(highLowTradeLimit)
             ? highLowTradeLimit

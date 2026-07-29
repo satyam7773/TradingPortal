@@ -15,6 +15,7 @@ interface TradeData {
   tradeSymbol: string
   exchange: string
   side: 'BUY' | 'SELL'
+  type?: string
   lotSize: number
   netQuantity: number
   lotValue: number
@@ -410,7 +411,7 @@ const Trades: React.FC = () => {
 
                         <td className="px-6 py-4 text-center">
                           <span className={`text-xs font-bold ${tradeColorClass}`}>
-                            {trade.side === 'BUY' ? 'Buy' : 'Sell'}
+                            {trade.type}
                           </span>
                         </td>
 

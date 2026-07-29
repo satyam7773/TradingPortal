@@ -6,6 +6,7 @@ import ThemeToggle from '../ui/ThemeToggle'
 import ABQuotesLogo from '../ui/ABQuotesLogo'
 import Menu, { createExistingMenuItems } from '../ui/Menu'
 import { PanicButton } from '../ui/PanicButton'
+import UserBalance from '../ui/UserBalance'
 import { TabsProvider, useTabs } from '../../hooks/useTabs'
 import { TabBar } from '../ui/TabBar'
 import { User, Eye } from 'lucide-react'
@@ -315,6 +316,13 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({
             </div>
           )}
         </div>
+
+        {/* Balance Display */}
+        {!isFirstLogin && (
+          <div className="flex-1 flex justify-center">
+            <UserBalance />
+          </div>
+        )}
         
         <div className="flex items-center gap-4">
           <PanicButton />
