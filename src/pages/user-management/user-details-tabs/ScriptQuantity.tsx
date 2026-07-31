@@ -60,8 +60,10 @@ const ScriptQuantitySettings: React.FC<{ user: any; groupId: number }> = ({ user
     let hasError = false;
     scripts.forEach(s => {
       if (selectedIds.has(s.quantityGroupId)) {
-        if (newQty > s.qtyMax || newBreakup > s.breakupQty) {
-          toast.error(`Value for ${s.scriptName} cannot exceed current limit (${s.qtyMax}/${s.breakupQty})`);
+        if (newQty > (s.defaultMaxQty || s.qtyMax) || newBreakup > (s.defaultBreakUpQty || s.breakupQty)) {
+          const maxQtyLimit = s.defaultMaxQty || s.qtyMax;
+          const breakupLimit = s.defaultBreakUpQty || s.breakupQty;
+          toast.error(`Value for ${s.scriptName} cannot exceed default limit (${maxQtyLimit}/${breakupLimit})`);
           hasError = true;
         }
       }

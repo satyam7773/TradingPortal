@@ -123,6 +123,8 @@ const CreateNewUser: React.FC = () => {
   const [selectedUserAllowedExchanges, setSelectedUserAllowedExchanges] = useState<string[]>([])
   const [selectedUserAllowedExchangeCount, setSelectedUserAllowedExchangeCount] = useState(0)
   const [selectedUserHighLowTradeLimit, setSelectedUserHighLowTradeLimit] = useState<{ nse: boolean; mcx: boolean; sgx: boolean; cds: boolean; callput: boolean }>({ nse: false, mcx: false, sgx: false, cds: false, callput: false })
+  const [selectedUserParentPnlSharing, setSelectedUserParentPnlSharing] = useState<number>(100)
+  const [selectedUserParentBrkSharing, setSelectedUserParentBrkSharing] = useState<number>(100)
   const [isFetchingSelectedUserDetails, setIsFetchingSelectedUserDetails] = useState(false)
   const [exchangeGroups, setExchangeGroups] = useState<{ [key: string]: any[] }>({})
   const [groupsLoading, setGroupsLoading] = useState(false)
@@ -394,6 +396,9 @@ const CreateNewUser: React.FC = () => {
               allowedExchanges: apiUserData.allowedExchanges,
               highLowTradeLimit: apiUserData.highLowTradeLimit,
               parentHighLowTradeLimit: apiUserData.parentHighLowTradeLimit,
+              parentId: apiUserData.parentId,
+              parentPnlSharing: apiUserData.parentPnlSharing,
+              parentBrkSharing: apiUserData.parentBrkSharing,
               marginSquareOff: marginSquareOffValue,
               ...(response.data.userProfile && { roleId: response.data.userProfile.roleId })
             })
@@ -502,6 +507,8 @@ const CreateNewUser: React.FC = () => {
       setFieldValue('userType', userTypeOptions.length > 0 ? userTypeOptions[0].value : '')
       setSelectedUserAllowedExchanges([])
       setSelectedUserAllowedExchangeCount(0)
+      setSelectedUserParentPnlSharing(100)
+      setSelectedUserParentBrkSharing(100)
 
       if (originalUserConfig) {
         setUserConfig(originalUserConfig)
@@ -551,6 +558,10 @@ const CreateNewUser: React.FC = () => {
 
         setSelectedUserAllowedExchanges(allowedKeys)
         setSelectedUserAllowedExchangeCount(allowedKeys.length)
+
+        // Store parent's P&L and brokerage sharing for calculating remaining share
+        setSelectedUserParentPnlSharing(userInfo?.parentPnlSharing || userInfo?.pnlSharing || 100)
+        setSelectedUserParentBrkSharing(userInfo?.parentBrkSharing || userInfo?.brkSharing || 100)
 
         // Check addMaster flag from fetched user details and update available user types
         const userAddMaster = userInfo?.addMaster ?? false
@@ -1155,11 +1166,17 @@ const CreateNewUser: React.FC = () => {
                         <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">Partnership Share Detail</h3>
                       </div>
 
+                      {(() => {
+                        const hasParent = isEditMode ? !!editingUser?.parentId : forUserAccount
+                        const availablePnl = hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)
+                        const availableBrokerage = hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)
+
+                        return (
+                          <>
                       <div className="mb-6">
                         <label className="block text-sm font-semibold text-text-primary mb-3 uppercase tracking-wide">Profit & Loss Sharing*</label>
                         <Field name="pnlSharing">
                           {({ field, meta }: any) => {
-                            const availablePnl = userConfig?.pnlSharing || 100
                             const currentValue = field.value ?? 0
                             const isExceeding = currentValue > availablePnl
 
@@ -1191,12 +1208,12 @@ const CreateNewUser: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4 mt-4">
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Our</p>
-                            <p className="text-2xl font-bold text-purple-500">{userConfig?.pnlSharing || 100}.00</p>
+                            <p className="text-2xl font-bold text-purple-500">{hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)}.00</p>
                           </div>
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Remaining</p>
-                            <p className={`text-2xl font-bold ${(values.pnlSharing || 0) > (userConfig?.pnlSharing || 100) ? 'text-red-500' : 'text-text-primary'}`}>
-                              {((userConfig?.pnlSharing || 100) - (values.pnlSharing || 0)).toFixed(2)}
+                            <p className={`text-2xl font-bold ${(values.pnlSharing || 0) > (hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)) ? 'text-red-500' : 'text-text-primary'}`}>
+                              {((hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)) - (values.pnlSharing || 0)).toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -1206,7 +1223,6 @@ const CreateNewUser: React.FC = () => {
                         <label className="block text-sm font-semibold text-text-primary mb-3 uppercase tracking-wide">BRK Sharing*</label>
                         <Field name="brokerageSharing">
                           {({ field, meta }: any) => {
-                            const availableBrokerage = userConfig?.brokeragePercentage || 100
                             const currentValue = field.value ?? 0
                             const isExceeding = currentValue > availableBrokerage
 
@@ -1238,16 +1254,19 @@ const CreateNewUser: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4 mt-4">
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Our</p>
-                            <p className="text-2xl font-bold text-pink-500">{userConfig?.brokeragePercentage || 100}.00</p>
+                            <p className="text-2xl font-bold text-pink-500">{hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)}.00</p>
                           </div>
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Remaining</p>
-                            <p className={`text-2xl font-bold ${(values.brokerageSharing || 0) > (userConfig?.brokeragePercentage || 100) ? 'text-red-500' : 'text-text-primary'}`}>
-                              {((userConfig?.brokeragePercentage || 100) - (values.brokerageSharing || 0)).toFixed(2)}
+                            <p className={`text-2xl font-bold ${(values.brokerageSharing || 0) > (hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)) ? 'text-red-500' : 'text-text-primary'}`}>
+                              {((hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)) - (values.brokerageSharing || 0)).toFixed(2)}
                             </p>
                           </div>
                         </div>
                       </div>
+                          </>
+                        )
+                      })()}
                     </motion.div>
                   )}
 

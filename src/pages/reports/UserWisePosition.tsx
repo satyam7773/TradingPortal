@@ -136,7 +136,7 @@ const UserWisePosition: React.FC = () => {
 
         if (posData?.positions?.length > 0) {
           const currentUser = JSON.parse(localStorage.getItem('userData') || '{}');
-          setupSocketSubscriptions(currentUser.userId || uids[0], posData.positions);
+          setupSocketSubscriptions(currentUser.userId, posData.positions);
         }
       } else {
         setFilteredPositions([]);
@@ -375,11 +375,13 @@ const UserWisePosition: React.FC = () => {
             // Update positions with new LTP and market data
             const updatedPositions = prevData.positions.map(position => {
               const newPrice = priceMap.get(position.token)
-              if (newPrice && newPrice.ltp !== undefined) {
-                // Recalculate P&L with new LTP (handle SELL positions correctly)
+              if (newPrice && (newPrice.bid !== undefined || newPrice.ask !== undefined)) {
+                // Use average of bid and ask as price source
+                const price = ((newPrice.bid || 0) + (newPrice.ask || 0)) / 2
+                // Recalculate P&L with price (handle SELL positions correctly)
                 const pnlValue = position.position === 'SELL'
-                  ? (position.averagePrice - newPrice.ltp) * position.netQuantity
-                  : (newPrice.ltp - position.averagePrice) * position.netQuantity
+                  ? (position.averagePrice - price) * position.netQuantity
+                  : (price - position.averagePrice) * position.netQuantity
                 const pnlPercentage = ((pnlValue / (position.averagePrice * position.netQuantity)) * 100)
 
                 // Track changes for animation
@@ -456,10 +458,12 @@ const UserWisePosition: React.FC = () => {
           setFilteredPositions(prevFiltered => {
             return prevFiltered.map(position => {
               const newPrice = priceMap.get(position.token)
-              if (newPrice && newPrice.ltp !== undefined) {
+              if (newPrice && (newPrice.bid !== undefined || newPrice.ask !== undefined)) {
+                // Use average of bid and ask as price source
+                const price = ((newPrice.bid || 0) + (newPrice.ask || 0)) / 2
                 const pnlValue = position.position === 'SELL'
-                  ? (position.averagePrice - newPrice.ltp) * position.netQuantity
-                  : (newPrice.ltp - position.averagePrice) * position.netQuantity
+                  ? (position.averagePrice - price) * position.netQuantity
+                  : (price - position.averagePrice) * position.netQuantity
                 const pnlPercentage = ((pnlValue / (position.averagePrice * position.netQuantity)) * 100)
 
                 return {
@@ -898,9 +902,8 @@ const UserWisePosition: React.FC = () => {
                             <td className="px-4 py-2 text-xs text-right">{position.averagePrice?.toFixed(2)}</td>
                             <td className="px-4 py-2 text-xs text-right font-bold">
                               {(() => {
-                                const cmpPrice = position.position === 'BUY' ? position.bid : position.ask;
-                                const cmpKey = position.position === 'BUY' ? 'bid' : 'ask';
-                                return <span className={getHighlightClass(cmpKey as keyof PriceChange)}>{cmpPrice?.toFixed(2) || '0.00'}</span>;
+                                const cmpPrice = ((position.bid || 0) + (position.ask || 0)) / 2;
+                                return <span className={getHighlightClass('ltp' as keyof PriceChange)}>{cmpPrice?.toFixed(2) || '0.00'}</span>;
                               })()}
                             </td>
                             <td className="px-4 py-2 text-xs text-right font-bold">

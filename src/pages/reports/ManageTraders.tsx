@@ -143,9 +143,12 @@ const ManageTraders: React.FC = () => {
           console.log('First trade keys:', Object.keys(tradesList[0]));
         }
         setTrades(Array.isArray(tradesList) ? tradesList : []);
-        const totalSize = result.data?.size || tradesList.length;
+        const limit = result.data?.limit || 100;
+        const totalSize = result.data?.total || result.data?.totalRecords || result.data?.size || tradesList.length;
         setTotalRecords(totalSize);
-        setTotalPages(Math.ceil(totalSize / pageSize));
+        // Calculate pages based on total records and limit
+        const calculatedPages = Math.ceil(totalSize / limit);
+        setTotalPages(calculatedPages);
         setCurrentPage(page);
       } else {
         setTrades([]);
@@ -791,8 +794,8 @@ const ManageTraders: React.FC = () => {
           <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200/50 dark:border-slate-600/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-600 dark:text-slate-400">
-                Showing <span className="font-semibold text-slate-900 dark:text-white">{currentPage * pageSize + 1}</span> to{' '}
-                <span className="font-semibold text-slate-900 dark:text-white">{Math.min((currentPage + 1) * pageSize, totalRecords)}</span> of{' '}
+                Showing <span className="font-semibold text-slate-900 dark:text-white">1</span> to{' '}
+                <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> of{' '}
                 <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> results
               </div>
               <div className="flex items-center gap-3">

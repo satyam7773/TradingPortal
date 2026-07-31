@@ -18,14 +18,15 @@ interface Candle {
 const IntradayHistory: React.FC = () => {
   // Filter State
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), [])
-  const [fromDate, setFromDate] = useState<string>(today)
-  const [toDate, setToDate] = useState<string>(today)
+  const [selectedDate, setSelectedDate] = useState<string>(today)
+  const [selectedExchange, setSelectedExchange] = useState<string>('MCX')
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
   const [selectedInterval, setSelectedInterval] = useState<string>('minute')
 
   // Data State
   const [candles, setCandles] = useState<Candle[]>([])
   const [symbols, setSymbols] = useState<any[]>([])
+  const [exchanges, setExchanges] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
@@ -49,6 +50,21 @@ const IntradayHistory: React.FC = () => {
 
   const totalPages = Math.ceil(candles.length / pageSize)
 
+  // Fetch symbols for selected exchange
+  const fetchSymbolsForExchange = async (exchangeName: string) => {
+    try {
+      const symbolsResponse = await userManagementService.fetchSymbols(exchangeName)
+      if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+        setSymbols(symbolsResponse.data)
+        if (symbolsResponse.data.length > 0) {
+          setSelectedSymbol(String(symbolsResponse.data[0].insToken || symbolsResponse.data[0].token))
+        }
+      }
+    } catch (error: any) {
+      toast.error('Failed to load symbols')
+    }
+  }
+
   // Fetch candle data
   const handleFetchCandles = async (symbolOverride?: string) => {
     const symbolToUse = symbolOverride || selectedSymbol
@@ -65,8 +81,8 @@ const IntradayHistory: React.FC = () => {
       const candleData = await intradayHistoryService.getHistory(
         symbolToUse,
         selectedInterval,
-        fromDate,
-        toDate
+        selectedDate,
+        selectedDate
       )
       setCandles(candleData)
       if (candleData.length === 0) {
@@ -88,16 +104,24 @@ const IntradayHistory: React.FC = () => {
       try {
         setInitialLoading(true)
 
-        // Fetch all symbols (using MCX as default exchange)
-        const symbolsResponse = await userManagementService.fetchSymbols('MCX')
-        if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
-          setSymbols(symbolsResponse.data)
-          if (symbolsResponse.data.length > 0) {
-            setSelectedSymbol(String(symbolsResponse.data[0].insToken || symbolsResponse.data[0].token))
+        // Fetch exchanges
+        const exchangesResponse = await userManagementService.fetchExchanges()
+        if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
+          setExchanges(exchangesResponse)
+          const defaultExchange = exchangesResponse[0].name
+          setSelectedExchange(defaultExchange)
+          
+          // Fetch symbols for default exchange
+          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
+          if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+            setSymbols(symbolsResponse.data)
+            if (symbolsResponse.data.length > 0) {
+              setSelectedSymbol(String(symbolsResponse.data[0].insToken || symbolsResponse.data[0].token))
+            }
           }
         }
       } catch (error: any) {
-        toast.error('Failed to load symbols')
+        toast.error('Failed to load metadata')
       } finally {
         setInitialLoading(false)
       }
@@ -105,6 +129,13 @@ const IntradayHistory: React.FC = () => {
 
     loadInitialData()
   }, [])
+
+  // Fetch symbols when exchange changes
+  useEffect(() => {
+    if (selectedExchange && !initialLoading) {
+      fetchSymbolsForExchange(selectedExchange)
+    }
+  }, [selectedExchange])
 
   const formatDateTime = (dateTimeStr: string) => {
     try {
@@ -144,23 +175,26 @@ const IntradayHistory: React.FC = () => {
   const filtersPanel = (
     <div className="space-y-4 p-4">
       <div className="space-y-2">
-        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">From :</label>
+        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Date :</label>
         <input
           type="date"
-          value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
           className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500"
         />
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">To :</label>
-        <input
-          type="date"
-          value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
+        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
+        <select
+          value={selectedExchange}
+          onChange={(e) => setSelectedExchange(e.target.value)}
           className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500"
-        />
+        >
+          {exchanges.map((ex) => (
+            <option key={ex.name} value={ex.name}>{ex.name}</option>
+          ))}
+        </select>
       </div>
 
       <SearchableSelect
@@ -184,8 +218,6 @@ const IntradayHistory: React.FC = () => {
           <option value="30minute">30 Minutes</option>
           <option value="60minute">1 Hour</option>
           <option value="day">Daily</option>
-          <option value="week">Weekly</option>
-          <option value="month">Monthly</option>
         </select>
       </div>
 
@@ -199,8 +231,9 @@ const IntradayHistory: React.FC = () => {
         </button>
         <button
           onClick={() => {
-            setFromDate(today)
-            setToDate(today)
+            setSelectedDate(today)
+            setSelectedExchange(exchanges[0]?.name || 'MCX')
+            setSelectedSymbol('')
             setSelectedInterval('minute')
             setCandles([])
             setCurrentPage(0)
@@ -228,7 +261,7 @@ const IntradayHistory: React.FC = () => {
                 <div>
                   <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Intraday History</h1>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-medium">
-                    {selectableSymbols.find(s => s.id === selectedSymbol)?.name || 'Select Symbol'} • <span className="text-blue-600 font-semibold">{selectedInterval}</span> • <span className="text-blue-600 font-semibold">{fromDate} to {toDate}</span>
+                    {selectableSymbols.find(s => s.id === selectedSymbol)?.name || 'Select Symbol'} • <span className="text-blue-600 font-semibold">{selectedInterval}</span> • <span className="text-blue-600 font-semibold">{selectedDate}</span>
                   </p>
                 </div>
                 <div className="grid grid-cols-4 gap-6 text-center">
