@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
@@ -30,10 +30,6 @@ const IntradayHistory: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(0)
-  const pageSize = 100
-
   // Adapt symbols for SearchableSelect
   const selectableSymbols = useMemo(() => {
     return symbols.map(s => ({
@@ -42,13 +38,7 @@ const IntradayHistory: React.FC = () => {
     }))
   }, [symbols])
 
-  // Paginated candles
-  const paginatedCandles = useMemo(() => {
-    const start = currentPage * pageSize
-    return candles.slice(start, start + pageSize)
-  }, [candles, currentPage, pageSize])
 
-  const totalPages = Math.ceil(candles.length / pageSize)
 
   // Fetch symbols for selected exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
@@ -75,7 +65,6 @@ const IntradayHistory: React.FC = () => {
     }
 
     setLoading(true)
-    setCurrentPage(0)
 
     try {
       const candleData = await intradayHistoryService.getHistory(
@@ -236,7 +225,6 @@ const IntradayHistory: React.FC = () => {
             setSelectedSymbol('')
             setSelectedInterval('minute')
             setCandles([])
-            setCurrentPage(0)
           }}
           className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition"
         >
@@ -310,7 +298,7 @@ const IntradayHistory: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {paginatedCandles.map((candle, index) => (
+                    {candles.map((candle, index) => (
                       <tr key={index} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
                         <td className="px-6 py-4 text-left text-sm text-slate-900 dark:text-slate-100 whitespace-nowrap">
                           {formatDateTime(candle.timestamp)}
@@ -337,39 +325,7 @@ const IntradayHistory: React.FC = () => {
               )}
             </div>
 
-            {/* Footer - Pagination */}
-            {candles.length > 0 && (
-              <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-slate-600 dark:text-slate-400">
-                    Showing <span className="font-semibold text-slate-900 dark:text-white">{currentPage * pageSize + 1}</span> to{' '}
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      {Math.min((currentPage + 1) * pageSize, candles.length)}
-                    </span>{' '}
-                    of <span className="font-semibold text-slate-900 dark:text-white">{candles.length}</span> results
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                      disabled={currentPage === 0 || loading}
-                      className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 disabled:opacity-40 transition shadow-sm inline-flex items-center gap-2"
-                    >
-                      <ChevronLeft className="w-4 h-4" /> Previous
-                    </button>
-                    <span className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                      Page {currentPage + 1} of {totalPages}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                      disabled={currentPage >= totalPages - 1 || loading}
-                      className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 disabled:opacity-40 transition shadow-sm inline-flex items-center gap-2"
-                    >
-                      Next <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+
           </div>
         </FilterLayout>
       </div>

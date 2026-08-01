@@ -1168,8 +1168,8 @@ const CreateNewUser: React.FC = () => {
 
                       {(() => {
                         const hasParent = isEditMode ? !!editingUser?.parentId : forUserAccount
-                        const availablePnl = hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)
-                        const availableBrokerage = hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)
+                        const availablePnl = isEditMode ? (editingUser?.parentPnlSharing || 100) : (userConfig?.pnlSharing || 100)
+                        const availableBrokerage = isEditMode ? (editingUser?.parentBrkSharing || 100) : (userConfig?.brokeragePercentage || 100)
 
                         return (
                           <>
@@ -1208,12 +1208,12 @@ const CreateNewUser: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4 mt-4">
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Our</p>
-                            <p className="text-2xl font-bold text-purple-500">{hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)}.00</p>
+                            <p className="text-2xl font-bold text-purple-500">{availablePnl}.00</p>
                           </div>
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Remaining</p>
-                            <p className={`text-2xl font-bold ${(values.pnlSharing || 0) > (hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)) ? 'text-red-500' : 'text-text-primary'}`}>
-                              {((hasParent ? (isEditMode ? (editingUser?.parentPnlSharing || 100) : selectedUserParentPnlSharing) : (userConfig?.pnlSharing || 100)) - (values.pnlSharing || 0)).toFixed(2)}
+                            <p className={`text-2xl font-bold ${(values.pnlSharing || 0) > availablePnl ? 'text-red-500' : 'text-text-primary'}`}>
+                              {(availablePnl - (values.pnlSharing || 0)).toFixed(2)}
                             </p>
                           </div>
                         </div>
@@ -1254,12 +1254,12 @@ const CreateNewUser: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4 mt-4">
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Our</p>
-                            <p className="text-2xl font-bold text-pink-500">{hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)}.00</p>
+                            <p className="text-2xl font-bold text-pink-500">{availableBrokerage}.00</p>
                           </div>
                           <div className="bg-surface-secondary rounded-xl p-4 border border-border-primary">
                             <p className="text-xs text-text-secondary mb-1 uppercase tracking-wide">Remaining</p>
-                            <p className={`text-2xl font-bold ${(values.brokerageSharing || 0) > (hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)) ? 'text-red-500' : 'text-text-primary'}`}>
-                              {((hasParent ? (isEditMode ? (editingUser?.parentBrkSharing || 100) : selectedUserParentBrkSharing) : (userConfig?.brokeragePercentage || 100)) - (values.brokerageSharing || 0)).toFixed(2)}
+                            <p className={`text-2xl font-bold ${(values.brokerageSharing || 0) > availableBrokerage ? 'text-red-500' : 'text-text-primary'}`}>
+                              {(availableBrokerage - (values.brokerageSharing || 0)).toFixed(2)}
                             </p>
                           </div>
                         </div>
