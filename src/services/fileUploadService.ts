@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient'
+import { apiClient, TokenManager } from './apiClient'
 
 export type FileReaderType = 'OPTION' | 'FUTURE'
 export type ExchangeType = 'DEFAULT' | 'MCX'
@@ -139,6 +139,155 @@ class FileUploadService {
 
     return { valid: true }
   }
+
+  /**
+   * Fetch active instruments for SGX and OTHERS exchanges
+   */
+  async getActiveInstruments() {
+    try {
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'
+      const url = `${baseURL}/user/api/instruments/active`
+      
+      const headers: any = {
+        'Content-Type': 'application/json'
+      }
+      
+      // Add authorization token if available
+      const token = TokenManager.getToken()
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      return Array.isArray(data) ? data : data?.data || []
+    } catch (error: any) {
+      console.error('❌ Error fetching instruments:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update circuit limits for an instrument
+   * @param instrumentToken - Kite instrument token
+   * @param lowerLimit - Lower circuit limit
+   * @param upperLimit - Upper circuit limit
+   * @param closingPrice - Closing price
+   */
+  async updateCircuitLimits(
+    instrumentToken: number,
+    lowerLimit: number,
+    upperLimit: number,
+    closingPrice: number
+  ) {
+    try {
+      const payload = {
+        instrument_token: instrumentToken,
+        lower_circuit_limit: lowerLimit,
+        upper_circuit_limit: upperLimit,
+        closing_price: closingPrice
+      }
+
+      const response = await fetch('https://api-staging.rivoplus.live/quotes/kite/updateCircuits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        try {
+          const errorData = JSON.parse(text)
+          throw new Error(errorData.responseMessage || `Update failed with status ${response.status}`)
+        } catch (e) {
+          throw new Error(text || `Update failed with status ${response.status}`)
+        }
+      }
+
+      const responseText = await response.text()
+      let data: FileUploadResponse
+      try {
+        data = JSON.parse(responseText)
+      } catch (e) {
+        data = {
+          responseCode: '200',
+          responseMessage: responseText
+        }
+      }
+
+      return data
+    } catch (error: any) {
+      console.error('❌ Circuit limits update error:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update closing price for an instrument
+   * @param instrumentToken - Kite instrument token
+   * @param closingPrice - Closing price
+   */
+  async updateClosingPrice(
+    instrumentToken: number,
+    closingPrice: number
+  ) {
+    try {
+      const payload = {
+        instrument_token: instrumentToken,
+        closing_price: closingPrice
+      }
+
+      const response = await fetch('https://api-staging.rivoplus.live/quotes/kite/updateClosingPrice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        try {
+          const errorData = JSON.parse(text)
+          throw new Error(errorData.responseMessage || `Update failed with status ${response.status}`)
+        } catch (e) {
+          throw new Error(text || `Update failed with status ${response.status}`)
+        }
+      }
+
+      const responseText = await response.text()
+      let data: FileUploadResponse
+      try {
+        data = JSON.parse(responseText)
+      } catch (e) {
+        data = {
+          responseCode: '200',
+          responseMessage: responseText
+        }
+      }
+
+      return data
+    } catch (error: any) {
+      console.error('❌ Closing price update error:', error)
+      throw error
+    }
+  }
 }
 
 export const fileUploadService = new FileUploadService()
+
+export interface ActiveInstrument {
+  exchangeName: string
+  tradeSymbol: string
+  token: number
+}

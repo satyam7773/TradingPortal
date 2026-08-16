@@ -208,6 +208,7 @@ const AccountSummary: React.FC = () => {
         <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
             <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
                 <FilterLayout
+                    filterWidthClass="lg:w-[16%]"
                     header={(
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -385,14 +386,14 @@ const AccountSummary: React.FC = () => {
                                                     </td>
                                                     <td className={`text-right px-4 py-3 text-xs font-semibold whitespace-nowrap ${
                                                         row.amount >= 0
-                                                            ? 'text-blue-600 dark:text-blue-400'
+                                                            ? 'text-green-600 dark:text-green-400'
                                                             : 'text-red-600 dark:text-red-400'
                                                     }`}>
                                                         ₹{row.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </td>
                                                     <td className={`text-right px-4 py-3 text-xs font-semibold whitespace-nowrap ${
                                                         row.closing >= 0
-                                                            ? 'text-blue-600 dark:text-blue-400'
+                                                            ? 'text-green-600 dark:text-green-400'
                                                             : 'text-red-600 dark:text-red-400'
                                                     }`}>
                                                         ₹{row.closing?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { createPortal } from 'react-dom';
 import { apiClient } from '../../services/apiClient';
 
 interface TradeData {
@@ -67,16 +68,15 @@ const DurationDetailsModal: React.FC<DurationDetailsModalProps> = ({ isOpen, tra
 
   if (!isOpen) return null;
 
-  const typeColorClass = (side: string) => side === 'BUY' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
-  const typeBgClass = (side: string) => side === 'BUY' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30';
+  const typeColorClass = (side: string) => side?.toUpperCase().startsWith('BUY') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+  const typeBgClass = (side: string) => side?.toUpperCase().startsWith('BUY') ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30';
 
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[9999]">
-      <div className="overflow-y-auto min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-6xl">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700 flex flex-col">
-            {/* Header - Fixed with rounded top corners */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl flex-shrink-0">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+      <div className="w-full max-w-6xl max-h-[90vh] flex flex-col">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700 flex flex-col h-full">
+          {/* Header - Fixed with rounded top corners */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl flex-shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Trade Duration Details</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Trade ID: {tradeId}</p>
@@ -90,7 +90,7 @@ const DurationDetailsModal: React.FC<DurationDetailsModalProps> = ({ isOpen, tra
             </div>
 
           {/* Content - Scrollable */}
-          <div className="p-6 overflow-y-auto">
+          <div className="p-6 overflow-y-auto flex-1">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-slate-500 dark:text-slate-400">Loading...</div>
@@ -123,7 +123,7 @@ const DurationDetailsModal: React.FC<DurationDetailsModalProps> = ({ isOpen, tra
                           <td className="px-4 py-3 text-slate-900 dark:text-white font-bold whitespace-nowrap">{trade.symbol}</td>
                           <td className="px-4 py-3 text-center whitespace-nowrap">
                             <span className={`text-xs font-bold ${typeColorClass(trade.side)} ${typeBgClass(trade.side)} px-2 py-1 rounded`}>
-                              {trade.side === 'BUY' ? 'Buy' : 'Sell'}
+                              {trade.side}
                             </span>
                           </td>
                           <td className={`px-4 py-3 text-center font-bold whitespace-nowrap ${typeColorClass(trade.side)}`}>
@@ -132,7 +132,7 @@ const DurationDetailsModal: React.FC<DurationDetailsModalProps> = ({ isOpen, tra
                           <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${typeColorClass(trade.side)}`}>
                             {trade.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
-                          <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${typeColorClass(trade.side)}`}>
+                          <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${trade.deal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                             {trade.deal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-300 whitespace-nowrap">
@@ -158,8 +158,8 @@ const DurationDetailsModal: React.FC<DurationDetailsModalProps> = ({ isOpen, tra
           </div>
         </div>
       </div>
-      </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

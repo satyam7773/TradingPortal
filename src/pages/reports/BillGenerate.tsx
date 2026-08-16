@@ -111,7 +111,7 @@ const BillGenerate: React.FC = () => {
             <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
                 <FilterLayout
                     storageKey="bill:showFilters"
-                    filterWidthClass="lg:w-[22%]"
+                    filterWidthClass="lg:w-[16%]"
                     filters={
                         <div className="space-y-4 p-4">
                             <div className="space-y-2">

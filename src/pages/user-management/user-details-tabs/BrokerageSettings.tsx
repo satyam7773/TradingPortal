@@ -246,7 +246,7 @@ const handleApply = () => {
   return (
     <FilterLayout
       storageKey="brokerageSettings:showFilters"
-      filterWidthClass="lg:w-[25%]"
+      filterWidthClass="lg:w-[16%]"
       filters={
         <div className="space-y-3 p-4">
           <label className="text-xs text-slate-600 dark:text-slate-300 block">

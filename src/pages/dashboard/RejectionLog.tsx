@@ -195,7 +195,7 @@ const RejectionLog: React.FC = () => {
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
         <FilterLayout
           storageKey="rejection:showFilters"
-          filterWidthClass="lg:w-[22%]"
+          filterWidthClass="lg:w-[16%]"
           filters={
             <div className="space-y-4 p-4">
               {/* Date Range Section - EXACTLY like Orders Page */}
@@ -332,7 +332,7 @@ const RejectionLog: React.FC = () => {
 
                         return (
                           <tr key={index} className="border-b border-slate-200/70 dark:border-slate-700/70 hover:bg-blue-50/80 dark:hover:bg-slate-700/50 transition-colors">
-                            <td className="px-4 py-3.5 text-xs text-slate-500 font-mono tracking-tighter whitespace-nowrap">
+                            <td className="px-4 py-3.5 text-xs font-bold text-slate-800 dark:text-slate-200 font-mono tracking-tighter whitespace-nowrap">
                               {formatDateTime(log.createdAt)}
                             </td>
 
@@ -370,7 +370,7 @@ const RejectionLog: React.FC = () => {
                               ₹{log.price.toFixed(2)}
                             </td>
 
-                            <td className="px-4 py-3.5 text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                            <td className="px-4 py-3.5 text-[10px] font-bold text-slate-800 dark:text-slate-200 leading-tight">
                               {log.deviceId} <br /> {log.ipAddress}
                             </td>
                           </tr>

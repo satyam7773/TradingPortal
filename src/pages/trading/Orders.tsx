@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Search, BarChart3, ChevronLeft, ChevronRight, Trash2, CheckCircle } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
@@ -6,6 +6,7 @@ import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
+import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 
 // --- Interfaces ---
 interface OrderData {
@@ -24,31 +25,59 @@ interface UserData {
   ipAddress: string; deviceId: string; lastLogin: string; createdDate: string;
 }
 
-const Orders: React.FC = () => {
-  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
-  const [fromDate, setFromDate] = useState<string>(today);
-  const [toDate, setToDate] = useState<string>(today);
+interface OrdersPageProps extends CacheContextProps {}
 
-  const [selectedUserId, setSelectedUserId] = useState<number | string>(0)
-  const [selectedExchange, setSelectedExchange] = useState<string>('')
-  const [selectedSymbol, setSelectedSymbol] = useState<string>('')
-
-  const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
-
-  const [ordersData, setOrdersData] = useState<OrdersResponse | null>(null)
-  const [users, setUsers] = useState<any[]>([])
-  const [exchanges, setExchanges] = useState<any[]>([])
-  const [symbols, setSymbols] = useState<any[]>([])
-  const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize, setPageSize] = useState(10)
-  const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set())
-  const [selectedUser, setSelectedUser] = useState<any | null>(null)
-
+const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave, isRestoringCache }) => {
   const loggedInUserId = useMemo(() => {
     const userDataStr = localStorage.getItem('userData')
     return userDataStr ? JSON.parse(userDataStr).userId : 31
   }, [])
+
+  // Initialize state with cache if available
+  const initializeFilterState = () => {
+    if (cacheData) {
+      return cacheData
+    }
+    const todayStr = new Date().toLocaleDateString('en-CA')
+    return {
+      fromDate: todayStr,
+      toDate: todayStr,
+      selectedUserId: 0,
+      selectedExchange: '',
+      selectedSymbol: '',
+      currentPage: 0
+    }
+  }
+
+  const initialFilters = initializeFilterState()
+  const cacheLoggedRef = React.useRef(false)
+  const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), [])
+  
+  // Log cache found once
+  useEffect(() => {
+    if (cacheData && !cacheLoggedRef.current) {
+      console.log('✅ [Orders] Initializing from cache:', cacheData)
+      cacheLoggedRef.current = true
+    }
+  }, [cacheData])
+  const [fromDate, setFromDate] = useState<string>(initialFilters.fromDate);
+  const [toDate, setToDate] = useState<string>(initialFilters.toDate);
+
+  const [selectedUserId, setSelectedUserId] = useState<number | string>(initialFilters.selectedUserId)
+  const [selectedExchange, setSelectedExchange] = useState<string>(initialFilters.selectedExchange)
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(initialFilters.selectedSymbol)
+
+  const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
+
+  const [ordersData, setOrdersData] = useState<OrdersResponse | null>(apiData?.ordersData || null)
+  const [users, setUsers] = useState<any[]>([])
+  const [exchanges, setExchanges] = useState<any[]>([])
+  const [symbols, setSymbols] = useState<any[]>([])
+  const [currentPage, setCurrentPage] = useState(initialFilters.currentPage)
+  const [pageSize, setPageSize] = useState(10)
+  const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set())
+  const [selectedUser, setSelectedUser] = useState<any | null>(null)
 
   const userDataStr = localStorage.getItem('userData');
   const loggedInUser = userDataStr ? JSON.parse(userDataStr) : null;
@@ -68,6 +97,33 @@ const Orders: React.FC = () => {
       name: s.tradeSymbol || s
     }));
   }, [symbols]);
+
+  const cacheTimerRef = React.useRef<any>(null)
+  const cacheInitializedRef = React.useRef(false)
+  const metadataLoadedRef = React.useRef(false)
+
+  // Fetch initial data only if cache doesn't exist
+  useEffect(() => {
+    if (!cacheInitializedRef.current && !cacheData) {
+      console.log('📡 [Orders] No cache found, fetching initial data...')
+      handleFetchOrders()
+      cacheInitializedRef.current = true
+    }
+  }, [cacheData]) // Watch cacheData to handle first load
+
+  // Handle cache data changes (when switching back to this tab with cache)
+  useEffect(() => {
+    if (cacheData && !cacheInitializedRef.current) {
+      console.log('🔄 [Orders] Cache found, initializing from cache')
+      cacheInitializedRef.current = true
+      
+      // Restore cached data if available
+      if (apiData?.ordersData) {
+        console.log('📊 [Orders] Restoring cached table data')
+        setOrdersData(apiData.ordersData)
+      }
+    }
+  }, [cacheData, apiData])
 
   // --- Core Fetch Logic ---
   const handleFetchOrders = async (pageOverride?: number, customId?: number | string, customEx?: string) => {
@@ -107,6 +163,9 @@ const Orders: React.FC = () => {
 
   // --- Lifecycle: Initial Metadata Load & Auto-Fetch ---
   useEffect(() => {
+    // Only load metadata once per session, not on every tab switch
+    if (metadataLoadedRef.current) return
+
     const loadInitialData = async () => {
       try {
         setInitialLoading(true)
@@ -115,38 +174,60 @@ const Orders: React.FC = () => {
           userManagementService.fetchExchanges()
         ]);
 
-        let defaultUserId: number | string = loggedInUserId;
-        let defaultExchange = '';
-
         if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
           setUsers(usersResponse.data)
-          if (usersResponse.data.length > 0) {
-            defaultUserId = usersResponse.data[0].userId;
+          // Only set default user if no cache exists
+          if (!cacheData && usersResponse.data.length > 0) {
+            const defaultUserId = usersResponse.data[0].userId;
             setSelectedUserId(defaultUserId)
           }
         }
 
         if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
           setExchanges(exchangesResponse)
-          defaultExchange = exchangesResponse[0].name;
-          setSelectedExchange(defaultExchange)
+          // Only set default exchange if no cache exists
+          if (!cacheData) {
+            const defaultExchange = exchangesResponse[0].name;
+            setSelectedExchange(defaultExchange)
 
-          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
-          if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
-            setSymbols(symbolsResponse.data)
+            const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
+            if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
+              setSymbols(symbolsResponse.data)
+            }
           }
         }
-
-        handleFetchOrders(0, defaultUserId, defaultExchange);
-
       } catch (error: any) {
         toast.error('Failed to initialize filters')
       } finally {
         setInitialLoading(false)
       }
     }
+    
     loadInitialData()
-  }, [loggedInUserId])
+    metadataLoadedRef.current = true // Mark as loaded so it doesn't run again
+  }, [cacheData, loggedInUserId]) // Added cacheData as dependency
+
+  // Save filters to cache whenever they change (debounced)
+  useEffect(() => {
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
+    
+    cacheTimerRef.current = setTimeout(() => {
+      const filters = {
+        fromDate,
+        toDate,
+        selectedUserId,
+        selectedExchange,
+        selectedSymbol,
+        currentPage
+      }
+      console.log('💾 [Orders] Saving filters to cache')
+      onCacheSave(filters, { ordersData })
+    }, 500)
+    
+    return () => {
+      if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
+    }
+  }, [fromDate, toDate, selectedUserId, selectedExchange, selectedSymbol, currentPage, ordersData, onCacheSave])
 
   const handleExchangeChange = async (name: string) => {
     setSelectedExchange(name);
@@ -243,22 +324,34 @@ const Orders: React.FC = () => {
     totalValue: ordersData?.orders.reduce((sum, o) => sum + (o.price * o.quantity), 0) || 0,
   }
 
+  // Clear all filters
+  const handleClearFilters = useCallback(() => {
+    console.log('🗑️ [Orders] Clearing all filters')
+    setFromDate(todayStr)
+    setToDate(todayStr)
+    setSelectedUserId(0)
+    setSelectedExchange('')
+    setSelectedSymbol('')
+    setOrdersData(null)
+    setCurrentPage(0)
+  }, [todayStr])
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
         <FilterLayout
           storageKey="orders:showFilters"
-          filterWidthClass="lg:w-[22%]"
+          filterWidthClass="lg:w-[16%]"
           filters={
             <div className="space-y-4 p-4">
               <div className="space-y-3 pb-4 border-b border-gray-300 dark:border-slate-600">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">From Date :</label>
-                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} max={today} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} max={todayStr} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">To Date :</label>
-                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} max={today} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} max={todayStr} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
               <div className="space-y-3">
@@ -292,32 +385,7 @@ const Orders: React.FC = () => {
                     {loading ? 'Loading...' : 'View'}
                   </button>
                   <button
-                    onClick={() => {
-                      const allExchangesValue = 'All Exchanges';
-                      setSelectedUserId(loggedInUserId);
-                      setSelectedExchange(allExchangesValue);
-                      setSelectedSymbol('');
-                      setFromDate(today);
-                      setToDate(today);
-                      setOrdersData(null);
-                      setCurrentPage(0);
-                      
-                      // Fetch symbols for All Exchanges
-                      userManagementService.fetchSymbols(allExchangesValue).then(res => {
-                        let symbolsData = res;
-                        // Handle both auto-unwrapped (array) and non-unwrapped (object with data) responses
-                        if (res?.responseCode === '0' && res.data) {
-                          symbolsData = res.data;
-                        }
-                        if (Array.isArray(symbolsData) && symbolsData.length > 0) {
-                          setSymbols(symbolsData);
-                        } else {
-                          setSymbols([]);
-                        }
-                      }).catch(() => {
-                        setSymbols([]);
-                      });
-                    }}
+                    onClick={handleClearFilters}
                     className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition"
                   >
                     Clear
@@ -334,7 +402,7 @@ const Orders: React.FC = () => {
                   <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Orders</h1>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-medium">{fromDate} to {toDate}</p>
                 </div>
-                <div className="grid grid-cols-3 gap-6 text-right">
+                <div className="grid grid-cols-3 gap-6 text-center">
                   <div>
                     <div className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalOrders}</div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">Total Orders</div>
@@ -343,10 +411,7 @@ const Orders: React.FC = () => {
                     <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalQuantity}</div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">Total Quantity</div>
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">₹{(stats.totalValue / 100000).toFixed(1)}L</div>
-                    <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">Total Value</div>
-                  </div>
+              
                 </div>
               </div>
             </div>
@@ -401,9 +466,9 @@ const Orders: React.FC = () => {
                         </th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Username</th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Placed By</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Symbol</th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[110px]">Symbol</th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Type</th>
-                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Quantity</th>
+                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[10px]">Quantity</th>
                         <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Price</th>
                         <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Brk</th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Order Time</th>
@@ -457,7 +522,7 @@ const Orders: React.FC = () => {
                               {order.placedByUsername || '-'}
                             </td>
 
-                            <td className={`px-4 py-3.5 text-left text-sm font-bold uppercase ${sideColorClass}`}>
+                            <td className={`px-4 py-3.5 text-left text-sm font-bold uppercase ${sideColorClass} max-w-[110px] truncate`}>
                               {order.exchange} {order.tradeSymbol}
                             </td>
 
@@ -465,7 +530,7 @@ const Orders: React.FC = () => {
                               {isBuy ? 'Buy' : 'Sell'} {order.orderLimitType === 'LIMIT' ? 'Limit' : order.orderLimitType}
                             </td>
 
-                            <td className={`px-4 py-3.5 text-left text-sm font-bold ${sideColorClass}`}>
+                            <td className={`px-4 py-3.5 text-left text-sm font-bold ${sideColorClass} max-w-[10px] text-center`}>
                               {order.quantity}
                             </td>
 
@@ -526,4 +591,4 @@ const Orders: React.FC = () => {
   )
 }
 
-export default Orders;
+export default withTabCache(OrdersPage, { title: 'Orders' })

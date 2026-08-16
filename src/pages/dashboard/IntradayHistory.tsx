@@ -239,7 +239,7 @@ const IntradayHistory: React.FC = () => {
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
         <FilterLayout
           storageKey="intraday:showFilters"
-          filterWidthClass="lg:w-[22%]"
+          filterWidthClass="lg:w-[16%]"
           filters={filtersPanel}
         >
           <div className="flex flex-col h-full bg-white/70 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg backdrop-blur-sm overflow-hidden">

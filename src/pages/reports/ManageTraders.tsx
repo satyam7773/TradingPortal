@@ -53,6 +53,7 @@ const ManageTraders: React.FC = () => {
     buySell: '',
     exchange: '',
     symbols: '',
+    selectedSymbolToken: 0,
     ipDev: 'Default',
     duration: '',
     pnl: ''
@@ -70,13 +71,15 @@ const ManageTraders: React.FC = () => {
   const [isBrkModalOpen, setIsBrkModalOpen] = useState(false);
   const [isDealModalOpen, setIsDealModalOpen] = useState(false);
   const [isDurationModalOpen, setIsDurationModalOpen] = useState(false);
+  const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
   const pageSize = 10;
 
   // Dynamic dropdown options
   const [users, setUsers] = useState<any[]>([]);
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
-  const [statuses] = useState(['Pending', 'Successful', 'Rejected']);
+  const [statuses] = useState(['PENDING', 'SUCCESS']);
   const [orderTypes] = useState(['Market', 'Limit']);
   const [buySellTypes] = useState(['BUY', 'SELL']);
 
@@ -90,7 +93,7 @@ const ManageTraders: React.FC = () => {
   ], [users]);
 
   const symbolOptions = useMemo(() => [
-    ...symbols.map(s => ({ id: s.tradeSymbol || s.token, name: s.tradeSymbol || s }))
+    ...symbols.map(s => ({ id: s.token, name: s.tradeSymbol || s }))
   ], [symbols]);
 
   // Fetch trades data
@@ -124,6 +127,7 @@ const ManageTraders: React.FC = () => {
       if (filtersToUse.status) payload.data.status = filtersToUse.status;
       if (filtersToUse.orderType) payload.data.orderType = filtersToUse.orderType;
       if (filtersToUse.buySell) payload.data.side = filtersToUse.buySell;
+      if (filtersToUse.selectedSymbolToken) payload.data.token = filtersToUse.selectedSymbolToken;
       if (filtersToUse.ipDev && filtersToUse.ipDev !== 'Default') payload.data.ipDev = filtersToUse.ipDev;
       if (filtersToUse.duration) payload.data.duration = filtersToUse.duration;
       if (filtersToUse.pnl) payload.data.pnl = filtersToUse.pnl;
@@ -165,6 +169,58 @@ const ManageTraders: React.FC = () => {
   const handlePageChange = (newPage: number) => {
     if (newPage >= 0 && newPage < totalPages) {
       handleFetchTrades(newPage);
+    }
+  };
+
+  const handleDeleteTrades = async () => {
+    if (selectedTradeIds.size === 0) {
+      toast.error('Please select trades to delete');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedTradeIds.size} trade(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const selectedIndices = Array.from(selectedTradeIds);
+      const tradeIdsToDelete = selectedIndices.map(index => trades[index]?.tradeId || trades[index]?.id || 0);
+      const targetUserId = filters.selectedUserId || loggedInUserId;
+      const response = await userManagementService.deleteTrades(loggedInUserId, targetUserId, tradeIdsToDelete);
+
+      if (response?.responseCode === '0' || response?.success) {
+        toast.success(`${selectedTradeIds.size} trade(s) deleted successfully`);
+        setSelectedTradeIds(new Set());
+        // Refresh the current page
+        handleFetchTrades(currentPage);
+      } else {
+        toast.error(response?.responseMessage || response?.message || 'Failed to delete trades');
+      }
+    } catch (error: any) {
+      console.error('Error deleting trades:', error);
+      toast.error(error?.message || 'Error deleting trades');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSelectTrade = (index: number) => {
+    const newSelected = new Set(selectedTradeIds);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedTradeIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTradeIds.size === trades.length) {
+      setSelectedTradeIds(new Set());
+    } else {
+      const allIndices = new Set(trades.map((_, index) => index));
+      setSelectedTradeIds(allIndices);
     }
   };
 
@@ -301,6 +357,7 @@ const ManageTraders: React.FC = () => {
       buySell: '',
       exchange,
       symbols: '',
+      selectedSymbolToken: 0,
       ipDev: 'Default',
       duration: '',
       pnl: ''
@@ -311,6 +368,7 @@ const ManageTraders: React.FC = () => {
   return (
     <>
       <FilterLayout
+        filterWidthClass="lg:w-[16%]"
         header={(
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -324,6 +382,15 @@ const ManageTraders: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
+            {selectedTradeIds.size > 0 && (
+              <button
+                onClick={handleDeleteTrades}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition inline-flex items-center gap-2 shadow-md disabled:opacity-50"
+              >
+                Delete {selectedTradeIds.size > 0 && `(${selectedTradeIds.size})`}
+              </button>
+            )}
           </div>
         )}
         filters={(
@@ -430,7 +497,7 @@ const ManageTraders: React.FC = () => {
               </div>
 
               {/* Order Type */}
-              <div>
+              {/* <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Order Type</label>
                 <select
                   value={filters.orderType}
@@ -442,7 +509,7 @@ const ManageTraders: React.FC = () => {
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
-              </div>
+              </div> */}
 
               {/* Buy/Sell Type */}
               <div>
@@ -492,8 +559,8 @@ const ManageTraders: React.FC = () => {
               <SearchableSelect
                 label="Symbol :"
                 items={symbolOptions}
-                selectedId={filters.symbols}
-                onSelect={(id) => handleFilterChange('symbols', String(id))}
+                selectedId={filters.selectedSymbolToken}
+                onSelect={(id) => handleFilterChange('selectedSymbolToken', Number(id))}
                 placeholder="Search symbol..."
               />
 
@@ -516,7 +583,8 @@ const ManageTraders: React.FC = () => {
                       orderType: '',
                       buySell: '',
                       exchange: allExchangesValue,
-                      symbols: ''
+                      symbols: '',
+                      selectedSymbolToken: 0
                     }));
                     setTrades([]);
                     
@@ -609,14 +677,22 @@ const ManageTraders: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedTradeIds.size === trades.length && trades.length > 0}
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                      />
+                    </th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Username</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Symbol</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Type</th>
+                    <th className="text-center px-8 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Type</th>
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Quantity</th>
                     <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Price</th>
                     <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Brk</th>
                     <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Deal</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Duration</th>
+                    <th className="text-center px-16 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[200px]">Duration</th>
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Time</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Execution Time</th>
@@ -630,17 +706,17 @@ const ManageTraders: React.FC = () => {
                 <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
                   {trades.length === 0 ? (
                     <tr>
-                      <td colSpan={16} className="px-4 py-12 text-center">
+                      <td colSpan={17} className="px-4 py-12 text-center">
                         <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No trades found</h3>
                         <p className="text-slate-500 dark:text-slate-400">Adjust your filters and click "View" to load trades</p>
                       </td>
                     </tr>
                   ) : trades.map((trade, index) => {
-                    const typeColorClass = trade.type === 'BUY'
+                    const typeColorClass = trade.type?.toUpperCase().startsWith('BUY')
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-red-600 dark:text-red-400';
-                    const typeBgClass = trade.type === 'BUY'
+                    const typeBgClass = trade.type?.toUpperCase().startsWith('BUY')
                       ? 'bg-emerald-100 dark:bg-emerald-900/30'
                       : 'bg-red-100 dark:bg-red-900/30';
                     const pnlColorClass = trade.pnl >= 0
@@ -652,6 +728,16 @@ const ManageTraders: React.FC = () => {
                         key={index}
                         className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
                       >
+                        {/* Checkbox */}
+                        <td className="px-4 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedTradeIds.has(index)}
+                            onChange={() => handleSelectTrade(index)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                          />
+                        </td>
+
                         {/* Username */}
                         <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
                           <span
@@ -671,7 +757,7 @@ const ManageTraders: React.FC = () => {
                         </td>
 
                         {/* Type (BUY/SELL) */}
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-8 py-3 text-center">
                           <span className={`text-xs font-bold ${trade.type?.toUpperCase().startsWith('BUY') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                             {trade.type}
                           </span>
@@ -721,8 +807,13 @@ const ManageTraders: React.FC = () => {
 
                         {/* Duration */}
                         <td 
-                          className="px-4 py-3 text-xs text-center text-blue-600 dark:text-blue-400 underline cursor-pointer hover:opacity-80 transition-opacity"
+                          className={`px-16 py-3 text-xs text-center min-w-[200px] ${
+                            trade.duration 
+                              ? 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:opacity-80 transition-opacity' 
+                              : 'text-slate-500 dark:text-slate-400'
+                          }`}
                           onClick={() => {
+                            if (!trade.duration) return;
                             const tradeId = (trade as any).id || (trade as any).tradeId;
                             if (tradeId) {
                               setSelectedTradeId(tradeId);
@@ -791,7 +882,7 @@ const ManageTraders: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200/50 dark:border-slate-600/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
+          <div className="sticky bottom-0 z-20 flex-shrink-0 px-4 py-4 border-t border-gray-200/50 dark:border-slate-600/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-600 dark:text-slate-400">
                 Showing <span className="font-semibold text-slate-900 dark:text-white">1</span> to{' '}

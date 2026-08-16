@@ -131,6 +131,16 @@ const UserWisePosition: React.FC = () => {
 
       if (response?.responseCode === '0') {
         const posData = response.data;
+        
+        // Initialize bid/ask from ltp for all positions (will be overridden by market data)
+        if (posData?.positions) {
+          posData.positions = posData.positions.map((pos: PositionData) => ({
+            ...pos,
+            bid: pos.bid || pos.ltp || 0,
+            ask: pos.ask || pos.ltp || 0
+          }));
+        }
+        
         setPositionData(posData);
         setFilteredPositions(posData?.positions || []);
 
@@ -376,8 +386,8 @@ const UserWisePosition: React.FC = () => {
             const updatedPositions = prevData.positions.map(position => {
               const newPrice = priceMap.get(position.token)
               if (newPrice && (newPrice.bid !== undefined || newPrice.ask !== undefined)) {
-                // Use average of bid and ask as price source
-                const price = ((newPrice.bid || 0) + (newPrice.ask || 0)) / 2
+                // Use directional pricing: bid for BUY, ask for SELL (actual exit price)
+                const price = position.position === 'BUY' ? newPrice.bid : newPrice.ask
                 // Recalculate P&L with price (handle SELL positions correctly)
                 const pnlValue = position.position === 'SELL'
                   ? (position.averagePrice - price) * position.netQuantity
@@ -459,8 +469,8 @@ const UserWisePosition: React.FC = () => {
             return prevFiltered.map(position => {
               const newPrice = priceMap.get(position.token)
               if (newPrice && (newPrice.bid !== undefined || newPrice.ask !== undefined)) {
-                // Use average of bid and ask as price source
-                const price = ((newPrice.bid || 0) + (newPrice.ask || 0)) / 2
+                // Use directional pricing: bid for BUY, ask for SELL (actual exit price)
+                const price = position.position === 'BUY' ? newPrice.bid : newPrice.ask
                 const pnlValue = position.position === 'SELL'
                   ? (position.averagePrice - price) * position.netQuantity
                   : (price - position.averagePrice) * position.netQuantity
@@ -600,7 +610,7 @@ const UserWisePosition: React.FC = () => {
   return (
     <FilterLayout
       storageKey="userWisePosition:showFilters"
-      filterWidthClass="lg:w-[25%]"
+      filterWidthClass="lg:w-[16%]"
       filters={
         <div className="space-y-4 p-4">
           <SearchableSelect
@@ -824,14 +834,14 @@ const UserWisePosition: React.FC = () => {
                 <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0">
                   <table className="w-full table-fixed border-collapse">
                     <colgroup>
-                      <col style={{ width: '180px' }} />
-                      <col style={{ width: '100px' }} />
                       <col style={{ width: '140px' }} />
-                      <col style={{ width: '140px' }} />
-                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '65px' }} />
                       <col style={{ width: '120px' }} />
+                      <col style={{ width: '120px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '150px' }} />
                       <col style={{ width: '90px' }} />
-                      <col style={{ width: '90px' }} />
+                      <col style={{ width: '65px' }} />
                       <col style={{ width: '110px' }} />
                       <col style={{ width: '100px' }} />
                       <col style={{ width: '110px' }} />
@@ -842,21 +852,21 @@ const UserWisePosition: React.FC = () => {
                     </colgroup>
                     <thead className="sticky top-0 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-600 z-10">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDate</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDays</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Username</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">ParentUserName</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Exchange</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Symbol</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Position</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Quantity</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Average Rate</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">CMP</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Profit / Loss</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">% P&L</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Realized P&L</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Total P&L</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Margin Used</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDate</th>
+                        <th className="px-1.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDays</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Username</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">ParentUserName</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Exchange</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Symbol</th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Position</th>
+                        <th className="px-1.5 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Quantity</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Average Rate</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">CMP</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Profit / Loss</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">% P&L</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Realized P&L</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Total P&L</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Margin Used</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
@@ -876,49 +886,49 @@ const UserWisePosition: React.FC = () => {
 
                         return (
                           <tr key={`${position.token}-${position.positionId}`}
-                            className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors h-10">
-                            <td className="px-4 py-2 text-xs truncate">{position.positionDate ? new Date(position.positionDate).toLocaleString() : '-'}</td>
-                            <td className="px-4 py-2 text-xs text-center">{position.positionDays}</td>
-                            <td className="px-4 py-2 text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer hover:underline truncate"
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors h-8">
+                            <td className="px-3 py-1.5 text-xs truncate">{position.positionDate ? new Date(position.positionDate).toLocaleString() : '-'}</td>
+                            <td className="px-1.5 py-1.5 text-xs text-center font-bold\">{position.positionDays}</td>
+                            <td className="px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer hover:underline truncate"
                               onClick={() => handleOpenUserDetails(position.username)}>
                               {position.username}
                             </td>
-                            <td className="px-4 py-2 text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer hover:underline truncate"
+                            <td className="px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-slate-100 cursor-pointer hover:underline truncate"
                               onClick={() => handleOpenUserDetails(position.parentUsername)}>
                               {position.parentUsername}
                             </td>
-                            <td className="px-4 py-2 text-xs">
-                              <span className={`px-2 py-1 rounded font-bold text-[10px] inline-block ${posColorClass}`}>
+                            <td className="px-3 py-1.5 text-xs">
+                              <span className={`px-2 py-0.5 rounded font-bold text-[10px] inline-block ${posColorClass}`}>
                                 {position.exchange}
                               </span>
                             </td>
-                            <td className="px-4 py-2 text-xs font-bold truncate">{position.tradeSymbol}</td>
-                            <td className="px-4 py-2 text-xs text-center">
-                              <span className={`px-2 py-1 rounded font-bold text-[10px] inline-block ${posColorClass}`}>
+                            <td className="px-3 py-1.5 text-xs font-bold truncate">{position.tradeSymbol}</td>
+                            <td className="px-3 py-1.5 text-xs text-center">
+                              <span className={`px-2 py-0.5 rounded font-bold text-[10px] inline-block ${posColorClass}`}>
                                 {position.position}
                               </span>
                             </td>
-                            <td className="px-4 py-2 text-xs text-right">{position.quantity}</td>
-                            <td className="px-4 py-2 text-xs text-right">{position.averagePrice?.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-xs text-right font-bold">
+                            <td className="px-1.5 py-1.5 text-xs text-right font-bold\">{position.quantity}</td>
+                            <td className="px-3 py-1.5 text-xs text-right">{position.averagePrice?.toFixed(2)}</td>
+                            <td className="px-3 py-1.5 text-xs text-right font-bold">
                               {(() => {
-                                const cmpPrice = ((position.bid || 0) + (position.ask || 0)) / 2;
+                                const cmpPrice = position.position === 'BUY' ? position.bid : position.ask;
                                 return <span className={getHighlightClass('ltp' as keyof PriceChange)}>{cmpPrice?.toFixed(2) || '0.00'}</span>;
                               })()}
                             </td>
-                            <td className="px-4 py-2 text-xs text-right font-bold">
-                              <span className={position.pnl >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}>{position.pnl?.toFixed(0)}</span>
+                            <td className="px-3 py-1.5 text-xs text-right font-bold">
+                              <span className={position.pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{position.pnl?.toFixed(0)}</span>
                             </td>
-                            <td className="px-4 py-2 text-xs text-right font-bold">
-                              <span className={position.pnlPercentage >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}>{position.pnlPercentage?.toFixed(2)}%</span>
+                            <td className="px-3 py-1.5 text-xs text-right font-bold">
+                              <span className={position.pnlPercentage >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{position.pnlPercentage?.toFixed(2)}%</span>
                             </td>
-                            <td className="px-4 py-2 text-xs text-right font-bold">
-                              <span className={position.realisedPnl >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}>{position.realisedPnl?.toFixed(0)}</span>
+                            <td className="px-3 py-1.5 text-xs text-right font-bold">
+                              <span className={position.realisedPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{position.realisedPnl?.toFixed(0)}</span>
                             </td>
-                            <td className="px-4 py-2 text-xs text-right font-bold">
-                              <span className={position.totalPnl >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}>{position.totalPnl?.toFixed(0)}</span>
+                            <td className="px-3 py-1.5 text-xs text-right font-bold">
+                              <span className={position.totalPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{position.totalPnl?.toFixed(0)}</span>
                             </td>
-                            <td className="px-4 py-2 text-xs text-right">{position.marginUsed?.toFixed(2)}</td>
+                            <td className="px-3 py-1.5 text-xs text-right">{position.marginUsed?.toFixed(2)}</td>
                           </tr>
                         );
                       })}

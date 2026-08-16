@@ -451,11 +451,11 @@ const CreateNewUser: React.FC = () => {
 
       let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
 
-      // Use parentHighLowTradeLimit to respect parent's restrictions
-      if (editingUser.parentHighLowTradeLimit) {
-        const highArr = Array.isArray(editingUser.parentHighLowTradeLimit)
-          ? editingUser.parentHighLowTradeLimit
-          : String(editingUser.parentHighLowTradeLimit).split(',');
+      // Use highLowTradeLimit to set which ones are enabled (not parentHighLowTradeLimit)
+      if (editingUser.highLowTradeLimit) {
+        const highArr = Array.isArray(editingUser.highLowTradeLimit)
+          ? editingUser.highLowTradeLimit
+          : String(editingUser.highLowTradeLimit).split(',');
 
         highArr.forEach((ex: string) => {
           const key = ex.trim().toLowerCase();
@@ -1500,41 +1500,60 @@ const CreateNewUser: React.FC = () => {
                           </div>
                           <h3 className="text-lg font-semibold text-text-primary">High Trade Limit</h3>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-text-secondary">Select All</span>
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={exchangeData.filter(ex => ex.key !== 'others').every(ex => !!values?.highTradeLimit?.[ex.key])}
-                              onChange={(e) => {
-                                const newHighTradeLimit = { ...values.highTradeLimit }
-                                exchangeData.filter(ex => ex.key !== 'others').forEach(ex => {
-                                  newHighTradeLimit[ex.key as keyof typeof newHighTradeLimit] = e.target.checked
-                                })
-                                setFieldValue('highTradeLimit', newHighTradeLimit)
-                              }}
-                              className="sr-only peer"
-                            />
-                            <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                        {exchangeData.filter(ex => ex.key !== 'others').map((exchange) => (
-                          <div key={`high-trade-${exchange.key}`} className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-text-primary">{exchange.name}</span>
+                        {!isEditMode || !editingUser?.parentHighLowTradeLimit ? (
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-text-secondary">Select All</span>
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
-                                checked={!!values?.highTradeLimit?.[exchange.key]}
-                                onChange={(e) => setFieldValue(`highTradeLimit.${exchange.key}`, e.target.checked)}
+                                checked={exchangeData.filter(ex => ex.key !== 'others').every(ex => !!values?.highTradeLimit?.[ex.key])}
+                                onChange={(e) => {
+                                  const newHighTradeLimit = { ...values.highTradeLimit }
+                                  exchangeData.filter(ex => ex.key !== 'others').forEach(ex => {
+                                    newHighTradeLimit[ex.key as keyof typeof newHighTradeLimit] = e.target.checked
+                                  })
+                                  setFieldValue('highTradeLimit', newHighTradeLimit)
+                                }}
                                 className="sr-only peer"
                               />
                               <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
                             </label>
                           </div>
-                        ))}
+                        ) : null}
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                        {(() => {
+                          // Determine which exchanges to show
+                          let exchangesToShow = exchangeData.filter(ex => ex.key !== 'others');
+                          
+                          if (isEditMode && editingUser?.parentHighLowTradeLimit) {
+                            // Parse parentHighLowTradeLimit to get allowed exchanges
+                            const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+                              ? editingUser.parentHighLowTradeLimit
+                              : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
+                            
+                            // Filter to only show exchanges from parent's list
+                            exchangesToShow = exchangeData.filter(ex => 
+                              parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
+                            );
+                          }
+                          
+                          return exchangesToShow.map((exchange) => (
+                            <div key={`high-trade-${exchange.key}`} className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-text-primary">{exchange.name}</span>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={!!values?.highTradeLimit?.[exchange.key]}
+                                  onChange={(e) => setFieldValue(`highTradeLimit.${exchange.key}`, e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
+                              </label>
+                            </div>
+                          ))
+                        })()}
                       </div>
                     </motion.div>
                   )}

@@ -5,7 +5,15 @@ export default defineConfig({
   plugins: [react()],
   server: { 
     port: 5173,
-    host: true
+    host: true,
+    proxy: {
+      '/user/api/instruments/active': {
+        target: 'https://api-staging.rivoplus.live',
+        changeOrigin: true,
+        rewrite: (path) => path,
+        secure: false
+      }
+    }
   },
   build: {
     rollupOptions: {

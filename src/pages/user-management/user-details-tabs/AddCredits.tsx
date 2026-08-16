@@ -84,7 +84,7 @@ const AddCredits: React.FC<AddCreditsProps> = ({ user, userDetails, onClose, onT
     <FilterLayout
       storageKey="addCredits:showFilters"
       defaultShow={true}
-      filterWidthClass="lg:w-[25%]"
+      filterWidthClass="lg:w-[16%]"
       filters={(
         <div className="space-y-3">
           <div className="flex items-center gap-2 mb-3">

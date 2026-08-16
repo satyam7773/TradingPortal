@@ -274,7 +274,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
   return (
     <FilterLayout
       storageKey="tradeMarginSettings:showFilters"
-      filterWidthClass="lg:w-[25%]"
+      filterWidthClass="lg:w-[16%]"
       filters={
         <div className="space-y-3 p-4">
           <div className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-200">Filter</div>

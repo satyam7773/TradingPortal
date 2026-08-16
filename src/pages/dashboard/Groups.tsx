@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Edit, Trash2, Upload, Download, Eye, ChevronLeft, ChevronRight, Settings } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { groupService } from '../../services/groupService'
 import { userManagementService } from '../../services'
@@ -419,7 +420,7 @@ const Groups: React.FC = () => {
       </div>
 
       {/* Create Modal */}
-      {showCreateModal && (
+      {showCreateModal && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Create New Group</h2>
@@ -470,10 +471,10 @@ const Groups: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Edit Modal */}
-      {showEditModal && selectedGroup && (
+      {showEditModal && selectedGroup && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Edit Group</h2>
@@ -525,10 +526,10 @@ const Groups: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Upload Modal */}
-      {showUploadModal && selectedGroup && (
+      {showUploadModal && selectedGroup && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
@@ -567,10 +568,10 @@ const Groups: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Quantity Settings Modal */}
-      {showQuantityModal && selectedGroup && (
+      {showQuantityModal && selectedGroup && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
@@ -632,7 +633,7 @@ const Groups: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   )
 }

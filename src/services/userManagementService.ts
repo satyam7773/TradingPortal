@@ -1533,6 +1533,37 @@ class UserManagementService {
       throw error;
     }
   }
+
+  /**
+   * Delete trades
+   */
+  async deleteTrades(
+    userId: number,
+    targetUserId: number,
+    tradeIds: number[]
+  ): Promise<any> {
+    try {
+      const deviceId = localStorage.getItem('deviceId') || '2517e77e-0c13-405a-97ec-6977d4f7ac07';
+      const request = {
+        userId: userId,
+        deviceId: deviceId,
+        tradeOrderMethod: "DELETE",
+        data: {
+          userId: targetUserId,
+          tradeIds: tradeIds,
+        },
+      };
+
+      const response = await apiClient.post(
+        "/oms/deleteTrade",
+        request,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to delete trades:", error);
+      throw error;
+    }
+  }
 }
 
 export const userManagementService = new UserManagementService();

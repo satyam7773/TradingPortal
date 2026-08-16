@@ -112,7 +112,7 @@ const M2MProfitLoss: React.FC = () => {
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
         <FilterLayout
           storageKey="m2m:showFilters"
-          filterWidthClass="lg:w-[25%]"
+          filterWidthClass="lg:w-[16%]"
           filters={
             <div className="space-y-4 p-4">
               <div className="space-y-3">
@@ -183,7 +183,7 @@ const M2MProfitLoss: React.FC = () => {
                           ₹{formatCurrency(item.pnl)}
                         </td>
                         <td className="px-6 py-4 text-right text-sm font-semibold dark:text-slate-300">{item.pnlSharing}%</td>
-                        <td className={`px-6 py-4 text-right text-sm font-bold ${item.plShareAmount >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        <td className={`px-6 py-4 text-right text-sm font-bold ${item.plShareAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           ₹{formatCurrency(item.plShareAmount)}
                         </td>
                       </tr>

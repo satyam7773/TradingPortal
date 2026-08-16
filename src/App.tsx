@@ -22,6 +22,7 @@ import LoginHistory from './pages/dashboard/LoginHistory'
 import Groups from './pages/dashboard/Groups'
 import UserWisePosition from './pages/reports/UserWisePosition'
 import ManageTraders from './pages/reports/ManageTraders'
+import DeletedTrades from './pages/reports/DeletedTrades'
 import AccountSummary from './pages/reports/AccountSummary'
 import TradeAccount from './pages/reports/TradeAccount'
 import Settlement from './pages/reports/Settlement'
@@ -61,6 +62,7 @@ const App: React.FC = () => {
           <Route path="api-test" element={<ApiTestPage />} />
           <Route path="user-position" element={<UserWisePosition />} />
           <Route path="manage-traders" element={<ManageTraders />} />
+          <Route path="deleted-trades" element={<DeletedTrades />} />
           <Route path="account-summary" element={<AccountSummary />} />
           <Route path="trade-account" element={<TradeAccount />} />
           <Route path="settlement" element={<Settlement />} />

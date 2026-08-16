@@ -37,6 +37,7 @@ const SecondaryPanelContent: React.FC = () => {
       // Reports
       'user-position': 'reports/UserWisePosition',
       'manage-traders': 'reports/ManageTraders',
+      'deleted-trades': 'reports/DeletedTrades',
       'trade-account': 'reports/TradeAccount',
       'settlement': 'reports/Settlement',
       

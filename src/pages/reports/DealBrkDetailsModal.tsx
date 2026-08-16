@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { createPortal } from 'react-dom';
 import { apiClient } from '../../services/apiClient';
 
 interface BrokageItem {
@@ -68,13 +69,12 @@ const DealBrkDetailsModal: React.FC<DealBrkDetailsModalProps> = ({ isOpen, trade
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[9999]">
-      <div className="overflow-y-auto min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-6xl">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700 flex flex-col">
-            {/* Header - Fixed with rounded top corners */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl flex-shrink-0">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+      <div className="w-full max-w-6xl max-h-[90vh] flex flex-col">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700 flex flex-col h-full">
+          {/* Header - Fixed with rounded top corners */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl flex-shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Deal Brokerage & P&L Details</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Trade ID: {tradeId}</p>
@@ -88,7 +88,7 @@ const DealBrkDetailsModal: React.FC<DealBrkDetailsModalProps> = ({ isOpen, trade
           </div>
 
           {/* Content - Scrollable */}
-          <div className="p-6 overflow-y-auto">
+          <div className="p-6 overflow-y-auto flex-1">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-slate-500 dark:text-slate-400">Loading...</div>
@@ -188,8 +188,8 @@ const DealBrkDetailsModal: React.FC<DealBrkDetailsModalProps> = ({ isOpen, trade
           </div>
         </div>
       </div>
-      </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

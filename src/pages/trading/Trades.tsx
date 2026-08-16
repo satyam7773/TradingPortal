@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { ArrowUpRight, ArrowDownLeft, Search, Clock, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
+import DurationDetailsModal from '../reports/DurationDetailsModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
+import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 
 interface TradeData {
   tradeId: number
@@ -71,7 +73,36 @@ interface UserData {
 let lastClickTime = 0;
 let lastProcessedId: number | null = null;
 
-const Trades: React.FC = () => {
+interface TradesPageProps extends CacheContextProps {}
+
+const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave, isRestoringCache }) => {
+  // Initialize state with cache if available, otherwise defaults
+  const initializeFilterState = () => {
+    if (cacheData) {
+      return cacheData
+    }
+    const todayStr = new Date().toLocaleDateString('en-CA')
+    return {
+      selectedUserId: 0,
+      selectedExchange: 'All Exchanges',
+      selectedSymbol: '',
+      selectedStatus: 'All',
+      selectedOrderType: 'All',
+      selectedSide: 'Both',
+      fromDate: todayStr,
+      toDate: todayStr,
+      timeEnabled: false,
+      fromTime: '00:00:00',
+      toTime: '23:59:59',
+      currentPage: 0,
+      totalRecords: 0,
+      totalPages: 0
+    }
+  }
+
+  const initialFilters = initializeFilterState()
+  const cacheLoggedRef = React.useRef(false)
+  
   const getLoggedInUserId = (): number => {
     const userDataStr = localStorage.getItem('userData')
     if (userDataStr) {
@@ -82,20 +113,19 @@ const Trades: React.FC = () => {
   }
 
   const loggedInUserId = getLoggedInUserId()
-  const [selectedUserId, setSelectedUserId] = useState<number>(0)
-  const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges')
-  const [selectedSymbol, setSelectedSymbol] = useState<string>('')
-  const [selectedStatus, setSelectedStatus] = useState<string>('All')
-  const [selectedOrderType, setSelectedOrderType] = useState<string>('All')
-  const [selectedSide, setSelectedSide] = useState<string>('Both')
+  const [selectedUserId, setSelectedUserId] = useState<number>(initialFilters.selectedUserId)
+  const [selectedExchange, setSelectedExchange] = useState<string>(initialFilters.selectedExchange)
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(initialFilters.selectedSymbol)
+  const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.selectedStatus)
+  const [selectedOrderType, setSelectedOrderType] = useState<string>(initialFilters.selectedOrderType)
+  const [selectedSide, setSelectedSide] = useState<string>(initialFilters.selectedSide)
   
-  const today = new Date();
-  const [fromDate, setFromDate] = useState<string>(today.toLocaleDateString('en-CA'));
-  const [toDate, setToDate] = useState<string>(today.toLocaleDateString('en-CA'));
+  const [fromDate, setFromDate] = useState<string>(initialFilters.fromDate)
+  const [toDate, setToDate] = useState<string>(initialFilters.toDate)
   const [liveMode, setLiveMode] = useState(false)
-  const [timeEnabled, setTimeEnabled] = useState(false)
-  const [fromTime, setFromTime] = useState<string>('00:00:00')
-  const [toTime, setToTime] = useState<string>('23:59:59')
+  const [timeEnabled, setTimeEnabled] = useState(initialFilters.timeEnabled)
+  const [fromTime, setFromTime] = useState<string>(initialFilters.fromTime)
+  const [toTime, setToTime] = useState<string>(initialFilters.toTime)
 
   // Advanced filters
   const [ipDevFilter, setIpDevFilter] = useState<string>('Default')
@@ -104,17 +134,24 @@ const Trades: React.FC = () => {
 
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [tradesData, setTradesData] = useState<TradeData[]>([])
+  const [tradesData, setTradesData] = useState<TradeData[]>(apiData?.tradesData || [])
   const [users, setUsers] = useState<any[]>([])
   const [exchanges, setExchanges] = useState<any[]>([])
   const [symbols, setSymbols] = useState<any[]>([])
-  const [currentPage, setCurrentPage] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
-  const [totalRecords, setTotalRecords] = useState(0)
+  const [currentPage, setCurrentPage] = useState<number>(initialFilters.currentPage)
+  const [totalPages, setTotalPages] = useState<number>(initialFilters.totalPages)
+  const [totalRecords, setTotalRecords] = useState<number>(initialFilters.totalRecords)
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
-  const pageSize = 10
+  const [isDurationModalOpen, setIsDurationModalOpen] = useState(false)
+  const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null)
+  const [selectedTradeUserId, setSelectedTradeUserId] = useState<number | null>(null)
+  const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
+  const pageSize = 100
 
-  const isFetchingRef = useRef(false);
+  const cacheInitializedRef = useRef(false)
+  const metadataLoadedRef = useRef(false)
+  const cacheTimerRef = useRef<any>(null)
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -124,7 +161,43 @@ const Trades: React.FC = () => {
     ...symbols.map(s => ({ id: String(s.token), name: s.tradeSymbol || s }))
   ], [symbols]);
 
+  const todayStr = useMemo(() => new Date().toLocaleDateString('en-CA'), [])
+
+  // Log cache found once
   useEffect(() => {
+    if (cacheData && !cacheLoggedRef.current) {
+      console.log('✅ [Trades] Initializing from cache:', cacheData)
+      cacheLoggedRef.current = true
+    }
+  }, [cacheData])
+
+  // Fetch initial data only if cache doesn't exist
+  useEffect(() => {
+    if (!cacheInitializedRef.current && !cacheData) {
+      console.log('📡 [Trades] No cache found, fetching initial data...')
+      handleView()
+      cacheInitializedRef.current = true
+    }
+  }, [cacheData]) // Watch cacheData to handle first load
+
+  // Handle cache data changes (when switching back to this tab with cache)
+  useEffect(() => {
+    if (cacheData && !cacheInitializedRef.current) {
+      console.log('🔄 [Trades] Cache found, initializing from cache')
+      cacheInitializedRef.current = true
+      
+      // Restore table data if available
+      if (apiData?.tradesData) {
+        console.log('📊 [Trades] Restoring cached table data')
+        setTradesData(apiData.tradesData)
+      }
+    }
+  }, [cacheData, apiData])
+
+  // Load metadata once per session
+  useEffect(() => {
+    if (metadataLoadedRef.current) return
+
     const loadInitialData = async () => {
       try {
         setInitialLoading(true)
@@ -135,11 +208,9 @@ const Trades: React.FC = () => {
         const exchangesResponse = await userManagementService.fetchExchanges()
         if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
           setExchanges(exchangesResponse)
-          const defaultExchange = exchangesResponse[0].name
-          setSelectedExchange(defaultExchange)
           
-          // Fetch symbols for the default exchange on page load (like in Positions)
-          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
+          // Fetch symbols for the default exchange on page load
+          const symbolsResponse = await userManagementService.fetchSymbols(exchangesResponse[0].name)
           if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
             setSymbols(symbolsResponse.data)
           }
@@ -150,8 +221,40 @@ const Trades: React.FC = () => {
         setInitialLoading(false)
       }
     }
+    
     loadInitialData()
-  }, [])
+    metadataLoadedRef.current = true
+  }, []) // Only run once per mount
+
+  // Save filters to cache whenever they change (debounced)
+  useEffect(() => {
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
+    
+    cacheTimerRef.current = setTimeout(() => {
+      const filters = {
+        selectedUserId,
+        selectedExchange,
+        selectedSymbol,
+        selectedStatus,
+        selectedOrderType,
+        selectedSide,
+        fromDate,
+        toDate,
+        timeEnabled,
+        fromTime,
+        toTime,
+        currentPage,
+        totalRecords,
+        totalPages
+      }
+      console.log('💾 [Trades] Saving filters to cache')
+      onCacheSave(filters, { tradesData, totalRecords, totalPages })
+    }, 500)
+    
+    return () => {
+      if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
+    }
+  }, [selectedUserId, selectedExchange, selectedSymbol, selectedStatus, selectedOrderType, selectedSide, fromDate, toDate, timeEnabled, fromTime, toTime, currentPage, totalRecords, totalPages, tradesData, onCacheSave])
 
   // Function to fetch symbols for a specific exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
@@ -173,12 +276,6 @@ const Trades: React.FC = () => {
   useEffect(() => {
     fetchSymbolsForExchange(selectedExchange)
   }, [selectedExchange])
-
-  useEffect(() => {
-    if (!initialLoading) {
-      handleView(0);
-    }
-  }, [initialLoading]);
 
   const handleView = async (page: number = 0) => {
     setLoading(true)
@@ -205,7 +302,10 @@ const Trades: React.FC = () => {
 
       if (response?.responseCode === '0') {
         const tradesList = response.data?.trades || response.data?.content || response.data || []
-        const totalSize = response.data?.size || (Array.isArray(tradesList) ? tradesList.length : 0)
+        console.log('📊 API Response data:', response.data)
+        console.log('📊 response.data keys:', Object.keys(response.data || {}))
+        // Use 'total' for total records across all pages, fallback to 'size' for current page
+        const totalSize = response.data?.total || response.data?.size || (Array.isArray(tradesList) ? tradesList.length : 0)
         setTradesData(Array.isArray(tradesList) ? tradesList : [])
         setTotalRecords(totalSize)
         setTotalPages(Math.ceil(totalSize / pageSize))
@@ -232,6 +332,73 @@ const Trades: React.FC = () => {
       handleView(newPage)
     }
   }
+
+  const handleDeleteTrades = async () => {
+    if (selectedTradeIds.size === 0) {
+      toast.error('Please select trades to delete')
+      return
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedTradeIds.size} trade(s)? This action cannot be undone.`)) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const tradeIdsArray = Array.from(selectedTradeIds)
+      const response = await userManagementService.deleteTrades(loggedInUserId, selectedUserId || loggedInUserId, tradeIdsArray)
+
+      if (response?.responseCode === '0' || response?.success) {
+        toast.success(`${selectedTradeIds.size} trade(s) deleted successfully`)
+        setSelectedTradeIds(new Set())
+        // Refresh the current page
+        handleView(currentPage)
+      } else {
+        toast.error(response?.responseMessage || response?.message || 'Failed to delete trades')
+      }
+    } catch (error: any) {
+      console.error('Error deleting trades:', error)
+      toast.error(error?.message || 'Error deleting trades')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleSelectTrade = (tradeId: number) => {
+    const newSelected = new Set(selectedTradeIds)
+    if (newSelected.has(tradeId)) {
+      newSelected.delete(tradeId)
+    } else {
+      newSelected.add(tradeId)
+    }
+    setSelectedTradeIds(newSelected)
+  }
+
+  const handleSelectAll = () => {
+    if (selectedTradeIds.size === tradesData.length) {
+      setSelectedTradeIds(new Set())
+    } else {
+      const allTradeIds = new Set(tradesData.map(t => t.tradeId))
+      setSelectedTradeIds(allTradeIds)
+    }
+  }
+
+  // Clear all filters and cache
+  const handleClearFilters = useCallback(() => {
+    console.log('🗑️ [Trades] Clearing all filters')
+    setSelectedUserId(loggedInUserId)
+    setSelectedExchange(exchanges[0]?.name || '')
+    setSelectedSymbol('')
+    setFromDate(todayStr)
+    setToDate(todayStr)
+    setSelectedStatus('All')
+    setSelectedOrderType('All')
+    setSelectedSide('Both')
+    setTradesData([])
+    setTotalRecords(0)
+    setTotalPages(0)
+    setCurrentPage(0)
+  }, [loggedInUserId, exchanges, todayStr])
 
   const formatDateTime = (dateTimeStr: string | null) => {
     if (!dateTimeStr) return '-'
@@ -272,10 +439,10 @@ const Trades: React.FC = () => {
   };
 
   const stats = {
-    totalTrades: totalRecords,
-    buyTrades: tradesData.filter(t => t.side === 'BUY').length,
-    sellTrades: tradesData.filter(t => t.side === 'SELL').length,
-    totalPnL: tradesData.reduce((sum, t) => sum + (t.realisedPnl || 0), 0),
+    totalTrades: tradesData.length,  // Current page trades count
+    buyTrades: tradesData.filter(t => t.side === 'BUY').length,  // Current page only
+    sellTrades: tradesData.filter(t => t.side === 'SELL').length,  // Current page only
+    totalPnL: tradesData.reduce((sum, t) => sum + (t.realisedPnl || 0), 0),  // Current page P&L
   }
 
   return (
@@ -283,7 +450,7 @@ const Trades: React.FC = () => {
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
         <FilterLayout
           storageKey="trades:showFilters"
-          filterWidthClass="lg:w-[22%]"
+          filterWidthClass="lg:w-[16%]"
           filters={
             <div className="space-y-4 p-4">
               <div className="space-y-2">
@@ -332,7 +499,7 @@ const Trades: React.FC = () => {
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => handleView(0)} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md">View</button>
-                <button onClick={() => { setSelectedUserId(loggedInUserId); setSelectedExchange(exchanges[0]?.name || ''); setSelectedSymbol(''); setFromDate(today.toLocaleDateString('en-CA')); setToDate(today.toLocaleDateString('en-CA')); setSelectedStatus('All'); setSelectedOrderType('All'); setSelectedSide('Both'); }} className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition">Clear</button>
+                <button onClick={handleClearFilters} className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition">Clear</button>
               </div>
             </div>
           }
@@ -346,10 +513,21 @@ const Trades: React.FC = () => {
                     {users.find(u => u.userId === selectedUserId)?.userName || 'User'} • <span className="text-blue-600 font-semibold">{fromDate} to {toDate}</span>
                   </p>
                 </div>
-                <div className="grid grid-cols-4 gap-6 text-center">
-                  <div><div className="text-2xl font-bold text-slate-900 dark:text-white">{totalRecords}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
-                  <div><div className="text-2xl font-bold text-blue-600">{stats.buyTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
-                  <div><div className="text-2xl font-bold text-red-600">{stats.sellTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
+                <div className="flex items-center gap-4">
+                  {selectedTradeIds.size > 0 && (
+                    <button
+                      onClick={handleDeleteTrades}
+                      disabled={isDeleting}
+                      className="px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition inline-flex items-center gap-2 shadow-md disabled:opacity-50"
+                    >
+                      Delete {selectedTradeIds.size > 0 && `(${selectedTradeIds.size})`}
+                    </button>
+                  )}
+                  <div className="grid grid-cols-4 gap-6 text-center">
+                    <div><div className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
+                    <div><div className="text-2xl font-bold text-blue-600">{stats.buyTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
+                    <div><div className="text-2xl font-bold text-red-600">{stats.sellTrades}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -358,6 +536,14 @@ const Trades: React.FC = () => {
               <table className="w-full border-collapse min-w-max">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                   <tr>
+                    <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                      <input
+                        type="checkbox"
+                        checked={selectedTradeIds.size === tradesData.length && tradesData.length > 0}
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                      />
+                    </th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Execution Time</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Placed By</th>
@@ -384,6 +570,14 @@ const Trades: React.FC = () => {
 
                     return (
                       <tr key={trade.tradeId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedTradeIds.has(trade.tradeId)}
+                            onChange={() => handleSelectTrade(trade.tradeId)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                          />
+                        </td>
                         <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.orderTime)}</td>
                         <td className="px-6 py-4 text-left whitespace-nowrap">
                           <span
@@ -441,13 +635,27 @@ const Trades: React.FC = () => {
                           {trade.realisedPnl?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
 
-                        <td className="px-6 py-4 text-center">
-                          <span className="text-xs text-slate-500 underline decoration-slate-300">
+                        <td className={`px-6 py-4 text-center ${
+                          trade.durationSeconds && trade.durationSeconds > 0
+                            ? 'cursor-pointer'
+                            : 'cursor-default'
+                        }`}
+                        onClick={() => {
+                          if (!trade.durationSeconds || trade.durationSeconds <= 0) return;
+                          setSelectedTradeId(trade.tradeId);
+                          setSelectedTradeUserId(trade.userId || loggedInUserId);
+                          setIsDurationModalOpen(true);
+                        }}>
+                          <span className={`text-xs ${
+                            trade.durationSeconds && trade.durationSeconds > 0
+                              ? 'text-blue-600 dark:text-blue-400 underline decoration-blue-300 hover:opacity-80 transition-opacity'
+                              : 'text-slate-500 dark:text-slate-400'
+                          }`}>
                             {trade.durationSeconds && trade.durationSeconds > 0
                               ? trade.durationSeconds >= 3600
                                 ? `${Math.floor(trade.durationSeconds / 3600)}h ${Math.floor((trade.durationSeconds % 3600) / 60)}m`
                                 : `${Math.floor(trade.durationSeconds / 60)} minutes`
-                              : 'Less than a minute'}
+                              : '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.orderTime)}</td>
@@ -461,7 +669,7 @@ const Trades: React.FC = () => {
               </table>
             </div>
 
-            <div className="flex-shrink-0 px-6 py-4 border-t border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
+            <div className="sticky bottom-0 z-20 flex-shrink-0 px-6 py-4 border-t border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 shadow-lg">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-slate-600 dark:text-slate-400">Showing <span className="font-semibold text-slate-900 dark:text-white">{currentPage * pageSize + 1}</span> to <span className="font-semibold text-slate-900 dark:text-white">{Math.min((currentPage + 1) * pageSize, totalRecords)}</span> of <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> results</div>
                 <div className="flex items-center gap-3">
@@ -487,8 +695,20 @@ const Trades: React.FC = () => {
         </div>,
         document.body
       )}
+
+      {/* Duration Details Modal */}
+      <DurationDetailsModal
+        isOpen={isDurationModalOpen}
+        tradeId={selectedTradeId || 0}
+        userId={selectedTradeUserId || loggedInUserId}
+        onClose={() => {
+          setIsDurationModalOpen(false);
+          setSelectedTradeId(null);
+          setSelectedTradeUserId(null);
+        }}
+      />
     </div>
   )
 }
 
-export default Trades
+export default withTabCache(TradesPage, { title: 'Trades' })

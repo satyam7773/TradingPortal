@@ -63,7 +63,7 @@ const Settlement: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full mt-5">
-        <FilterLayout storageKey="settlement:showFilters" filterWidthClass="lg:w-[22%]" filters={
+        <FilterLayout storageKey="settlement:showFilters" filterWidthClass="lg:w-[16%]" filters={
             <div className="space-y-4 p-4">
               <input type="date" value={dates.from} onChange={e => setDates({...dates, from: e.target.value})} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />
               <input type="date" value={dates.to} onChange={e => setDates({...dates, to: e.target.value})} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />

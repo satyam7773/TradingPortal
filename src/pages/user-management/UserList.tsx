@@ -512,7 +512,7 @@ const UserList: React.FC = () => {
   const renderUserListContent = () => (
     <FilterLayout
       storageKey="userList:showFilters"
-      filterWidthClass="lg:w-[22%]"
+      filterWidthClass="lg:w-[16%]"
       filters={
         <div className="space-y-4">
           <div className="space-y-2">

@@ -250,7 +250,7 @@ const LoginHistory: React.FC = () => {
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
         <FilterLayout
           storageKey="loginHistory:showFilters"
-          filterWidthClass="lg:w-[25%]"
+          filterWidthClass="lg:w-[16%]"
           filters={
             <div className="space-y-4 p-4">
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Filter</h3>
