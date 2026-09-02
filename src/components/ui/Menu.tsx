@@ -138,6 +138,7 @@ const dashboardTabConfigs = {
   '/dashboard/configure-2fa': { title: 'Configure 2FA', icon: Lock },
   '/dashboard/file-upload': { title: 'File Upload', icon: Upload },
   '/dashboard/change-password': { title: 'Change Password', icon: Lock },
+  '/dashboard/run-settlement': { title: 'Run Settlement', icon: Briefcase },
 
 }
 
@@ -379,15 +380,15 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
         { label: 'Account Summary', path: '/dashboard/account-summary', action: () => navigate('/dashboard/account-summary') },
         { label: 'Bill Generate', path: '/dashboard/bill-generate', action: () => navigate('/dashboard/bill-generate') },
         { label: 'Script Quantity', path: '/dashboard/script-quantity', action: () => navigate('/dashboard/script-quantity') },
-        { label: 'User Credit', path: '/dashboard/user-credit', action: () => navigate('/dashboard/user-credit') },
+        // { label: 'User Credit', path: '/dashboard/user-credit', action: () => navigate('/dashboard/user-credit') },
+        { label: 'Deleted Trades', path: '/dashboard/deleted-trades', action: () => navigate('/dashboard/deleted-trades') },
         
         ...(isAdminOrMaster ? [
-          { label: 'Deleted Trades', path: '/dashboard/deleted-trades', action: () => navigate('/dashboard/deleted-trades') },
           { label: '% Open Position', path: '/dashboard/open-position', action: () => navigate('/dashboard/open-position') },
           { label: 'User Script Position PL', path: '/dashboard/user-script-position-pl', action: () => navigate('/dashboard/user-script-position-pl') },
           { label: 'User Script Position Track', path: '/dashboard/user-script-position-track', action: () => navigate('/dashboard/user-script-position-track') },
           { label: 'Weekly Admin', path: '/dashboard/weekly-admin', action: () => navigate('/dashboard/weekly-admin') },
-          { label: 'Trade Margin', path: '/dashboard/trade-margin', action: () => navigate('/dashboard/trade-margin') },
+          { label: 'Trade Margin', path: '/dashboard/trade-margin', action: () => { sessionStorage.setItem('tradeMarginFromReports', 'true'); navigate('/dashboard/trade-margin'); } },
           { label: 'Script Master', path: '/dashboard/script-master', action: () => navigate('/dashboard/script-master') },
           { label: 'Script P&L Summary', path: '/dashboard/script-pl-summary', action: () => navigate('/dashboard/script-pl-summary') },
           { label: 'Analytics', path: '/dashboard/analytics', action: () => navigate('/dashboard/analytics') },
@@ -402,6 +403,8 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
       subItems: [
         { label: 'Messages', path: '/dashboard/messages', action: () => navigate('/dashboard/messages') },
         { label: 'Configure 2FA', path: '/dashboard/configure-2fa', action: () => navigate('/dashboard/configure-2fa') },
+
+        ...(isAdminOnly ? [{ label: 'Run Settlement', path: '/dashboard/run-settlement', action: () => navigate('/dashboard/run-settlement') }] : []),
 
         ...(isAdminOrMaster ? [
           { label: 'Status Bar', path: '/dashboard/status-bar', action: () => navigate('/dashboard/status-bar') },

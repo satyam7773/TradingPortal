@@ -26,7 +26,22 @@ interface DeletedTradeData {
   undo: boolean;
 }
 
-const DeletedTrades: React.FC = () => {
+interface DeletedTradesProps {
+  username?: string;
+  userId?: string;
+  roleId?: string;
+  user?: any; // userDetails from modal
+}
+
+const DeletedTrades: React.FC<DeletedTradesProps> = ({ 
+  username,
+  userId: propsUserId,
+  roleId,
+  user: userDetails
+}) => {
+  // Detect if in modal mode based on presence of userDetails
+  const isModalMode = !!userDetails;
+
   // Initialize dates to today using en-CA format (YYYY-MM-DD)
   const today = new Date().toLocaleDateString('en-CA');
 
@@ -61,6 +76,11 @@ const DeletedTrades: React.FC = () => {
   const loggedInUserId = userData?.userId;
   const deviceId = userData?.deviceId || '';
   const tradeOrderMethod = userData?.tradeOrderMethod || 'WEB';
+  const userRoleId = userData?.roleId;
+  const isAdminUser = userRoleId === 1 || userRoleId === 2 || userRoleId === 3;
+
+  // In modal mode, use propsUserId; in dashboard mode, use selectedUserId
+  const targetUserId = isModalMode && propsUserId ? parseInt(propsUserId) : loggedInUserId;
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -85,6 +105,9 @@ const DeletedTrades: React.FC = () => {
     try {
       const filtersToUse = currentFilters || filters;
 
+      // In modal mode, use targetUserId; in dashboard mode, use selectedUserId
+      const userIdForData = isModalMode ? targetUserId : (filtersToUse.selectedUserId || loggedInUserId);
+
       const payload: any = {
         userId: loggedInUserId,
         requestTimestamp: '',
@@ -92,7 +115,7 @@ const DeletedTrades: React.FC = () => {
           from: filtersToUse.fromDate,
           to: filtersToUse.toDate,
           page: page,
-          userId: filtersToUse.selectedUserId || null,
+          userId: userIdForData,
           exchange: filtersToUse.exchange || null,
           token: filtersToUse.selectedSymbolToken || 0,
           status: filtersToUse.status || 'ALL'
@@ -158,6 +181,11 @@ const DeletedTrades: React.FC = () => {
   };
 
   const handleRestoreTrades = async () => {
+    if (!isAdminUser) {
+      toast.error('Only admins can restore trades');
+      return;
+    }
+
     if (selectedTradeIds.size === 0) {
       toast.error('Please select trades to restore');
       return;
@@ -205,6 +233,11 @@ const DeletedTrades: React.FC = () => {
   };
 
   const handleRestoreTrade = async (tradeId: number) => {
+    if (!isAdminUser) {
+      toast.error('Only admins can restore trades');
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to restore this trade?')) {
       return;
     }
@@ -255,10 +288,12 @@ const DeletedTrades: React.FC = () => {
           setStatuses(statusData.data);
         }
 
-        // Fetch users
-        const usersResponse = await userManagementService.fetchOwnUsersForUserwiseforManageTrades(loggedInUserId);
-        if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
-          setUsers(usersResponse.data);
+        // Only fetch users in dashboard mode
+        if (!isModalMode) {
+          const usersResponse = await userManagementService.fetchOwnUsersForUserwiseforManageTrades(loggedInUserId);
+          if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
+            setUsers(usersResponse.data);
+          }
         }
 
         // Fetch exchanges
@@ -289,7 +324,7 @@ const DeletedTrades: React.FC = () => {
     };
 
     loadInitialData();
-  }, []);
+  }, [isModalMode]);
 
   // Fetch trades when exchange is set
   useEffect(() => {
@@ -356,7 +391,7 @@ const DeletedTrades: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
-            {selectedTradeIds.size > 0 && (
+            {isAdminUser && selectedTradeIds.size > 0 && (
               <button
                 onClick={handleRestoreTrades}
                 disabled={isRestoring}
@@ -392,14 +427,18 @@ const DeletedTrades: React.FC = () => {
                 />
               </div>
 
-              {/* Username */}
-              <SearchableSelect
-                label="Username :"
-                items={userOptions}
-                selectedId={filters.selectedUserId}
-                onSelect={(userId) => handleFilterChange('selectedUserId', Number(userId))}
-                placeholder="Search user..."
-              />
+              {!isModalMode && (
+                <>
+                  {/* Username */}
+                  <SearchableSelect
+                    label="Username :"
+                    items={userOptions}
+                    selectedId={filters.selectedUserId}
+                    onSelect={(userId) => handleFilterChange('selectedUserId', Number(userId))}
+                    placeholder="Search user..."
+                  />
+                </>
+              )}
 
               {/* Order Status */}
               <div>
@@ -464,14 +503,16 @@ const DeletedTrades: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-red-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={selectedTradeIds.size === trades.filter(t => t.undo).length && trades.filter(t => t.undo).length > 0}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                      />
-                    </th>
+                    {isAdminUser && (
+                      <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedTradeIds.size === trades.filter(t => t.undo).length && trades.filter(t => t.undo).length > 0}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                        />
+                      </th>
+                    )}
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Username</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Symbol</th>
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[120px]">Type</th>
@@ -489,7 +530,7 @@ const DeletedTrades: React.FC = () => {
                 <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
                   {trades.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-4 py-12 text-center">
+                      <td colSpan={isAdminUser ? 13 : 12} className="px-4 py-12 text-center">
                         <Trash2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No deleted trades found</h3>
                         <p className="text-slate-500 dark:text-slate-400">Adjust your filters and click "View" to load deleted trades</p>
@@ -505,19 +546,21 @@ const DeletedTrades: React.FC = () => {
                         key={index}
                         className="hover:bg-gradient-to-r hover:from-red-50 hover:to-pink-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
                       >
-                        {/* Checkbox */}
-                        <td className="px-4 py-3 text-center">
-                          {trade.undo ? (
-                            <input
-                              type="checkbox"
-                              checked={selectedTradeIds.has(index)}
-                              onChange={() => handleSelectTrade(index)}
-                              className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">-</span>
-                          )}
-                        </td>
+                        {/* Checkbox - Only show for admin users */}
+                        {isAdminUser && (
+                          <td className="px-4 py-3 text-center">
+                            {trade.undo ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedTradeIds.has(index)}
+                                onChange={() => handleSelectTrade(index)}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                              />
+                            ) : (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">-</span>
+                            )}
+                          </td>
+                        )}
 
                         {/* Username */}
                         <td className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">

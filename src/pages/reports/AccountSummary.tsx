@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import UserDetailsModal from '../user-management/UserDetailsModal';
+import DownloadReport from '../../components/DownloadReport';
+import { useDownloadReport } from '../../hooks/useDownloadReport';
 
 interface SummaryData {
     date: string;
@@ -64,6 +66,7 @@ const AccountSummary: React.FC = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [users, setUsers] = useState<any[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
     const pageSize = 100;
 
     // Get logged in user ID
@@ -71,18 +74,25 @@ const AccountSummary: React.FC = () => {
     const userData = userDataStr ? JSON.parse(userDataStr) : null;
     const loggedInUserId = userData?.userId;
 
+    // Initialize download report hook
+    const downloadReport = useDownloadReport({
+        apiEndpoint: 'https://api-staging.rivoplus.live/reports/accountSummary/download',
+        filename: 'AccountSummary'
+    });
+
     const userOptions = useMemo(() => [
         ...users.map(u => ({ id: u.userId, name: u.userName }))
     ], [users]);
 
-    // Fetch account summary data
-    const handleFetchSummary = async (page: number = 0, currentFilters?: typeof filters) => {
+    // Fetch account summary data - once only, no pagination in API
+    const handleFetchSummary = async (currentFilters?: typeof filters) => {
         if (!loggedInUserId) {
             toast.error('User not logged in');
             return;
         }
 
         setLoading(true);
+        setCurrentPage(0); // Reset to first page on new fetch
         try {
             const filtersToUse = currentFilters || filters;
 
@@ -94,7 +104,6 @@ const AccountSummary: React.FC = () => {
                     from: filtersToUse.fromDate,
                     to: filtersToUse.toDate,
                     userId: targetUserId,
-                    page: page,
                     brokerage: filtersToUse.brk,
                     pnl: filtersToUse.pnl,
                     other: filtersToUse.other
@@ -114,7 +123,6 @@ const AccountSummary: React.FC = () => {
                 const totalSize = summaryList.length;
                 setTotalRecords(totalSize);
                 setTotalPages(Math.ceil(totalSize / pageSize));
-                setCurrentPage(page);
             } else {
                 setSummaryData([]);
                 if (result?.responseMessage) toast.error(result.responseMessage);
@@ -127,9 +135,10 @@ const AccountSummary: React.FC = () => {
         }
     };
 
+    // Client-side pagination - no API call
     const handlePageChange = (newPage: number) => {
         if (newPage >= 0 && newPage < totalPages) {
-            handleFetchSummary(newPage);
+            setCurrentPage(newPage);
         }
     };
 
@@ -168,6 +177,33 @@ const AccountSummary: React.FC = () => {
             other: false
         });
         setSummaryData([]);
+    };
+
+    const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+        if (summaryData.length === 0) {
+            toast.error('No data to download');
+            return;
+        }
+        try {
+            setIsDownloading(true);
+            const targetUserId = filters.selectedUserId || loggedInUserId;
+            await downloadReport.download(format, {
+                userId: targetUserId,
+                requestTimestamp: '',
+                data: {
+                    from: filters.fromDate,
+                    to: filters.toDate,
+                    userId: targetUserId,
+                    brokerage: filters.brk,
+                    pnl: filters.pnl,
+                    other: filters.other
+                }
+            }, { pdf: format === 'pdf' });
+        } catch (error) {
+            console.error('Download error:', error);
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     const handleUserNameClick = (e: React.MouseEvent, username: string, userId?: number) => {
@@ -310,6 +346,15 @@ const AccountSummary: React.FC = () => {
                                     Clear
                                 </button>
                             </div>
+
+                            {/* Download Section */}
+                            <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                                <DownloadReport
+                                    onDownload={handleDownloadReport}
+                                    isDisabled={isDownloading || summaryData.length === 0}
+                                    label="Download Report"
+                                />
+                            </div>
                         </div>
                     )}
                 >
@@ -342,10 +387,14 @@ const AccountSummary: React.FC = () => {
                                         ) : paginatedData.map((row, index) => {
                                             const sideColorClass = row.side === 'BUY'
                                                 ? 'text-emerald-600 dark:text-emerald-400'
-                                                : 'text-red-600 dark:text-red-400';
+                                                : row.side === 'SELL'
+                                                ? 'text-red-600 dark:text-red-400'
+                                                : '';
                                             const sideBgClass = row.side === 'BUY'
                                                 ? 'bg-emerald-100 dark:bg-emerald-900/30'
-                                                : 'bg-red-100 dark:bg-red-900/30';
+                                                : row.side === 'SELL'
+                                                ? 'bg-red-100 dark:bg-red-900/30'
+                                                : '';
                                             const typeColorClass = row.type === 'Profit/Loss'
                                                 ? 'text-emerald-600 dark:text-emerald-400'
                                                 : row.type === 'Brokerage'
@@ -355,51 +404,61 @@ const AccountSummary: React.FC = () => {
                                             return (
                                                 <tr key={index} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                                                     <td className="text-left px-4 py-3 text-xs text-slate-900 dark:text-white whitespace-nowrap">
-                                                        {
-                                                            row.date ? new Date(row.date).toLocaleString() : '-'
-                                                        }
+                                                        {row.date ? new Date(row.date).toLocaleString() : '-'}
                                                     </td>
                                                     <td className="text-left px-4 py-3 text-xs whitespace-nowrap">
-                                                        <span
-                                                            className="text-sm font-semibold text-blue-600 underline cursor-pointer hover:text-blue-800 transition-colors dark:text-blue-400 dark:hover:text-blue-300"
-                                                            onClick={(e) => handleUserNameClick(e, row.username, row.userId)}
-                                                        >
-                                                            {row.username}
-                                                        </span>
+                                                        {row.username ? (
+                                                            <span
+                                                                className="text-sm font-semibold text-blue-600 underline cursor-pointer hover:text-blue-800 transition-colors dark:text-blue-400 dark:hover:text-blue-300"
+                                                                onClick={(e) => handleUserNameClick(e, row.username, row.userId)}
+                                                            >
+                                                                {row.username}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-sm text-slate-500 dark:text-slate-400">-</span>
+                                                        )}
                                                     </td>
                                                     <td className="text-left px-4 py-3 text-xs text-slate-700 dark:text-slate-300">
-                                                        {row.particular}
+                                                        {row.particular || '-'}
                                                     </td>
                                                     <td className="text-center px-4 py-3 text-xs text-slate-900 dark:text-white whitespace-nowrap">
-                                                        {row.quantity}
+                                                        {row.quantity || row.quantity === 0 ? row.quantity : '-'}
                                                     </td>
                                                     <td className="text-center px-4 py-3 text-xs whitespace-nowrap">
-                                                        <span className={`px-2 py-1 rounded-full font-semibold ${sideBgClass} ${sideColorClass}`}>
-                                                            {row.side}
-                                                        </span>
+                                                        {row.side ? (
+                                                            <span className={`px-2 py-1 rounded-full font-semibold ${sideBgClass} ${sideColorClass}`}>
+                                                                {row.side}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-slate-500 dark:text-slate-400">-</span>
+                                                        )}
                                                     </td>
                                                     <td className="text-right px-4 py-3 text-xs text-slate-900 dark:text-white whitespace-nowrap">
-                                                        ₹{row.price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {row.price || row.price === 0 ? `₹${row.price?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                                                     </td>
                                                     <td className={`text-left px-4 py-3 text-xs font-semibold whitespace-nowrap ${typeColorClass}`}>
-                                                        {row.type}
+                                                        {row.type || '-'}
                                                     </td>
                                                     <td className={`text-right px-4 py-3 text-xs font-semibold whitespace-nowrap ${
-                                                        row.amount >= 0
+                                                        row.amount && row.amount >= 0
                                                             ? 'text-green-600 dark:text-green-400'
-                                                            : 'text-red-600 dark:text-red-400'
+                                                            : row.amount && row.amount < 0
+                                                            ? 'text-red-600 dark:text-red-400'
+                                                            : ''
                                                     }`}>
-                                                        ₹{row.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {row.amount || row.amount === 0 ? `₹${row.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                                                     </td>
                                                     <td className={`text-right px-4 py-3 text-xs font-semibold whitespace-nowrap ${
-                                                        row.closing >= 0
+                                                        row.closing && row.closing >= 0
                                                             ? 'text-green-600 dark:text-green-400'
-                                                            : 'text-red-600 dark:text-red-400'
+                                                            : row.closing && row.closing < 0
+                                                            ? 'text-red-600 dark:text-red-400'
+                                                            : ''
                                                     }`}>
-                                                        ₹{row.closing?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {row.closing || row.closing === 0 ? `₹${row.closing?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                                                     </td>
                                                     <td className="text-left px-4 py-3 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                                                        {row.openQty}
+                                                        {row.openQty || '-'}
                                                     </td>
                                                 </tr>
                                             );
@@ -420,7 +479,7 @@ const AccountSummary: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => handlePageChange(currentPage - 1)}
-                                        disabled={currentPage === 0 || loading}
+                                        disabled={currentPage === 0}
                                         className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 disabled:opacity-40 transition shadow-sm inline-flex items-center gap-2"
                                     >
                                         <ChevronLeft className="w-4 h-4" /> Previous
@@ -430,7 +489,7 @@ const AccountSummary: React.FC = () => {
                                     </span>
                                     <button
                                         onClick={() => handlePageChange(currentPage + 1)}
-                                        disabled={currentPage >= totalPages - 1 || loading}
+                                        disabled={currentPage >= totalPages - 1}
                                         className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 disabled:opacity-40 transition shadow-sm inline-flex items-center gap-2"
                                     >
                                         Next <ChevronRight className="w-4 h-4" />

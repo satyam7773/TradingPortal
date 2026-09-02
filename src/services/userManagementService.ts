@@ -822,7 +822,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/positions/portal",
+        "https://api-staging.rivoplus.live/oms/positions/portal/cumulative",
         request,
       );
       return response;

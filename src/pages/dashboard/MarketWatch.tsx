@@ -21,6 +21,8 @@ interface FeedInstrument {
   high: number
   low: number
   close: number
+  lcl:number
+  ucl:number
   lastQty?: number
   avgPrice?: number
   lastTradedTime?: number
@@ -1423,7 +1425,7 @@ const MarketWatch: React.FC = () => {
                   <Search className="w-4 h-4" />
                   {/* IMPROVED BUTTON LABEL */}
                   {selectedScript ? (
-                    `${selectedScript.instrumentName} ${formatStrike(selectedScript.strikePrice)} ${selectedScript.tradeSymbol?.endsWith('CE') ? 'CALL' : selectedScript.tradeSymbol?.endsWith('PE') ? 'PUT' : ''}`
+                    `${selectedScript.instrumentName} ${selectedScript.strikePrice && selectedScript.strikePrice > 0 ? formatStrike(selectedScript.strikePrice) : ''} ${selectedScript.tradeSymbol?.endsWith('CE') ? 'CALL' : selectedScript.tradeSymbol?.endsWith('PE') ? 'PUT' : ''}`
                   ) : (
                     selectedExchange ? 'Choose a script...' : 'Select exchange first'
                   )}
@@ -1486,7 +1488,7 @@ const MarketWatch: React.FC = () => {
                       return filtered.slice(0, 100).map((script) => {
                         // Construct readable label matching the image
                         const name = script.instrumentName || script.script || '';
-                        const strike = formatStrike(script.strikePrice);
+                        const strike = script.strikePrice && script.strikePrice > 0 ? formatStrike(script.strikePrice) : '';
                         const type = script.tradeSymbol?.endsWith('CE') ? 'CALL' : script.tradeSymbol?.endsWith('PE') ? 'PUT' : '';
                         const expiryDate = script.expiry ? new Date(parseInt(script.expiry)).toLocaleDateString('en-GB', {
                           day: '2-digit',
@@ -1509,7 +1511,7 @@ const MarketWatch: React.FC = () => {
                           >
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 dark:text-slate-200 text-sm">
-                                {name} {strike} {type} {expiryDate}
+                                {name} {strike && `${strike} `}{type} {expiryDate}
                               </span>
                               <div className="flex justify-between items-center mt-1">
                                 <span className="text-[10px] text-text-secondary uppercase font-semibold">{script.exchange}</span>
@@ -1599,7 +1601,7 @@ const MarketWatch: React.FC = () => {
                       // Slice to 50 for performance as All Scripts is a huge list
                       return filtered.slice(0, 50).map((script) => {
                         const name = script.instrumentName || script.script || '';
-                        const strike = script.strikePrice ? (script.strikePrice % 1 === 0 ? script.strikePrice : script.strikePrice.toFixed(2)) : '';
+                        const strike = script.strikePrice && script.strikePrice > 0 ? (script.strikePrice % 1 === 0 ? script.strikePrice : script.strikePrice.toFixed(2)) : '';
                         const type = script.tradeSymbol?.endsWith('CE') ? 'CALL' : script.tradeSymbol?.endsWith('PE') ? 'PUT' : '';
                         const expiryDate = script.expiry ? new Date(parseInt(script.expiry)).toLocaleDateString('en-GB', {
                           day: '2-digit',
@@ -1621,7 +1623,7 @@ const MarketWatch: React.FC = () => {
                           >
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 dark:text-slate-200 text-sm">
-                                {name} {strike} {type} {expiryDate}
+                                {name} {strike && `${strike} `}{type} {expiryDate}
                               </span>
                               <div className="flex justify-between items-center mt-1">
                                 <span className="text-[10px] text-text-secondary uppercase font-semibold">{script.exchange}</span>
@@ -2883,13 +2885,13 @@ const MarketWatch: React.FC = () => {
                           <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-700 pb-2">
                             <span className="font-bold text-gray-700 dark:text-gray-300">L. CRKT :</span>
                             <span className="font-semibold text-gray-900 dark:text-gray-100">
-                              {(liveData.low * 0.95).toFixed(2)}
+                              {(liveData.lcl).toFixed(2)}
                             </span>
                           </div>
                           <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-700 pb-2">
                             <span className="font-bold text-gray-700 dark:text-gray-300">U. CRKT :</span>
                             <span className="font-semibold text-gray-900 dark:text-gray-100">
-                              {(liveData.high * 1.05).toFixed(2)}
+                              {(liveData.ucl).toFixed(2)}
                             </span>
                           </div>
                           <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-700 pb-2">

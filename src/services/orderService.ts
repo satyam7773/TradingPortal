@@ -22,6 +22,25 @@ export interface PlaceOrderRequest {
   }
 }
 
+export interface ModifyOrderRequest {
+  requestTimestamp: string
+  userId: number
+  deviceId: string
+  tradeOrderMethod: string
+  data: {
+    userId: number
+    exchange: string
+    tradeSymbol: string
+    side: 'BUY' | 'SELL'
+    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS'
+    lotSize: number
+    price: number
+    token: number
+    lotValue: number
+    orderId: number
+  }
+}
+
 export interface PlaceOrderResponse {
   responseCode: string
   responseMessage: string
@@ -148,6 +167,113 @@ class OrderService {
     }
 
     return this.placeOrder(orderData)
+  }
+
+  /**
+   * Modify an existing order
+   */
+  async modifyOrder(orderData: ModifyOrderRequest): Promise<PlaceOrderResponse> {
+    try {
+      const response = await axios.post<PlaceOrderResponse>(
+        `${this.baseURL}/oms/modifyOrder`,
+        orderData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        }
+      )
+
+      if (response.data?.responseCode === '0' || response.status === 200) {
+        console.log('✅ Order modified successfully:', response.data)
+        return response.data
+      } else {
+        throw new Error(response.data?.responseMessage || 'Failed to modify order')
+      }
+    } catch (error: any) {
+      console.error('❌ Error modifying order:', error)
+      const errorMessage = error.response?.data?.responseMessage || error.message || 'Failed to modify order'
+      throw new Error(errorMessage)
+    }
+  }
+
+  /**
+   * Modify a buy order
+   */
+  async modifyBuyOrder(
+    loggedInUserId: number,
+    clientUserId: number,
+    orderId: number,
+    exchange: string,
+    tradeSymbol: string,
+    token: number,
+    quantity: number,
+    price: number,
+    lotValue: number,
+    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
+    tradeOrderMethod: string = 'WEB',
+    deviceId: string = getDeviceId()
+  ): Promise<PlaceOrderResponse> {
+    const orderData: ModifyOrderRequest = {
+      requestTimestamp: Date.now().toString(),
+      userId: loggedInUserId,
+      deviceId,
+      tradeOrderMethod,
+      data: {
+        userId: clientUserId,
+        exchange,
+        tradeSymbol,
+        side: 'BUY',
+        orderType,
+        lotSize: quantity,
+        price,
+        token,
+        lotValue,
+        orderId,
+      },
+    }
+
+    return this.modifyOrder(orderData)
+  }
+
+  /**
+   * Modify a sell order
+   */
+  async modifySellOrder(
+    loggedInUserId: number,
+    clientUserId: number,
+    orderId: number,
+    exchange: string,
+    tradeSymbol: string,
+    token: number,
+    quantity: number,
+    price: number,
+    lotValue: number,
+    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
+    tradeOrderMethod: string = 'WEB',
+    deviceId: string = getDeviceId()
+  ): Promise<PlaceOrderResponse> {
+    const orderData: ModifyOrderRequest = {
+      requestTimestamp: Date.now().toString(),
+      userId: loggedInUserId,
+      deviceId,
+      tradeOrderMethod,
+      data: {
+        userId: clientUserId,
+        exchange,
+        tradeSymbol,
+        side: 'SELL',
+        orderType,
+        lotSize: quantity,
+        price,
+        token,
+        lotValue,
+        orderId,
+      },
+    }
+
+    return this.modifyOrder(orderData)
   }
 }
 

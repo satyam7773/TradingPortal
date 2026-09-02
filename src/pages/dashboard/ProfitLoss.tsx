@@ -6,6 +6,8 @@ import SearchableSelect from '../../components/ui/SearchableSelect'
 import userManagementService from '../../services/userManagementService'
 import marketWatchService from '../../services/marketWatchService'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
+import DownloadReport from '../../components/DownloadReport'
+import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 // --- Interfaces ---
 interface PnLData {
@@ -39,6 +41,12 @@ const ProfitLossPage: React.FC<PnLPageProps> = ({ cacheData, apiData, onCacheSav
   const isAdminOnly = roleId === 1 || roleId === 2 // Strict Admin
   const isAdminOrMaster = roleId === 1 || roleId === 2 || roleId === 3 // Admin + Master
   const isClient = roleId === 4
+
+  // Initialize download report hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: 'https://api-staging.rivoplus.live/pnl/download',
+    filename: 'PnLReport'
+  })
 
   // Initialize state with cache if available
   const initializeFilterState = () => {
@@ -82,6 +90,7 @@ const ProfitLossPage: React.FC<PnLPageProps> = ({ cacheData, apiData, onCacheSav
   )
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(initialFilters.autoRefresh)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const cacheTimerRef = useRef<any>(null)
   const cacheInitializedRef = useRef(false)
@@ -381,6 +390,26 @@ const ProfitLossPage: React.FC<PnLPageProps> = ({ cacheData, apiData, onCacheSav
     setSelectedUserId(loggedInUserId)
   }
 
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (pnlTableData.length === 0) {
+      toast.error('No P&L data to download')
+      return
+    }
+    try {
+      setIsDownloading(true)
+      const targetUserId = userFilterType === 'SINGLE' ? Number(selectedUserId) : loggedInUserId
+      await downloadReport.download(format, {
+        userId: targetUserId,
+        requestTimestamp: new Date().toISOString(),
+        data: ''
+      }, { pdf: format === 'pdf' })
+    } catch (error) {
+      console.error('Download error:', error)
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
@@ -434,6 +463,15 @@ const ProfitLossPage: React.FC<PnLPageProps> = ({ cacheData, apiData, onCacheSav
               <div className="flex gap-2 pt-2">
                 <button onClick={() => handleView()} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition">View</button>
                 <button onClick={handleClearFilters} className="flex-1 px-4 py-2 bg-slate-700 text-white rounded font-semibold text-sm transition">Clear</button>
+              </div>
+
+              {/* Download Section */}
+              <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                <DownloadReport
+                  onDownload={handleDownloadReport}
+                  isDisabled={isDownloading || pnlTableData.length === 0}
+                  label="Download Report"
+                />
               </div>
             </div>
           }

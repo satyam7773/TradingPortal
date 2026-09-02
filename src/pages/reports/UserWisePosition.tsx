@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import FilterLayout from '../../components/FilterLayout';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import UserDetailsModal from '../user-management/UserDetailsModal';
+import DownloadReport from '../../components/DownloadReport';
+import { useDownloadReport } from '../../hooks/useDownloadReport';
 
 interface PositionData {
   positionId: number;
@@ -74,6 +76,43 @@ const UserWisePosition: React.FC = () => {
   const [plPercent, setPlPercent] = useState<string>('');
   const [posiDays, setPosiDays] = useState<string>('');
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const userDataStr = localStorage.getItem('userData');
+  const userData = userDataStr ? JSON.parse(userDataStr) : null;
+  const loggedInUserId = userData?.userId || 31;
+
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: 'https://api-staging.rivoplus.live/oms/positions/download',
+    filename: 'userwise-positions',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  });
+
+  // Handle download with current filters
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (!positionData) {
+      toast.error('No positions data to download');
+      return;
+    }
+
+    try {
+      await downloadReport.download(format, {
+        userId: loggedInUserId,
+        requestTimestamp: Date.now().toString(),
+        data: {
+          userId: selectedUserId || loggedInUserId,
+          exchange: selectedExchange || 'All Exchanges',
+          tradeSymbol: selectedSymbol || ''
+        }
+      }, {
+        pdf: format === 'pdf'
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -745,6 +784,15 @@ const UserWisePosition: React.FC = () => {
                 Clear
               </button>
             </div>
+          </div>
+
+          {/* Download Report Section */}
+          <div className="border-t border-gray-300 dark:border-slate-600 pt-4 mt-4">
+            <DownloadReport
+              onDownload={handleDownloadReport}
+              isDisabled={isDownloading || !positionData}
+              label="Download Report :"
+            />
           </div>
 
 

@@ -8,6 +8,8 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DealBrkDetailsModal from './DealBrkDetailsModal';
 import DurationDetailsModal from './DurationDetailsModal';
+import DownloadReport from '../../components/DownloadReport';
+import { useDownloadReport } from '../../hooks/useDownloadReport';
 
 interface TradeData {
   id?: number;
@@ -73,6 +75,7 @@ const ManageTraders: React.FC = () => {
   const [isDurationModalOpen, setIsDurationModalOpen] = useState(false);
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const pageSize = 10;
 
   // Dynamic dropdown options
@@ -87,6 +90,47 @@ const ManageTraders: React.FC = () => {
   const userDataStr = localStorage.getItem('userData');
   const userData = userDataStr ? JSON.parse(userDataStr) : null;
   const loggedInUserId = userData?.userId;
+  
+  // Check if user is admin
+  const roleId = userData?.roleId;
+  const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3;
+
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: 'https://api-staging.rivoplus.live/reports/trades/download',
+    filename: 'manage-trades',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  });
+
+  // Handle download with current filters
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (trades.length === 0) {
+      toast.error('No trades data to download');
+      return;
+    }
+
+    try {
+      await downloadReport.download(format, {
+        userId: loggedInUserId,
+        requestTimestamp: Date.now().toString(),
+        data: {
+          fromDate: filters.fromDate,
+          toDate: filters.toDate,
+          time: filters.time,
+          fromTime: filters.fromTime,
+          toTime: filters.toTime,
+          page: currentPage,
+          exchange: filters.exchange || 'All Exchanges',
+          userId: filters.selectedUserId || loggedInUserId
+        }
+      }, {
+        pdf: format === 'pdf'
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -173,6 +217,17 @@ const ManageTraders: React.FC = () => {
   };
 
   const handleDeleteTrades = async () => {
+    // Check if user has permission to delete
+    const userData = localStorage.getItem('userData');
+    const user = userData ? JSON.parse(userData) : null;
+    const roleId = user?.roleId;
+    const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3;
+
+    if (!isAdminUser) {
+      toast.error('You do not have permission to delete trades');
+      return;
+    }
+
     if (selectedTradeIds.size === 0) {
       toast.error('Please select trades to delete');
       return;
@@ -382,7 +437,7 @@ const ManageTraders: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
-            {selectedTradeIds.size > 0 && (
+            {selectedTradeIds.size > 0 && isAdminUser && (
               <button
                 onClick={handleDeleteTrades}
                 disabled={isDeleting}
@@ -667,6 +722,15 @@ const ManageTraders: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Download Report Section */}
+              <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                <DownloadReport
+                  onDownload={handleDownloadReport}
+                  isDisabled={isDownloading || trades.length === 0}
+                  label="Download Report :"
+                />
+              </div>
             </div>
           </>
         )}
@@ -677,14 +741,16 @@ const ManageTraders: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={selectedTradeIds.size === trades.length && trades.length > 0}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                      />
-                    </th>
+                    {isAdminUser && (
+                      <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedTradeIds.size === trades.length && trades.length > 0}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                        />
+                      </th>
+                    )}
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Username</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Symbol</th>
                     <th className="text-center px-8 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Type</th>
@@ -729,14 +795,16 @@ const ManageTraders: React.FC = () => {
                         className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
                       >
                         {/* Checkbox */}
-                        <td className="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedTradeIds.has(index)}
-                            onChange={() => handleSelectTrade(index)}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                          />
-                        </td>
+                        {isAdminUser && (
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedTradeIds.has(index)}
+                              onChange={() => handleSelectTrade(index)}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                            />
+                          </td>
+                        )}
 
                         {/* Username */}
                         <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">

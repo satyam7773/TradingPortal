@@ -30,7 +30,10 @@ const validationSchema = Yup.object({
   accountName: Yup.string().required('Account name is required'),
   userType: Yup.string().required('User type is required'),
   name: Yup.string().required('Name is required'),
-  username: Yup.string().required('Username is required'),
+  username: Yup.string()
+    .required('Username is required')
+    .min(4, 'Username must be at least 4 characters')
+    .max(8, 'Username must be at most 8 characters'),
   password: Yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
   retypePassword: Yup.string()
     .oneOf([Yup.ref('password')], 'Passwords must match')
@@ -576,6 +579,7 @@ const CreateNewUser: React.FC = () => {
           const allowedForUser = allowedKeys.length === 0 || allowedKeys.includes(ex.key)
           const targetedGroupArray = freshSubGroups[ex.key] || [];
           const defaultIdString = targetedGroupArray.length > 0 ? String(targetedGroupArray[0].groupId) : '';
+          const isLockedTurnover = ['nse', 'sgx', 'others'].includes(ex.key)
 
           if (!allowedForUser) {
             setFieldValue(`exchanges.${ex.key}.enabled`, false)
@@ -584,6 +588,11 @@ const CreateNewUser: React.FC = () => {
             setFieldValue(`exchanges.${ex.key}.group`, '')
           } else {
             setFieldValue(`exchanges.${ex.key}.group`, defaultIdString);
+            // For locked turnover exchanges, set the appropriate brokerage flags
+            if (isLockedTurnover) {
+              setFieldValue(`exchanges.${ex.key}.turnoverBrk`, true)
+              setFieldValue(`exchanges.${ex.key}.symbolBrk`, false)
+            }
           }
         })
 
@@ -661,6 +670,18 @@ const CreateNewUser: React.FC = () => {
 
   const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
     try {
+      // Auto-fix: Ensure locked-turnover exchanges have proper brokerage flags
+      const lockedTurnoverExchanges = ['nse', 'sgx', 'others']
+      lockedTurnoverExchanges.forEach(ex => {
+        if (values.exchanges[ex as keyof typeof values.exchanges]?.enabled) {
+          const exchange = values.exchanges[ex as keyof typeof values.exchanges]
+          if (!exchange.turnoverBrk && !exchange.symbolBrk) {
+            exchange.turnoverBrk = true
+            exchange.symbolBrk = false
+          }
+        }
+      })
+
       const enabledExchangesWithoutBrokerage = Object.entries(values.exchanges)
         .filter(([key, exchange]: [string, any]) => isExchangeAllowed(key) && exchange.enabled)
         .filter(([key, exchange]: [string, any]) => !exchange.turnoverBrk && !exchange.symbolBrk)
@@ -1299,7 +1320,18 @@ const CreateNewUser: React.FC = () => {
                                 onChange={(e) => {
                                   const checked = e.target.checked
                                   visibleExchangeData.forEach((ex) => {
-                                    if (isExchangeAllowed(ex.key)) setFieldValue(`exchanges.${ex.key}.enabled`, checked);
+                                    if (isExchangeAllowed(ex.key)) {
+                                      const key = ex.key.toLowerCase()
+                                      const isLockedTurnover = ['nse', 'sgx', 'others'].includes(key)
+                                      
+                                      setFieldValue(`exchanges.${key}.enabled`, checked)
+                                      
+                                      // Auto-set brokerage flags when enabling
+                                      if (checked && isLockedTurnover) {
+                                        setFieldValue(`exchanges.${key}.turnoverBrk`, true)
+                                        setFieldValue(`exchanges.${key}.symbolBrk`, false)
+                                      }
+                                    }
                                   })
                                 }}
                               />
@@ -1328,7 +1360,18 @@ const CreateNewUser: React.FC = () => {
                                       type="checkbox"
                                       className="sr-only peer"
                                       checked={!!values?.exchanges?.[exchange.key]?.enabled}
-                                      onChange={(e) => setFieldValue(`exchanges.${exchange.key}.enabled`, e.target.checked)}
+                                      onChange={(e) => {
+                                        const key = exchange.key.toLowerCase()
+                                        const isLockedTurnover = ['nse', 'sgx', 'others'].includes(key)
+                                        
+                                        setFieldValue(`exchanges.${key}.enabled`, e.target.checked)
+                                        
+                                        // Auto-set brokerage flags when enabling an exchange
+                                        if (e.target.checked && isLockedTurnover) {
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, true)
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, false)
+                                        }
+                                      }}
                                       disabled={!isExchangeAllowed(exchange.key)}
                                     />
                                     <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
@@ -1392,7 +1435,18 @@ const CreateNewUser: React.FC = () => {
                                       type="checkbox"
                                       className="sr-only peer"
                                       checked={!!values?.exchanges?.[exchange.key]?.enabled}
-                                      onChange={(e) => setFieldValue(`exchanges.${exchange.key}.enabled`, e.target.checked)}
+                                      onChange={(e) => {
+                                        const key = exchange.key.toLowerCase()
+                                        const isLockedTurnover = ['nse', 'sgx', 'others'].includes(key)
+                                        
+                                        setFieldValue(`exchanges.${key}.enabled`, e.target.checked)
+                                        
+                                        // Auto-set brokerage flags when enabling an exchange
+                                        if (e.target.checked && isLockedTurnover) {
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, true)
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, false)
+                                        }
+                                      }}
                                       disabled={!isExchangeAllowed(exchange.key)}
                                     />
                                     <div className="relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
@@ -1500,26 +1554,44 @@ const CreateNewUser: React.FC = () => {
                           </div>
                           <h3 className="text-lg font-semibold text-text-primary">High Trade Limit</h3>
                         </div>
-                        {!isEditMode || !editingUser?.parentHighLowTradeLimit ? (
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-text-secondary">Select All</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={exchangeData.filter(ex => ex.key !== 'others').every(ex => !!values?.highTradeLimit?.[ex.key])}
-                                onChange={(e) => {
-                                  const newHighTradeLimit = { ...values.highTradeLimit }
-                                  exchangeData.filter(ex => ex.key !== 'others').forEach(ex => {
-                                    newHighTradeLimit[ex.key as keyof typeof newHighTradeLimit] = e.target.checked
-                                  })
-                                  setFieldValue('highTradeLimit', newHighTradeLimit)
-                                }}
-                                className="sr-only peer"
-                              />
-                              <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
-                            </label>
-                          </div>
-                        ) : null}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-text-secondary">Select All</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(() => {
+                                let exchangesToShow = exchangeData.filter(ex => ex.key !== 'others');
+                                if (isEditMode && editingUser?.parentHighLowTradeLimit) {
+                                  const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+                                    ? editingUser.parentHighLowTradeLimit
+                                    : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
+                                  exchangesToShow = exchangeData.filter(ex => 
+                                    parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
+                                  );
+                                }
+                                return exchangesToShow.every(ex => !!values?.highTradeLimit?.[ex.key]);
+                              })()}
+                              onChange={(e) => {
+                                let exchangesToShow = exchangeData.filter(ex => ex.key !== 'others');
+                                if (isEditMode && editingUser?.parentHighLowTradeLimit) {
+                                  const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+                                    ? editingUser.parentHighLowTradeLimit
+                                    : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
+                                  exchangesToShow = exchangeData.filter(ex => 
+                                    parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
+                                  );
+                                }
+                                const newHighTradeLimit = { ...values.highTradeLimit }
+                                exchangesToShow.forEach(ex => {
+                                  newHighTradeLimit[ex.key as keyof typeof newHighTradeLimit] = e.target.checked
+                                })
+                                setFieldValue('highTradeLimit', newHighTradeLimit)
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
+                          </label>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">

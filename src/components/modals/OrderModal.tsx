@@ -53,6 +53,9 @@ interface OrderModalProps {
   modalPosition?: { x: number; y: number }
   onDragStart?: (e: React.MouseEvent) => void
   isDragging?: boolean
+
+  // Order method editability control
+  isOrderMethodDisabled?: boolean
 }
 
 const OrderModal: React.FC<OrderModalProps> = ({
@@ -84,7 +87,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
 
   modalPosition = { x: 0, y: 0 },
   onDragStart,
-  isDragging = false
+  isDragging = false,
+  isOrderMethodDisabled = false
 }) => {
   if (!isOpen || !selectedInstrument) return null
 
@@ -157,9 +161,13 @@ const OrderModal: React.FC<OrderModalProps> = ({
                 <label className="block text-sm font-bold text-slate-500 mb-2">Order Type</label>
                 <select
                   value={orderMethod}
-                  onChange={(e) => onOrderMethodChange(e.target.value)}
-                  className={`w-full px-3 py-3 font-medium border-2 rounded-lg outline-none ${'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 focus:border-blue-500'
-                    }`}
+                  onChange={(e) => !isOrderMethodDisabled && onOrderMethodChange(e.target.value)}
+                  disabled={isOrderMethodDisabled}
+                  className={`w-full px-3 py-3 font-medium border-2 rounded-lg outline-none ${
+                    isOrderMethodDisabled
+                      ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 cursor-not-allowed'
+                      : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 focus:border-blue-500'
+                  }`}
                 >
                   <option value="MARKET">Market</option>
                   <option value="LIMIT">Limit</option>

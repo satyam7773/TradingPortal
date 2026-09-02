@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
+import DownloadReport from '../../components/DownloadReport'
 
 interface M2MData {
   userId: number
@@ -31,6 +32,7 @@ const M2MProfitLoss: React.FC = () => {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -105,6 +107,51 @@ const M2MProfitLoss: React.FC = () => {
     }
   }
 
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (reportData.length === 0) {
+      toast.error('No M2M data to download')
+      return
+    }
+    try {
+      setIsDownloading(true)
+      const userIdForRequest = selectedUserId || loggedInUserId
+      const userFilterType = selectedUserId === 0 ? 'ALL' : 'SINGLE'
+      const endpoint = `https://api-staging.rivoplus.live/user/download/${userIdForRequest}?pdf=${format === 'pdf'}&userFilterType=${userFilterType}`
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userIdForRequest,
+          requestTimestamp: new Date().toISOString(),
+          data: ''
+        })
+      })
+      if (!response.ok) throw new Error('Download failed')
+      const jsonData = await response.json()
+      if (jsonData.data) {
+        const binary = atob(jsonData.data)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes])
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `M2MReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        toast.success(`Downloaded ${format.toUpperCase()}`)
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      toast.error('Download failed')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   const formatCurrency = (val: number) => val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   return (
@@ -140,6 +187,15 @@ const M2MProfitLoss: React.FC = () => {
                   >
                     Clear
                   </button>
+                </div>
+
+                {/* Download Section */}
+                <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                  <DownloadReport
+                    onDownload={handleDownloadReport}
+                    isDisabled={isDownloading || reportData.length === 0}
+                    label="Download Report"
+                  />
                 </div>
               </div>
             </div>

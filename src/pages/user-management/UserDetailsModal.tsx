@@ -12,6 +12,10 @@ import ChangePassword from './user-details-tabs/ChangePassword';
 import SharingDetails from './user-details-tabs/SharingDetails';
 import AddCredits from './user-details-tabs/AddCredits';
 import UserPositionsPanel from '../../components/UserPositionsPanel';
+import ScriptMaster from '../dashboard/ScriptMaster';
+import { ScriptBufferLimit } from '../dashboard';
+import { Trades } from '../trading';
+import { DeletedTrades } from '../reports';
 
 interface UserData {
   id: string;
@@ -44,6 +48,8 @@ interface UserData {
   lastLogin: string;
   isActive: boolean;
   isTradeLock: boolean;
+  deleteTrade: boolean;
+  deleteTradeEnabled: boolean;
 }
 
 interface UserDetailsModalProps {
@@ -285,7 +291,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   }, [userDetails]);
 
   // Handle child user toggle with API call
-  const handleChildUserToggle = useCallback(async (childUserId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'manualOrder') => {
+  const handleChildUserToggle = useCallback(async (childUserId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'manualOrder' | 'deleteTrade') => {
     try {
       const fieldToApiType: Record<string, string> = {
         'bet': 'bet',
@@ -294,7 +300,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         'status': 'status',
         'creditLimit': 'creditLimit',
         'creditBasedMargin': 'creditBasedMargin',
-        'manualOrder': 'manualOrder'
+        'manualOrder': 'manualOrder',
+        'deleteTrade': 'deleteTrade'
       };
 
       const apiType = fieldToApiType[field];
@@ -309,12 +316,13 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         'status': 'status',
         'creditLimit': 'creditLimit',
         'creditBasedMargin': 'creditBasedMargin',
-        'manualOrder': 'manualOrder'
+        'manualOrder': 'manualOrder',
+        'deleteTrade': 'deleteTrade'
       };
 
-      
-      
-      
+
+
+
       const toggleName = fieldToToggleName[field];
       console.log(`DEBUG: Toggling field: ${field}, API Type: ${apiType}, Toggle Name: ${toggleName}`);
       const toggleSetting = childUser.userSettingsToggles?.find(t => t.toggle === toggleName);
@@ -571,7 +579,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       deviceId: apiUser.deviceId || 'N/A',
       lastLogin: formatDate(apiUser.lastLoginDate),
       isActive: apiUser.isActive ?? true,
-      isTradeLock: apiUser.isTradeLock ?? false
+      isTradeLock: apiUser.isTradeLock ?? false,
+      deleteTrade: getToggleValue('deleteTrade'),
+      deleteTradeEnabled: getToggleEnabled('deleteTrade')
     };
   };
 
@@ -803,18 +813,10 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
                 {/* Dynamic Menu Tab (each menu from userSettings.menus becomes a top-level tab) */}
                 {userDetails.userSettings?.menus?.some((m) => m.name === activeTab) && (
-                  <div className="animate-fadeIn">
-                    <div className="p-4 bg-white/70 dark:bg-slate-800/70 rounded-lg border border-gray-200 dark:border-slate-700">
-                      {LazyMenuComponent ? (
-                        <Suspense fallback={<div className="py-8 text-center">Loading...</div>}>
-                          {/* @ts-ignore - dynamic lazy component */}
-                          <LazyMenuComponent user={user} userDetails={userDetails} onClose={onClose} onToggle={onToggle} onRefresh={fetchUserDetails} />
-                        </Suspense>
-                      ) : (
-                        <div className="text-sm text-gray-600">No component available for this menu.</div>
-                      )}
-                    </div>
-                  </div>
+                  <Suspense fallback={<div className="py-8 text-center">Loading...</div>}>
+                    {/* @ts-ignore - dynamic lazy component */}
+                    {LazyMenuComponent && <LazyMenuComponent user={user} userDetails={userDetails} onClose={onClose} onToggle={onToggle} onRefresh={fetchUserDetails} />}
+                  </Suspense>
                 )}
 
                 {/* User List Tab */}
@@ -847,6 +849,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                     <col style={{ width: '70px' }} />
                                     <col style={{ width: '70px' }} />
                                     <col style={{ width: '70px' }} />
+                                    <col style={{ width: '70px' }} />
                                     <col style={{ width: '150px' }} />
                                     <col style={{ width: '140px' }} />
                                     <col style={{ width: '160px' }} />
@@ -868,6 +871,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Margin</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Status</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">C.Margin</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Del Trade</th>
                                       <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Created</th>
                                       <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">IP Address</th>
                                       <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Device ID</th>
@@ -993,19 +997,19 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
                                           {/* Manual Order Toggle */}
                                           <td className="px-2 py-2 text-center">
-                                         <ToggleSwitch
-      enabled={transformedUser.manualOrder}
-      size="xs"
-      disabled={!transformedUser.manualOrderEnabled}
-      onClick={() => {
-        // Force an extra check
-        if (!transformedUser.manualOrderEnabled) {
-          console.warn("Attempted to toggle a disabled setting!");
-          return;
-        }
-        handleChildUserToggle(transformedUser.id, 'manualOrder');
-      }}
-    />
+                                            <ToggleSwitch
+                                              enabled={transformedUser.manualOrder}
+                                              size="xs"
+                                              disabled={!transformedUser.manualOrderEnabled}
+                                              onClick={() => {
+                                                // Force an extra check
+                                                if (!transformedUser.manualOrderEnabled) {
+                                                  console.warn("Attempted to toggle a disabled setting!");
+                                                  return;
+                                                }
+                                                handleChildUserToggle(transformedUser.id, 'manualOrder');
+                                              }}
+                                            />
                                           </td>
 
                                           {/* Margin Toggle */}
@@ -1021,6 +1025,11 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                           {/* Credit Based Margin Toggle */}
                                           <td className="px-2 py-2 text-center">
                                             <ToggleSwitch enabled={transformedUser.creditBasedMargin} onClick={() => handleChildUserToggle(transformedUser.id, 'creditBasedMargin')} size="xs" disabled={!transformedUser.creditBasedMarginEnabled} />
+                                          </td>
+
+                                          {/* Delete Trade Toggle */}
+                                          <td className="px-2 py-2 text-center">
+                                            <ToggleSwitch enabled={transformedUser.deleteTrade} onClick={() => handleChildUserToggle(transformedUser.id, 'deleteTrade')} size="xs" disabled={!transformedUser.deleteTradeEnabled} />
                                           </td>
 
                                           {/* Created Date */}
@@ -1073,35 +1082,31 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
                 {/* Positions Tab */}
                 {activeTab === 'positions' && (
-                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} user={userDetails}/>
+                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )}
+
+                {/* scripMaster Tab */}
+                {activeTab === 'scripMaster' && (
+                  <ScriptMaster username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
                 )}
 
                 {/* Trades Tab */}
                 {activeTab === 'trades' && (
-                  <div className="animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
-                      <div className="flex items-center justify-center h-64">
-                        <div className="text-center">
-                          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">Trades</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Coming soon...</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <Trades username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )}
+
+
+                {/* scripBuffer Tab */}
+                {activeTab === 'scripBuffer' && (
+                  <ScriptBufferLimit username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
                 )}
 
                 {/* Deleted Trades Tab */}
-                {activeTab === 'deletedTrades' && (
-                  <div className="animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
-                      <div className="flex items-center justify-center h-64">
-                        <div className="text-center">
-                          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">Deleted Trades</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Coming soon...</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                {/* {activeTab === 'deletedTrades' && (
+                  <DeletedTrades username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )} */}
+                 {activeTab === 'deletedTrades' && (
+                  <p>Deleted Trade Coming Soon</p>
                 )}
               </>
             );

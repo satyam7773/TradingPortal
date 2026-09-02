@@ -3,11 +3,15 @@ import { ArrowUpRight, ArrowDownLeft, Search, Clock, TrendingUp, ChevronLeft, Ch
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
+import orderService from '../../services/orderService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import DurationDetailsModal from '../reports/DurationDetailsModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
+import ConfigManager from '../../utils/configManager'
+import DownloadReport from '../../components/DownloadReport'
+import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 interface TradeData {
   tradeId: number
@@ -73,12 +77,35 @@ interface UserData {
 let lastClickTime = 0;
 let lastProcessedId: number | null = null;
 
-interface TradesPageProps extends CacheContextProps {}
+interface TradesPageProps {
+  // Cache props (optional for modal mode)
+  cacheData?: any;
+  apiData?: any;
+  onCacheSave?: (data: any, apiData?: any) => void;
+  isRestoringCache?: boolean;
+  // Modal props
+  username?: string;
+  userId?: string;
+  roleId?: string;
+  user?: any; // userDetails from modal
+}
 
-const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave, isRestoringCache }) => {
+const TradesPage: React.FC<TradesPageProps> = ({ 
+  cacheData, 
+  apiData, 
+  onCacheSave, 
+  isRestoringCache,
+  username,
+  userId: propsUserId,
+  roleId,
+  user: userDetails
+}) => {
+  // Detect if in modal mode based on presence of userDetails
+  const isModalMode = !!userDetails;
+  
   // Initialize state with cache if available, otherwise defaults
   const initializeFilterState = () => {
-    if (cacheData) {
+    if (cacheData && !isModalMode) {
       return cacheData
     }
     const todayStr = new Date().toLocaleDateString('en-CA')
@@ -113,7 +140,19 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
   }
 
   const loggedInUserId = getLoggedInUserId()
-  const [selectedUserId, setSelectedUserId] = useState<number>(initialFilters.selectedUserId)
+  
+  // In modal mode, use propsUserId; in dashboard mode, use selectedUserId from cache
+  const targetUserId = isModalMode && propsUserId ? parseInt(propsUserId) : loggedInUserId;
+  
+  // Initialize download report hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: 'https://api-staging.rivoplus.live/portal/trades/download',
+    filename: 'Trades'
+  });
+  
+  const [selectedUserId, setSelectedUserId] = useState<number>(
+    isModalMode ? (propsUserId ? parseInt(propsUserId) : loggedInUserId) : initialFilters.selectedUserId
+  )
   const [selectedExchange, setSelectedExchange] = useState<string>(initialFilters.selectedExchange)
   const [selectedSymbol, setSelectedSymbol] = useState<string>(initialFilters.selectedSymbol)
   const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.selectedStatus)
@@ -147,6 +186,8 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
   const [selectedTradeUserId, setSelectedTradeUserId] = useState<number | null>(null)
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  
   const pageSize = 100
 
   const cacheInitializedRef = useRef(false)
@@ -201,9 +242,12 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
     const loadInitialData = async () => {
       try {
         setInitialLoading(true)
-        const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId)
-        if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
-          setUsers(usersResponse.data)
+        // Only fetch users in dashboard mode
+        if (!isModalMode) {
+          const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId)
+          if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
+            setUsers(usersResponse.data)
+          }
         }
         const exchangesResponse = await userManagementService.fetchExchanges()
         if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
@@ -224,10 +268,12 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
     
     loadInitialData()
     metadataLoadedRef.current = true
-  }, []) // Only run once per mount
+  }, [isModalMode]) // Only run once per mount
 
   // Save filters to cache whenever they change (debounced)
   useEffect(() => {
+    if (!onCacheSave || isModalMode) return // Skip caching in modal mode
+    
     if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
     
     cacheTimerRef.current = setTimeout(() => {
@@ -248,13 +294,13 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
         totalPages
       }
       console.log('💾 [Trades] Saving filters to cache')
-      onCacheSave(filters, { tradesData, totalRecords, totalPages })
+      onCacheSave!(filters, { tradesData, totalRecords, totalPages })
     }, 500)
     
     return () => {
       if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current)
     }
-  }, [selectedUserId, selectedExchange, selectedSymbol, selectedStatus, selectedOrderType, selectedSide, fromDate, toDate, timeEnabled, fromTime, toTime, currentPage, totalRecords, totalPages, tradesData, onCacheSave])
+  }, [selectedUserId, selectedExchange, selectedSymbol, selectedStatus, selectedOrderType, selectedSide, fromDate, toDate, timeEnabled, fromTime, toTime, currentPage, totalRecords, totalPages, tradesData, onCacheSave, isModalMode])
 
   // Function to fetch symbols for a specific exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
@@ -298,7 +344,9 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
         requestData.tradeSymbol = selectedSymbol
       }
 
-      const response = await userManagementService.fetchTrades(selectedUserId || loggedInUserId, requestData)
+      // In modal mode, use targetUserId; in dashboard mode, use selectedUserId
+      const userIdForRequest = isModalMode ? targetUserId : (selectedUserId || loggedInUserId)
+      const response = await userManagementService.fetchTrades(loggedInUserId, { ...requestData, userId: userIdForRequest })
 
       if (response?.responseCode === '0') {
         const tradesList = response.data?.trades || response.data?.content || response.data || []
@@ -334,6 +382,17 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
   }
 
   const handleDeleteTrades = async () => {
+    // Check if user has permission to delete
+    const userData = localStorage.getItem('userData')
+    const user = userData ? JSON.parse(userData) : null
+    const roleId = user?.roleId
+    const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
+
+    if (!isAdminUser) {
+      toast.error('You do not have permission to delete trades')
+      return
+    }
+
     if (selectedTradeIds.size === 0) {
       toast.error('Please select trades to delete')
       return
@@ -400,6 +459,33 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
     setCurrentPage(0)
   }, [loggedInUserId, exchanges, todayStr])
 
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (tradesData.length === 0) {
+      toast.error('No trades to download')
+      return
+    }
+    try {
+      setIsDownloading(true)
+      const userIdForRequest = isModalMode ? targetUserId : (selectedUserId || loggedInUserId)
+      await downloadReport.download(format, {
+        userId: loggedInUserId,
+        data: {
+          from: fromDate,
+          to: toDate,
+          exchange: selectedExchange !== 'All Exchanges' ? selectedExchange : 'All Exchanges',
+          userId: userIdForRequest,
+          page: currentPage,
+          tradeSymbol: selectedSymbol || ''
+        },
+        requestTimestamp: new Date().getTime().toString()
+      }, { pdf: format === 'pdf' })
+    } catch (error) {
+      console.error('Download error:', error)
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   const formatDateTime = (dateTimeStr: string | null) => {
     if (!dateTimeStr) return '-'
     try {
@@ -432,7 +518,33 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
       id: userId.toString(),
       username: username,
       name: username,
-      isActive: true
+      type: 'Client',
+      parent: '',
+      credit: 0,
+      balance: 0,
+      sharing: null,
+      bet: false,
+      closeOut: false,
+      margin: false,
+      status: false,
+      creditLimit: false,
+      creditBasedMargin: false,
+      betEnabled: false,
+      closeOutEnabled: false,
+      marginEnabled: false,
+      statusEnabled: false,
+      creditLimitEnabled: false,
+      creditBasedMarginEnabled: false,
+      createdDate: '',
+      ipAddress: '',
+      manualOrder: false,
+      manualOrderEnabled: false,
+      deviceId: '',
+      lastLogin: '',
+      isActive: true,
+      isTradeLock: false,
+      deleteTrade: false,
+      deleteTradeEnabled: false
     };
 
     setSelectedUser(placeholderUser);
@@ -444,6 +556,12 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
     sellTrades: tradesData.filter(t => t.side === 'SELL').length,  // Current page only
     totalPnL: tradesData.reduce((sum, t) => sum + (t.realisedPnl || 0), 0),  // Current page P&L
   }
+
+  // Check if user is admin
+  const userData = localStorage.getItem('userData')
+  const user = userData ? JSON.parse(userData) : null
+  const userRoleId = user?.roleId
+  const isAdminUser = userRoleId === 1 || userRoleId === 2 || userRoleId === 3
 
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
@@ -461,13 +579,15 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">To :</label>
                 <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500" />
               </div>
-              <SearchableSelect
-                label="Username :"
-                items={userOptions}
-                selectedId={selectedUserId}
-                onSelect={(userId) => setSelectedUserId(Number(userId))}
-                placeholder="Search user..."
-              />
+              {!isModalMode && (
+                <SearchableSelect
+                  label="Username :"
+                  items={userOptions}
+                  selectedId={selectedUserId}
+                  onSelect={(userId) => setSelectedUserId(Number(userId))}
+                  placeholder="Search user..."
+                />
+              )}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
                 <select value={selectedExchange} onChange={(e) => setSelectedExchange(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
@@ -501,6 +621,15 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
                 <button onClick={() => handleView(0)} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md">View</button>
                 <button onClick={handleClearFilters} className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded font-semibold text-sm transition">Clear</button>
               </div>
+
+              {/* Download Section */}
+              <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                <DownloadReport
+                  onDownload={handleDownloadReport}
+                  isDisabled={isDownloading || tradesData.length === 0}
+                  label="Download Report"
+                />
+              </div>
             </div>
           }
         >
@@ -514,7 +643,7 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  {selectedTradeIds.size > 0 && (
+                  {selectedTradeIds.size > 0 && isAdminUser && (
                     <button
                       onClick={handleDeleteTrades}
                       disabled={isDeleting}
@@ -536,14 +665,16 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
               <table className="w-full border-collapse min-w-max">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                   <tr>
-                    <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
-                      <input
-                        type="checkbox"
-                        checked={selectedTradeIds.size === tradesData.length && tradesData.length > 0}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                      />
-                    </th>
+                    {isAdminUser && (
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={selectedTradeIds.size === tradesData.length && tradesData.length > 0}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                        />
+                      </th>
+                    )}
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Execution Time</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Placed By</th>
@@ -570,14 +701,16 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
 
                     return (
                       <tr key={trade.tradeId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                        <td className="px-4 py-4 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedTradeIds.has(trade.tradeId)}
-                            onChange={() => handleSelectTrade(trade.tradeId)}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                          />
-                        </td>
+                        {isAdminUser && (
+                          <td className="px-4 py-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedTradeIds.has(trade.tradeId)}
+                              onChange={() => handleSelectTrade(trade.tradeId)}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.orderTime)}</td>
                         <td className="px-6 py-4 text-left whitespace-nowrap">
                           <span
@@ -711,4 +844,9 @@ const TradesPage: React.FC<TradesPageProps> = ({ cacheData, apiData, onCacheSave
   )
 }
 
+
+// Export plain component for modal use (like ScriptMaster)
+export { TradesPage as Trades }
+
+// Export wrapped component for dashboard use with caching
 export default withTabCache(TradesPage, { title: 'Trades' })

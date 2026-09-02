@@ -3,6 +3,8 @@ import { toast } from 'react-hot-toast';
 import { X, ArrowLeft } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
+import DownloadReport from '../../components/DownloadReport';
+import { useDownloadReport } from '../../hooks/useDownloadReport';
 
 const Settlement: React.FC = () => {
   const getMondayOfCurrentWeek = () => {
@@ -25,12 +27,51 @@ const Settlement: React.FC = () => {
   
   const [mainData, setMainData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [modalUserStack, setModalUserStack] = useState<number[]>([]);
   const [modalData, setModalData] = useState<any>(null);
   const [modalLoading, setModalLoading] = useState(false);
 
   const activeModalUserId = modalUserStack.length > 0 ? modalUserStack[modalUserStack.length - 1] : null;
+
+  // Get logged in user ID
+  const userDataStr = localStorage.getItem('userData');
+  const userData = userDataStr ? JSON.parse(userDataStr) : null;
+  const loggedInUserId = userData?.userId || 31;
+
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: 'https://api-staging.rivoplus.live/reports/settlement/download',
+    filename: 'settlement',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  });
+
+  // Handle download with current filters
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (!mainData) {
+      toast.error('No settlement data to download');
+      return;
+    }
+
+    try {
+      await downloadReport.download(format, {
+        userId: loggedInUserId,
+        requestTimestamp: Date.now().toString(),
+        data: {
+          from: dates.from,
+          to: dates.to,
+          opening: opening,
+          searchUserId: loggedInUserId
+        }
+      }, {
+        pdf: format === 'pdf'
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
 
   const handleView = async () => {
     setLoading(true);
@@ -65,13 +106,55 @@ const Settlement: React.FC = () => {
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full mt-5">
         <FilterLayout storageKey="settlement:showFilters" filterWidthClass="lg:w-[16%]" filters={
             <div className="space-y-4 p-4">
-              <input type="date" value={dates.from} onChange={e => setDates({...dates, from: e.target.value})} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />
-              <input type="date" value={dates.to} onChange={e => setDates({...dates, to: e.target.value})} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" />
-              <button onClick={handleView} className="w-full py-2 bg-orange-500 text-white rounded font-bold text-sm">View</button>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">From Date :</label>
+                <input 
+                  type="date" 
+                  value={dates.from} 
+                  onChange={e => setDates({...dates, from: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">To Date :</label>
+                <input 
+                  type="date" 
+                  value={dates.to} 
+                  onChange={e => setDates({...dates, to: e.target.value})} 
+                  className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Opening :</label>
+                <select 
+                  value={opening} 
+                  onChange={e => setOpening(e.target.value as 'WITH' | 'WITHOUT')} 
+                  className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm"
+                >
+                  <option value="WITHOUT">WITHOUT</option>
+                  <option value="WITH">WITH</option>
+                </select>
+              </div>
+              <button 
+                onClick={handleView} 
+                disabled={loading}
+                className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-bold text-sm transition disabled:opacity-50"
+              >
+                {loading ? 'Loading...' : 'View'}
+              </button>
+
+              {/* Download Report Section */}
+              <div className="border-t border-gray-300 dark:border-slate-600 pt-4 mt-4">
+                <DownloadReport
+                  onDownload={handleDownloadReport}
+                  isDisabled={isDownloading || !mainData}
+                  label="Download Report :"
+                />
+              </div>
             </div>
           }>
           <div className="h-full bg-white/70 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 shadow-lg p-6 overflow-hidden">
-             {loading ? <div>Loading...</div> : mainData && <SettlementTable data={mainData} onUserClick={(id) => setModalUserStack([id])} />}
+             {loading ? <div>Loading...</div> : mainData && <SettlementTable data={mainData} onUserClick={(id: number) => setModalUserStack([id])} />}
           </div>
         </FilterLayout>
       </div>
@@ -96,7 +179,7 @@ const Settlement: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto p-6 bg-[#0b1221]">
-              {modalLoading ? <div className="text-white text-center p-10">Loading...</div> : modalData && <SettlementTable data={modalData} onUserClick={(id) => setModalUserStack(prev => [...prev, id])} isDark />}
+              {modalLoading ? <div className="text-white text-center p-10">Loading...</div> : modalData && <SettlementTable data={modalData} onUserClick={(id: number) => setModalUserStack(prev => [...prev, id])} isDark />}
             </div>
           </div>
         </div>

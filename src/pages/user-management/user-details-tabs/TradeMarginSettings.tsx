@@ -383,12 +383,14 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
             </button>
           </div>
 
-          <button
-            onClick={handleUpdateToAllUsers}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
-          >
-            Update to All Users
-          </button>
+          {user?.type === 'Master' && (
+            <button
+              onClick={handleUpdateToAllUsers}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
+            >
+              Update to All Users
+            </button>
+          )}
         </div>
       }
     >

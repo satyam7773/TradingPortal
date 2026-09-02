@@ -43,6 +43,7 @@ const SecondaryPanelContent: React.FC = () => {
       
       // Dashboard & Trading
       'market-watch': 'dashboard/MarketWatch',
+      'trade-margin': 'dashboard/TradeMarginPage',
       'markets': 'trading/Markets',
       'orders': 'trading/Orders',
       'portfolio': 'trading/Portfolio',
@@ -53,18 +54,37 @@ const SecondaryPanelContent: React.FC = () => {
       'api-test': 'admin/ApiTestPage',
     }
     
+    // Helper function to get module loader by any key format
+    const getModuleLoader = (filePath: string) => {
+      const possibleKeys = [
+        `../../pages/${filePath}.tsx`,
+        `../../pages/${filePath}.ts`,
+        `../../pages/${filePath}.jsx`,
+        `../../pages/${filePath}.js`
+      ]
+      
+      for (const key of possibleKeys) {
+        if (key in pageModules) {
+          return pageModules[key as keyof typeof pageModules]
+        }
+      }
+      
+      // Fallback: Search by partial match
+      const searchString = `${filePath}.tsx`
+      const matchedKey = Object.keys(pageModules).find(key => key.endsWith(searchString) || key.includes(searchString))
+      
+      if (matchedKey) {
+        return pageModules[matchedKey as keyof typeof pageModules]
+      }
+      
+      return null
+    }
+    
     // Get the component path from mapping
     const componentFilePath = pathMappings[componentPath]
     
     if (componentFilePath) {
-      // Find the exact module from pageModules
-      const moduleKey = `../../pages/${componentFilePath}.tsx`
-      const moduleKeyAlt = `../../pages/${componentFilePath}.ts`
-      const moduleKeyJsx = `../../pages/${componentFilePath}.jsx`
-      const moduleKeyJs = `../../pages/${componentFilePath}.js`
-      
-      const moduleLoader = pageModules[moduleKey] || pageModules[moduleKeyAlt] || pageModules[moduleKeyJsx] || pageModules[moduleKeyJs]
-      
+      const moduleLoader = getModuleLoader(componentFilePath)
       if (moduleLoader) {
         return React.lazy(() => moduleLoader().then((m: any) => ({ default: m.default })))
       }
@@ -80,19 +100,9 @@ const SecondaryPanelContent: React.FC = () => {
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join('')
       
-      // Try all possible extensions
-      const possibleKeys = [
-        `../../pages/${folder}/${componentName}.tsx`,
-        `../../pages/${folder}/${componentName}.ts`,
-        `../../pages/${folder}/${componentName}.jsx`,
-        `../../pages/${folder}/${componentName}.js`
-      ]
-      
-      for (const key of possibleKeys) {
-        const moduleLoader = pageModules[key]
-        if (moduleLoader) {
-          return React.lazy(() => moduleLoader().then((m: any) => ({ default: m.default })))
-        }
+      const moduleLoader = getModuleLoader(`${folder}/${componentName}`)
+      if (moduleLoader) {
+        return React.lazy(() => moduleLoader().then((m: any) => ({ default: m.default })))
       }
     }
     

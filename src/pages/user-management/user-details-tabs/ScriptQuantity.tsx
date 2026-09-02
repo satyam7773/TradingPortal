@@ -130,8 +130,9 @@ const ScriptQuantitySettings: React.FC<{ user: any; groupId: number }> = ({ user
         </div>
       }
     >
-      <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex-1 overflow-y-auto bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg">
+          <table className="w-full text-sm">
           <thead className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800">
             <tr className="text-left text-xs text-slate-700 dark:text-slate-200">
               <th className="px-3 py-3"><input type="checkbox" onChange={e => setSelectedIds(e.target.checked ? new Set(scripts.map(s => s.quantityGroupId)) : new Set())} /></th>
@@ -159,6 +160,7 @@ const ScriptQuantitySettings: React.FC<{ user: any; groupId: number }> = ({ user
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </FilterLayout>
   );

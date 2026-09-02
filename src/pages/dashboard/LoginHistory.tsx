@@ -5,6 +5,8 @@ import { authService } from '../../services/authService'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
+import DownloadReport from '../../components/DownloadReport'
+import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 interface LoginHistoryRecord {
   loginHistoryId: number
@@ -40,6 +42,7 @@ const LoginHistory: React.FC = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [users, setUsers] = useState<any[]>([])
   const [initialLoading, setInitialLoading] = useState(true)
+  const [isDownloading, setIsDownloading] = useState(false)
   const pageSize = 10
 
   const userOptions = useMemo(() => [
@@ -50,6 +53,11 @@ const LoginHistory: React.FC = () => {
     // Load users on mount
     loadUsers()
   }, [])
+
+  const downloadReport = useDownloadReport({
+    apiEndpoint: 'https://api-staging.rivoplus.live/login/history/uId/download',
+    filename: 'LoginHistoryReport'
+  })
 
   const loadUsers = async () => {
     try {
@@ -125,6 +133,49 @@ const LoginHistory: React.FC = () => {
     setSelectedUserId(null)
     setLoginHistory([])
     setCurrentPage(0)
+  }
+
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (loginHistory.length === 0) {
+      toast.error('No login history data to download')
+      return
+    }
+    try {
+      setIsDownloading(true)
+      const targetUserId = selectedUserId || 0
+      const endpoint = `https://api-staging.rivoplus.live/login/history/${targetUserId}/download`
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: targetUserId,
+          requestTimestamp: new Date().toISOString(),
+          data: ''
+        })
+      })
+      if (!response.ok) throw new Error('Download failed')
+      const jsonData = await response.json()
+      if (jsonData.data) {
+        const binary = atob(jsonData.data)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes])
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `LoginHistoryReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        toast.success(`Downloaded ${format.toUpperCase()}`)
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      toast.error('Download failed')
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   const fetchLoginHistoryFiltered = async (page: number) => {
@@ -318,6 +369,15 @@ const LoginHistory: React.FC = () => {
                 >
                   Clear
                 </button>
+              </div>
+
+              {/* Download Section */}
+              <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                <DownloadReport
+                  onDownload={handleDownloadReport}
+                  isDisabled={isDownloading || loginHistory.length === 0}
+                  label="Download Report"
+                />
               </div>
             </div>
           }

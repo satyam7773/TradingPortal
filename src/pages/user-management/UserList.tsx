@@ -53,6 +53,8 @@ interface UserData {
   freshStopLossEnabled: boolean;
   manualOrder: boolean;
   manualOrderEnabled: boolean;
+  deleteTrade: boolean;
+  deleteTradeEnabled: boolean;
 }
 
 interface ToggleSetting {
@@ -219,6 +221,8 @@ const UserList: React.FC = () => {
       isTradeLock: apiUser.isTradeLock ?? false,
       manualOrder: getToggleValue('manualOrder'),
       manualOrderEnabled: getToggleEnabled('manualOrder'),
+      deleteTrade: getToggleValue('deleteTrade'),
+      deleteTradeEnabled: getToggleEnabled('deleteTrade'),
     };
   };
 
@@ -263,7 +267,8 @@ const UserList: React.FC = () => {
           cachedUsers[0].hasOwnProperty('sharing') &&
           cachedUsers[0].hasOwnProperty('parentCredits') &&
           cachedUsers[0].hasOwnProperty('isActive') &&
-          cachedUsers[0].hasOwnProperty('isTradeLock')
+          cachedUsers[0].hasOwnProperty('isTradeLock') &&
+          cachedUsers[0].hasOwnProperty('deleteTrade')
         );
 
         if (isValidCache) {
@@ -397,7 +402,7 @@ const UserList: React.FC = () => {
 
   const displayUsers = filteredUsers;
 
-  const handleToggle = useCallback(async (userId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin') => {
+  const handleToggle = useCallback(async (userId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'deleteTrade') => {
     try {
       // Map field names to API type values
       const fieldToApiType: Record<string, string> = {
@@ -408,7 +413,8 @@ const UserList: React.FC = () => {
         'status': 'status',
         'creditLimit': 'creditLimit',
         'creditBasedMargin': 'creditBasedMargin',
-        'manualOrder': 'manualOrder'
+        'manualOrder': 'manualOrder',
+        'deleteTrade': 'deleteTrade'
       };
 
       // Map field names to display names
@@ -420,7 +426,8 @@ const UserList: React.FC = () => {
         'freshStopLoss': 'Fresh Stop Loss',
         'creditLimit': 'Credit Limit',
         'creditBasedMargin': 'CBM',
-        'manualOrder': 'Manual Order'
+        'manualOrder': 'Manual Order',
+        'deleteTrade': 'Delete Trade'
       };
 
       const apiType = fieldToApiType[field];
@@ -629,6 +636,7 @@ const UserList: React.FC = () => {
                 <col style={{ width: '70px' }} />
                 <col style={{ width: '70px' }} />
                 <col style={{ width: '70px' }} />
+                <col style={{ width: '70px' }} />
                 <col style={{ width: '150px' }} />
                 <col style={{ width: '140px' }} />
                 <col style={{ width: '160px' }} />
@@ -654,6 +662,7 @@ const UserList: React.FC = () => {
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Margin</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Status</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">CBM</th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Del Trade</th>
                   <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Created</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">IP Address</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Device ID</th>
@@ -826,6 +835,9 @@ const UserList: React.FC = () => {
                     </td>
                     <td className="px-2 py-2 text-center">
                       <ToggleSwitch enabled={user.creditBasedMargin} onClick={() => handleToggle(user.id, 'creditBasedMargin')} size="xs" disabled={!user.creditBasedMarginEnabled} />
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <ToggleSwitch enabled={user.deleteTrade} onClick={() => handleToggle(user.id, 'deleteTrade')} size="xs" disabled={!user.deleteTradeEnabled} />
                     </td>
                     <td className="px-2 py-2">
                       <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{user.createdDate}</span>

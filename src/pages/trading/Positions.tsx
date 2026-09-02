@@ -313,7 +313,7 @@ const Positions: React.FC = () => {
 
       if (response?.responseCode === "0" && response.data) {
         setPositionData(response.data);
-        let positions = response.data.positions || [];
+        let positions = response.data || [];
         if (selectedSymbol)
           positions = positions.filter(
             (p: PositionData) => p.tradeSymbol === selectedSymbol,

@@ -332,12 +332,14 @@ const handleApply = () => {
               Update
             </button>
           </div>
-          <button
-            onClick={() => handleUpdate(true)}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm"
-          >
-            Update All Users
-          </button>
+          {user?.type === 'Master' && (
+            <button
+              onClick={() => handleUpdate(true)}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm"
+            >
+              Update All Users
+            </button>
+          )}
         </div>
       }
     >

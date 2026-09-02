@@ -3,8 +3,10 @@ import { Search, BarChart3, ChevronLeft, ChevronRight, Trash2, CheckCircle } fro
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
+import orderService from '../../services/orderService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
+import OrderModal from '../../components/modals/OrderModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 
@@ -14,7 +16,7 @@ interface OrderData {
   orderId: number; orderLimitType: string; orderMethod: string; orderTime: string;
   side?: any; price: number; quantity: number; referencePrice: number;
   tradeSymbol: string; userId: number; userName: string;
-  placedByUsername: string;
+  placedByUsername: string; token?: number;
 }
 
 interface OrdersResponse { limit: number; offset: number; side?: any; orders: OrderData[]; size: number; }
@@ -79,6 +81,34 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set())
   const [selectedUser, setSelectedUser] = useState<any | null>(null)
 
+  // Order Modal States - BUY
+  const [showBuyModal, setShowBuyModal] = useState(false)
+  const [buyQuantity, setBuyQuantity] = useState('1')
+  const [buyPrice, setBuyPrice] = useState('0')
+  const [buyMethod, setBuyMethod] = useState('LIMIT')
+  const [buyRemark, setBuyRemark] = useState('')
+  const [isBuySubmitting, setIsBuySubmitting] = useState(false)
+
+  // Order Modal States - SELL
+  const [showSellModal, setShowSellModal] = useState(false)
+  const [sellQuantity, setSellQuantity] = useState('1')
+  const [sellPrice, setSellPrice] = useState('0')
+  const [sellMethod, setSellMethod] = useState('LIMIT')
+  const [sellRemark, setSellRemark] = useState('')
+  const [isSellSubmitting, setIsSellSubmitting] = useState(false)
+
+  // Shared states
+  const [selectedModalInstrument, setSelectedModalInstrument] = useState<any>(null)
+  const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null)
+  const [clientSearchTerm, setClientSearchTerm] = useState('')
+
+  // Draggable modal state
+  const [buyModalPosition, setBuyModalPosition] = useState({ x: 0, y: 0 })
+  const [sellModalPosition, setSellModalPosition] = useState({ x: 0, y: 0 })
+  const [isDraggingBuy, setIsDraggingBuy] = useState(false)
+  const [isDraggingSell, setIsDraggingSell] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+
   const userDataStr = localStorage.getItem('userData');
   const loggedInUser = userDataStr ? JSON.parse(userDataStr) : null;
 
@@ -97,6 +127,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
       name: s.tradeSymbol || s
     }));
   }, [symbols]);
+
+
 
   const cacheTimerRef = React.useRef<any>(null)
   const cacheInitializedRef = React.useRef(false)
@@ -229,6 +261,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
     }
   }, [fromDate, toDate, selectedUserId, selectedExchange, selectedSymbol, currentPage, ordersData, onCacheSave])
 
+
+
   const handleExchangeChange = async (name: string) => {
     setSelectedExchange(name);
     setSelectedSymbol('');
@@ -336,6 +370,196 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
     setCurrentPage(0)
   }, [todayStr])
 
+  // Client Order Handlers
+  const handleOpenModifyModal = (order: OrderData, targetType: 'BUY' | 'SELL') => {
+    const mergedConfig = {
+      exchange: order.exchange,
+      tradeSymbol: order.tradeSymbol,
+      instrumentName: order.tradeSymbol,
+      script: order.tradeSymbol,
+      lotSize: order.quantity || 1,
+    };
+
+    const quantity = (order.quantity || 1).toString();
+    const price = (order.price || 0).toString();
+
+    setClientSearchTerm(`${order.userName || order.placedByUsername || ''}`);
+    setSelectedOrder(order);
+    setSelectedModalInstrument({ token: order.token || 0, config: mergedConfig });
+
+    if (targetType === 'BUY') {
+      setBuyQuantity(quantity);
+      setBuyPrice(price);
+      setBuyMethod('LIMIT');
+      setBuyRemark('');
+      setShowBuyModal(true);
+    } else {
+      setSellQuantity(quantity);
+      setSellPrice(price);
+      setSellMethod('LIMIT');
+      setSellRemark('');
+      setShowSellModal(true);
+    }
+  };
+
+  const handleBuySubmit = async () => {
+    if (!selectedModalInstrument) {
+      toast.error('Please select an instrument');
+      return;
+    }
+    
+    if (!buyQuantity || !buyPrice) {
+      toast.error('Please fill in quantity and price');
+      return;
+    }
+
+    if (!selectedOrder) {
+      toast.error('Order data missing');
+      return;
+    }
+    
+    setIsBuySubmitting(true);
+    try {
+      const userId = loggedInUser?.userId || loggedInUserId;
+      const quantity = parseInt(buyQuantity);
+      const price = parseFloat(buyPrice);
+      
+      const response = await orderService.modifyBuyOrder(
+        userId,
+        userId,
+        selectedOrder.orderId,
+        selectedOrder.exchange,
+        selectedOrder.tradeSymbol,
+        selectedModalInstrument.token,
+        quantity,
+        price,
+        quantity,
+        'LIMIT',
+        'WEB'
+      );
+
+      if (response?.responseCode === '0') {
+        toast.success('Buy order modified successfully');
+        setShowBuyModal(false);
+        setSelectedOrder(null);
+        // Reset form
+        setBuyQuantity('1');
+        setBuyPrice('0');
+        setBuyMethod('LIMIT');
+        setBuyRemark('');
+        handleFetchOrders();
+      } else {
+        toast.error(response?.responseMessage || 'Failed to modify buy order');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Error modifying buy order');
+    } finally {
+      setIsBuySubmitting(false);
+    }
+  };
+
+  const handleSellSubmit = async () => {
+    if (!selectedModalInstrument) {
+      toast.error('Please select an instrument');
+      return;
+    }
+    
+    if (!sellQuantity || !sellPrice) {
+      toast.error('Please fill in quantity and price');
+      return;
+    }
+
+    if (!selectedOrder) {
+      toast.error('Order data missing');
+      return;
+    }
+    
+    setIsSellSubmitting(true);
+    try {
+      const userId = loggedInUser?.userId || loggedInUserId;
+      const quantity = parseInt(sellQuantity);
+      const price = parseFloat(sellPrice);
+      
+      const response = await orderService.modifySellOrder(
+        userId,
+        userId,
+        selectedOrder.orderId,
+        selectedOrder.exchange,
+        selectedOrder.tradeSymbol,
+        selectedModalInstrument.token,
+        quantity,
+        price,
+        quantity,
+        'LIMIT',
+        'WEB'
+      );
+
+      if (response?.responseCode === '0') {
+        toast.success('Sell order modified successfully');
+        setShowSellModal(false);
+        setSelectedOrder(null);
+        // Reset form
+        setSellQuantity('1');
+        setSellPrice('0');
+        setSellMethod('LIMIT');
+        setSellRemark('');
+        handleFetchOrders();
+      } else {
+        toast.error(response?.responseMessage || 'Failed to modify sell order');
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'Error modifying sell order');
+    } finally {
+      setIsSellSubmitting(false);
+    }
+  };
+
+  const handleDragSetup = (e: React.MouseEvent, type: "BUY" | "SELL") => {
+    e.preventDefault();
+    const targetModalElement = (e.currentTarget as HTMLElement)
+      .parentElement as HTMLElement;
+    const rect = targetModalElement.getBoundingClientRect();
+
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+
+    if (type === "BUY") setIsDraggingBuy(true);
+    else setIsDraggingSell(true);
+  };
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (isDraggingBuy) {
+        setBuyModalPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y,
+        });
+      }
+      if (isDraggingSell) {
+        setSellModalPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y,
+        });
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDraggingBuy(false);
+      setIsDraggingSell(false);
+    };
+
+    if (isDraggingBuy || isDraggingSell) {
+      document.addEventListener("mousemove", handleGlobalMouseMove);
+      document.addEventListener("mouseup", handleGlobalMouseUp);
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleGlobalMouseMove);
+      document.removeEventListener("mouseup", handleGlobalMouseUp);
+    };
+  }, [isDraggingBuy, isDraggingSell, dragOffset]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
@@ -430,13 +654,32 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                   >
                     <Trash2 className="w-4 h-4" /> Cancel Selected
                   </button>
-                  <button 
-                    onClick={handleProceedToSuccess}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
-                  >
-                    <CheckCircle className="w-4 h-4" /> Proceed to Success
-                  </button>
+                  {loggedInUser?.roleId === 4 && (
+                    <button 
+                      onClick={() => {
+                        const firstOrderId = Array.from(selectedOrders)[0];
+                        const firstOrder = ordersData?.orders.find(o => o.orderId === firstOrderId);
+                        if (firstOrder) {
+                          const orderType = firstOrder.side === 'BUY' ? 'BUY' : 'SELL';
+                          handleOpenModifyModal(firstOrder, orderType);
+                        }
+                      }}
+                      disabled={loading || selectedOrders.size !== 1}
+                      className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
+                      title="Select one order to modify"
+                    >
+                      Edit Modify
+                    </button>
+                  )}
+                  {loggedInUser?.roleId !== 4 && (
+                    <button 
+                      onClick={handleProceedToSuccess}
+                      disabled={loading}
+                      className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Proceed to Success
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -457,12 +700,14 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                     <thead>
                       <tr className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b-2 border-blue-200 dark:border-blue-500/30">
                         <th className="px-3 py-3.5 w-12">
-                          <input 
-                            type="checkbox" 
-                            checked={ordersData.orders.length > 0 && selectedOrders.size === ordersData.orders.length} 
-                            onChange={() => setSelectedOrders(selectedOrders.size === ordersData.orders.length ? new Set() : new Set(ordersData.orders.map(o => o.orderId)))} 
-                            className="w-4 h-4 cursor-pointer" 
-                          />
+                          {loggedInUser?.roleId !== 4 ? (
+                            <input 
+                              type="checkbox" 
+                              checked={ordersData.orders.length > 0 && selectedOrders.size === ordersData.orders.length} 
+                              onChange={() => setSelectedOrders(selectedOrders.size === ordersData.orders.length ? new Set() : new Set(ordersData.orders.map(o => o.orderId)))} 
+                              className="w-4 h-4 cursor-pointer" 
+                            />
+                          ) : null}
                         </th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Username</th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Placed By</th>
@@ -495,16 +740,28 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                               }`}
                           >
                             <td className="px-3 py-3.5 text-center">
-                              <input
-                                type="checkbox"
-                                checked={selectedOrders.has(order.orderId)}
-                                onChange={() => {
-                                  const next = new Set(selectedOrders);
-                                  next.has(order.orderId) ? next.delete(order.orderId) : next.add(order.orderId);
-                                  setSelectedOrders(next);
-                                }}
-                                className="w-4 h-4 cursor-pointer"
-                              />
+                              {loggedInUser?.roleId === 4 ? (
+                                <input
+                                  type="radio"
+                                  name="selectedOrder"
+                                  checked={selectedOrders.has(order.orderId)}
+                                  onChange={() => {
+                                    setSelectedOrders(new Set([order.orderId]));
+                                  }}
+                                  className="w-4 h-4 cursor-pointer"
+                                />
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrders.has(order.orderId)}
+                                  onChange={() => {
+                                    const next = new Set(selectedOrders);
+                                    next.has(order.orderId) ? next.delete(order.orderId) : next.add(order.orderId);
+                                    setSelectedOrders(next);
+                                  }}
+                                  className="w-4 h-4 cursor-pointer"
+                                />
+                              )}
                             </td>
                             <td className="px-4 py-3.5 text-left text-sm font-semibold">
                               <span
@@ -587,6 +844,78 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
         </div>,
         document.body
       )}
+
+      {/* Order Modal for Client Buy */}
+      <OrderModal
+        isOpen={showBuyModal}
+        onClose={() => {
+          setShowBuyModal(false);
+          setSelectedOrder(null);
+          setBuyQuantity('1');
+          setBuyPrice('0');
+        }}
+        orderType="BUY"
+        selectedInstrument={selectedModalInstrument}
+        orderQuantity={buyQuantity}
+        onOrderQuantityChange={setBuyQuantity}
+        orderPrice={buyPrice}
+        onOrderPriceChange={setBuyPrice}
+        orderMethod={buyMethod}
+        onOrderMethodChange={setBuyMethod}
+        orderRemark={buyRemark}
+        onOrderRemarkChange={setBuyRemark}
+        isAdminUser={false}
+        clientSearchTerm={clientSearchTerm}
+        onClientSearchChange={setClientSearchTerm}
+        isSubmitting={isBuySubmitting}
+        onSubmit={handleBuySubmit}
+        onCancel={() => {
+          setShowBuyModal(false);
+          setSelectedOrder(null);
+          setBuyQuantity('1');
+          setBuyPrice('0');
+        }}
+        modalPosition={buyModalPosition}
+        onDragStart={(e) => handleDragSetup(e, "BUY")}
+        isDragging={isDraggingBuy}
+        isOrderMethodDisabled={true}
+      />
+
+      {/* Order Modal for Client Sell */}
+      <OrderModal
+        isOpen={showSellModal}
+        onClose={() => {
+          setShowSellModal(false);
+          setSelectedOrder(null);
+          setSellQuantity('1');
+          setSellPrice('0');
+        }}
+        orderType="SELL"
+        selectedInstrument={selectedModalInstrument}
+        orderQuantity={sellQuantity}
+        onOrderQuantityChange={setSellQuantity}
+        orderPrice={sellPrice}
+        onOrderPriceChange={setSellPrice}
+        orderMethod={sellMethod}
+        onOrderMethodChange={setSellMethod}
+        orderRemark={sellRemark}
+        onOrderRemarkChange={setSellRemark}
+        isAdminUser={false}
+        clientSearchTerm={clientSearchTerm}
+        onClientSearchChange={setClientSearchTerm}
+        isSubmitting={isSellSubmitting}
+        onSubmit={handleSellSubmit}
+        onCancel={() => {
+          setShowSellModal(false);
+          setSelectedOrder(null);
+          setSellQuantity('1');
+          setSellPrice('0');
+        }}
+        modalPosition={sellModalPosition}
+        onDragStart={(e) => handleDragSetup(e, "SELL")}
+        isDragging={isDraggingSell}
+        isOrderMethodDisabled={true}
+      />
     </div>
   )
 }

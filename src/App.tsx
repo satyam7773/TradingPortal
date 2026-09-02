@@ -14,7 +14,11 @@ import {
   SearchUser,
   FileUploadPage,
   ProfitLoss,
-  IntradayHistory
+  IntradayHistory,
+  RunSettlement,
+  ScriptBufferLimit,
+  ScriptMaster,
+  TradeMarginPage
 } from './pages'
 import CreateNewUser from './pages/user-management/CreateNewUser'
 import MarketWatch from './pages/dashboard/MarketWatch'
@@ -29,6 +33,7 @@ import Settlement from './pages/reports/Settlement'
 import AppLayout from './components/layout/AppLayout'
 import ScrollToTop from './components/common/ScrollToTop'
 import M2MReport from './pages/dashboard/M2MReport'
+import WeeklyAdmin from './pages/dashboard/WeeklyAdmin'
 import RejectionLog from './pages/dashboard/RejectionLog'
 import UserSettingsChangePassword from './pages/dashboard/UserSettingsChangePassword'
 import BillGenerate from './pages/reports/BillGenerate'
@@ -49,6 +54,7 @@ const App: React.FC = () => {
           <Route path="profit-loss" element={<ProfitLoss />} />
           <Route path="intraday-history" element={<IntradayHistory />} />
           <Route path="m2mReport" element={<M2MReport />} />
+          <Route path="weekly-admin" element={<WeeklyAdmin />} />
           <Route path="rejection-log" element={<RejectionLog />} />
           <Route path="change-password" element={<UserSettingsChangePassword />} />
           <Route path="orders" element={<Orders />} />
@@ -68,6 +74,10 @@ const App: React.FC = () => {
           <Route path="settlement" element={<Settlement />} />
           <Route path="file-upload" element={<FileUploadPage />} />
           <Route path="bill-generate" element={<BillGenerate />} />
+          <Route path="run-settlement" element={<RunSettlement />} />
+          <Route path="script-buffer-limit" element={<ScriptBufferLimit />} />
+          <Route path="script-master" element={<ScriptMaster />} />
+          <Route path="trade-margin" element={<TradeMarginPage />} />
           <Route path="*" element={<div className="p-8 text-center">
             <h1 className="text-2xl font-bold mb-4">Page Not Found</h1>
             <p className="text-gray-600 mb-4">The route you're looking for doesn't exist within /dashboard</p>
