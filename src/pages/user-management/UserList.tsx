@@ -367,22 +367,10 @@ const UserList: React.FC = () => {
   }, [showSharingModal, showPasswordModal, showAddCreditsModal, showIntradaySquareOffModal, showMarketTradeRightsModal]);
 
   const filteredUsers = users.filter(user => {
-    // Apply search term filter
+    // Apply search term filter - Search only in username
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = (
-        user.username.toLowerCase().includes(searchLower) ||
-        user.name.toLowerCase().includes(searchLower) ||
-        user.type.toLowerCase().includes(searchLower) ||
-        user.parent.toLowerCase().includes(searchLower) ||
-        user.ipAddress.toLowerCase().includes(searchLower) ||
-        user.deviceId.toLowerCase().includes(searchLower) ||
-        user.createdDate.toLowerCase().includes(searchLower) ||
-        user.lastLogin.toLowerCase().includes(searchLower) ||
-        user.credit.toString().includes(searchLower) ||
-        user.balance.toString().includes(searchLower) ||
-        (user.sharing !== null && user.sharing.toString().includes(searchLower))
-      );
+      const matchesSearch = user.username.toLowerCase().includes(searchLower);
       if (!matchesSearch) return false;
     }
 

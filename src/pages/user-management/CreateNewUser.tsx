@@ -86,7 +86,8 @@ const initialValues = {
     mcx: false,
     sgx: false,
     cds: false,
-    callput: false
+    callput: false,
+    others: false
   }
 }
 
@@ -452,7 +453,7 @@ const CreateNewUser: React.FC = () => {
         }
       });
 
-      let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
+      let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false };
 
       // Use highLowTradeLimit to set which ones are enabled (not parentHighLowTradeLimit)
       if (editingUser.highLowTradeLimit) {
@@ -1552,7 +1553,7 @@ const CreateNewUser: React.FC = () => {
                           <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                             <TrendingUp className="w-4 h-4 text-emerald-500" />
                           </div>
-                          <h3 className="text-lg font-semibold text-text-primary">High Trade Limit</h3>
+                          <h3 className="text-lg font-semibold text-text-primary">High Low Between Limit</h3>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-sm font-medium text-text-secondary">Select All</span>
