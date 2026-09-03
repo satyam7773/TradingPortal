@@ -1,0 +1,63 @@
+{
+  "appId": "com.trading-portal.app",
+  "productName": "Trading Portal",
+  "artifactName": "${productName}-${version}-${arch}.${ext}",
+  "directories": {
+    "buildResources": "public",
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/main.js",
+    "electron/preload.js",
+    "package.json",
+    "public/**/*"
+  ],
+  "extraMetadata": {
+    "main": "dist/electron/main.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "msi",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "certificateFile": null,
+    "certificatePassword": null,
+    "signingHashAlgorithms": [
+      "sha256"
+    ],
+    "sign": null
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Trading Portal",
+    "installerIcon": "public/logo.png",
+    "uninstallerIcon": "public/logo.png",
+    "installerHeaderIcon": "public/logo.png"
+  },
+  "portable": {
+    "artifactName": "${productName}-${version}-portable.${ext}"
+  },
+  "msi": {
+    "oneClick": false
+  }
+}
