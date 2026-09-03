@@ -36,6 +36,7 @@ interface TradeData {
   orderType: string
   tradeOrderMethod: string | null
   orderTime: string
+  executionTime?: string
   createdAt: string
   tradeDays?: number
   ip: string | null
@@ -489,7 +490,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
   const formatDateTime = (dateTimeStr: string | null) => {
     if (!dateTimeStr) return '-'
     try {
-      const date = new Date(dateTimeStr + 'Z')
+      const date = new Date(dateTimeStr)
       return date.toLocaleString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
@@ -711,7 +712,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                             />
                           </td>
                         )}
-                        <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.orderTime)}</td>
+                        <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.executionTime)}</td>
                         <td className="px-6 py-4 text-left whitespace-nowrap">
                           <span
                             className="text-sm font-semibold text-blue-600 underline cursor-pointer hover:text-blue-800 transition-colors"

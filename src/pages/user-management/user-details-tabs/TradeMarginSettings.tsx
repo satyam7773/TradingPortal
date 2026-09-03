@@ -22,6 +22,15 @@ interface TradeMarginItem {
 const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) => {
   const [selectedExchange, setSelectedExchange] = useState<string>('');
   const [marginTypeFilter, setMarginTypeFilter] = useState<string>('percentage'); // percentage, amount
+  const [scriptNameSearch, setScriptNameSearch] = useState<string>('');
+
+  // Get the viewed user's roleId to check if they're a Master or Admin
+  // This shows "Update to All Users" only if the USER BEING VIEWED is a Master/Admin, not the logged-in user
+  const userRoleId = React.useMemo(() => {
+    const roleId = userDetails?.userProfile?.roleId;
+    console.log('🔍 [TradeMarginSettings] User (being viewed) roleId:', roleId, 'User object:', user, 'userDetails:', userDetails?.userProfile);
+    return roleId || null; // roleId: 1,2=Admin, 3=Master, 4=Client
+  }, [userDetails, user]);
   const [marginInput, setMarginInput] = useState<string>('');
   const [cfMarginInput, setCfMarginInput] = useState<string>('');
   const [minVolumeInput, setMinVolumeInput] = useState<string>('');
@@ -29,7 +38,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
   const [callputMarginInput, setCallputMarginInput] = useState<string>('');
   const [marginData, setMarginData] = useState<TradeMarginItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set()); // Store instrumentId, not index
   
   // Extract allowed exchanges from userDetails
   const allowedExchanges = React.useMemo(() => {
@@ -113,8 +122,8 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     }
 
     // Apply to selected items
-    const updatedData = marginData.map((item, idx) => {
-      if (selectedItems.has(idx)) {
+    const updatedData = marginData.map((item) => {
+      if (selectedItems.has(item.instrumentId)) {
         return {
           ...item,
           margin: marginInput ? parseFloat(marginInput) : item.margin,
@@ -146,8 +155,10 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
       const storedUserData = userDataStr ? JSON.parse(userDataStr) : null;
       const loggedInUserId = storedUserData?.userId || user?.id;
 
-      const selectedTradeMargins = Array.from(selectedItems).map((idx) => {
-        const item = marginData[idx];
+      const selectedTradeMargins = Array.from(selectedItems).map((instrumentId) => {
+        const item = marginData.find(m => m.instrumentId === instrumentId);
+        if (!item) return null;
+        
         const payload: any = {
           instrumentId: item.instrumentId,
           margin: item.margin,
@@ -164,7 +175,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         }
         
         return payload;
-      });
+      }).filter(p => p !== null);
 
       // Build the request payload
       const payload = {
@@ -247,29 +258,40 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     if (selectedItems.size === filteredMarginData.length) {
       setSelectedItems(new Set());
     } else {
-      setSelectedItems(new Set(filteredMarginData.map((_, idx) => idx)));
+      setSelectedItems(new Set(filteredMarginData.map((item) => item.instrumentId)));
     }
   };
 
-  const toggleSelectItem = (index: number) => {
+  const toggleSelectItem = (instrumentId: number) => {
     const newSelected = new Set(selectedItems);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
+    if (newSelected.has(instrumentId)) {
+      newSelected.delete(instrumentId);
     } else {
-      newSelected.add(index);
+      newSelected.add(instrumentId);
     }
     setSelectedItems(newSelected);
   };
 
-  // Filter marginData based on marginTypeFilter
+  // Filter marginData based on marginTypeFilter and scriptNameSearch
   const filteredMarginData = React.useMemo(() => {
+    let filtered = marginData;
+
+    // Filter by margin type
     if (marginTypeFilter === 'percentage') {
-      return marginData.filter(item => item.marginPercentage === true);
+      filtered = filtered.filter(item => item.marginPercentage === true);
     } else if (marginTypeFilter === 'amount') {
-      return marginData.filter(item => item.marginPercentage === false);
+      filtered = filtered.filter(item => item.marginPercentage === false);
     }
-    return marginData;
-  }, [marginData, marginTypeFilter]);
+
+    // Filter by script name
+    if (scriptNameSearch.trim()) {
+      filtered = filtered.filter(item => 
+        item.scripName.toLowerCase().includes(scriptNameSearch.toLowerCase())
+      );
+    }
+
+    return filtered;
+  }, [marginData, marginTypeFilter, scriptNameSearch]);
 
   return (
     <FilterLayout
@@ -297,6 +319,17 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                 ))
               )}
             </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-slate-600 dark:text-slate-300 block">Search Script Name :</label>
+            <input
+              type="text"
+              value={scriptNameSearch}
+              onChange={(e) => setScriptNameSearch(e.target.value)}
+              placeholder="Search script..."
+              className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+            />
           </div>
 
           <div className="space-y-1">
@@ -383,31 +416,38 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
             </button>
           </div>
 
-          {user?.type === 'Master' && (
-            <button
-              onClick={handleUpdateToAllUsers}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
-            >
-              Update to All Users
-            </button>
-          )}
+          {(() => {
+            // Only show "Update to All Users" if the USER BEING VIEWED is a Master (3) or Admin (1, 2)
+            // Hide if: Client (4) or unknown roleId
+            const canShowButton = userRoleId !== null && userRoleId !== 4;
+            console.log('🔘 [TradeMarginSettings] Show "Update to All Users" button for user?', canShowButton, 'userRoleId:', userRoleId);
+            
+            return canShowButton ? (
+              <button
+                onClick={handleUpdateToAllUsers}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
+              >
+                Update to All Users
+              </button>
+            ) : null;
+          })()}
         </div>
       }
     >
       {/* Right content - Table */}
-      <div className="p-4">
+      <div className="p-4 h-full overflow-y-auto tabs-scrollbar flex flex-col">
         {loading ? (
           <div className="text-center py-8 text-slate-600 dark:text-slate-300">Loading...</div>
         ) : (
-          <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
-            <div className="overflow-x-auto tabs-scrollbar">
+          <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden flex flex-col h-full">
+            <div className="overflow-x-auto overflow-y-auto tabs-scrollbar flex-1">
               <table className="w-full text-sm">
                 <thead className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800">
                   <tr className="text-left text-xs text-slate-700 dark:text-slate-200">
                     <th className="px-3 py-3 min-w-[80px]">
                       <input
                         type="checkbox"
-                        checked={selectedItems.size === filteredMarginData.length && filteredMarginData.length > 0}
+                        checked={filteredMarginData.length > 0 && selectedItems.size === filteredMarginData.length}
                         onChange={toggleSelectAll}
                         className="cursor-pointer"
                       />
@@ -422,26 +462,27 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                       <th className="px-3 py-3 min-w-[150px]">Callput Margin</th>
                     )}
                     <th className="px-3 py-3 min-w-[150px]">Expiry Date</th>
+                    <th className="px-3 py-3 min-w-[150px]">Updated Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
                   {filteredMarginData.length === 0 ? (
                     <tr>
-                      <td colSpan={selectedExchange === 'CALLPUT' ? 9 : 8} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      <td colSpan={selectedExchange === 'CALLPUT' ? 10 : 9} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                         No margin settings found for {selectedExchange}
                       </td>
                     </tr>
                   ) : (
-                    filteredMarginData.map((item, idx) => (
+                    filteredMarginData.map((item) => (
                       <tr
-                        key={idx}
+                        key={item.instrumentId}
                         className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors"
                       >
                         <td className="px-3 py-2">
                           <input
                             type="checkbox"
-                            checked={selectedItems.has(idx)}
-                            onChange={() => toggleSelectItem(idx)}
+                            checked={selectedItems.has(item.instrumentId)}
+                            onChange={() => toggleSelectItem(item.instrumentId)}
                             className="cursor-pointer"
                           />
                         </td>
@@ -455,7 +496,16 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                           <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.callputMargin != null ? (item.callputMarginPercentage ? '' : 'Rs ') + Number(item.callputMargin).toFixed(2) + (item.callputMarginPercentage ? '%' : '') : '-'}</td>
                         )}
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
-                          {item.expiry ? new Date(item.expiry).toLocaleDateString() : '-'}
+                          {item.expiry ? new Date(item.expiry).toLocaleString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+                          }) : '-'}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                          {item.updatedDate ? new Date(item.updatedDate).toLocaleString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+                          }) : '-'}
                         </td>
                       </tr>
                     ))

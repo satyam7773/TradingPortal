@@ -49,7 +49,7 @@ interface UserDetailsResponse {
   userSettings?: any;
   userList?: any[];
   [key: string]: any;
-} 
+}
 
 interface UserDetailsTabProps {
   user: any;
@@ -60,33 +60,33 @@ interface UserDetailsTabProps {
 
 // Exchange data
 const exchangeData = [
-  { 
-    key: 'nse', 
-    name: 'NSE', 
+  {
+    key: 'nse',
+    name: 'NSE',
     fullName: 'National Stock Exchange',
     color: 'bg-blue-500'
   },
-  { 
-    key: 'mcx', 
-    name: 'MCX', 
+  {
+    key: 'mcx',
+    name: 'MCX',
     fullName: 'Multi Commodity Exchange',
     color: 'bg-purple-500'
   },
-  { 
-    key: 'sgx', 
-    name: 'SGX', 
+  {
+    key: 'sgx',
+    name: 'SGX',
     fullName: 'Singapore Exchange',
     color: 'bg-purple-500'
   },
-  { 
-    key: 'cds', 
-    name: 'CDS', 
+  {
+    key: 'cds',
+    name: 'CDS',
     fullName: 'Currency Derivatives',
     color: 'bg-orange-500'
   },
-  { 
-    key: 'callput', 
-    name: 'CALLPUT', 
+  {
+    key: 'callput',
+    name: 'CALLPUT',
     fullName: 'Options Trading',
     color: 'bg-indigo-500'
   }
@@ -95,9 +95,9 @@ const exchangeData = [
 // Format date utility
 const formatDate = (date: any): string => {
   if (!date) return 'N/A';
-  
+
   let dateObj;
-  
+
   // Check if it's a numeric timestamp (number or string of digits)
   if (typeof date === 'number') {
     dateObj = new Date(date);
@@ -112,12 +112,12 @@ const formatDate = (date: any): string => {
   } else {
     return String(date);
   }
-  
+
   // Check if the date is valid
   if (isNaN(dateObj.getTime())) {
     return 'Invalid date';
   }
-  
+
   try {
     return dateObj.toLocaleString('en-US', {
       year: 'numeric',
@@ -138,7 +138,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   const [isUpdating, setIsUpdating] = useState(false);
   const [parentUserConfig, setParentUserConfig] = useState<any>(null);
   const [configLoading, setConfigLoading] = useState(false);
-  
+
   // State for editable fields
   const [editedName, setEditedName] = useState(userDetails.userInfo.name);
   const [editedMobile, setEditedMobile] = useState(
@@ -158,15 +158,15 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   const [editedAddMaster, setEditedAddMaster] = useState(
     user?.addMaster || (userDetails as any)?.userInfo?.addMaster || false
   );
-  
+
   // Parse allowed exchanges
   const parseAllowedExchanges = () => {
     // Get all available exchanges from parent
     const parentExchanges = userDetails?.userInfo?.parentAllowedExchanges || user?.parentAllowedExchanges || [];
     const currentExchanges = userDetails?.userInfo?.allowedExchanges || user?.allowedExchanges || [];
-    
+
     const obj: any = {};
-    
+
     // Add all parent exchanges as keys (default to unchecked)
     parentExchanges.forEach((ex: any) => {
       const name = ex?.name || ex;
@@ -175,12 +175,12 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         obj[key] = false; // Default unchecked
       }
     });
-    
+
     // Mark currently allowed ones as checked
-    const allowedList = Array.isArray(currentExchanges) ? currentExchanges : 
-                        typeof currentExchanges === 'string' ? 
-                        currentExchanges.split(',').map((e: string) => ({ name: e.trim() })) : [];
-    
+    const allowedList = Array.isArray(currentExchanges) ? currentExchanges :
+      typeof currentExchanges === 'string' ?
+        currentExchanges.split(',').map((e: string) => ({ name: e.trim() })) : [];
+
     allowedList.forEach((ex: any) => {
       const name = ex?.name || ex;
       const key = String(name).toLowerCase();
@@ -188,7 +188,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         obj[key] = true; // Checked
       }
     });
-    
+
     return obj;
   };
 
@@ -199,9 +199,9 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
     // Get all available limits from parent
     const parentLimits = userDetails?.userInfo?.parentHighLowTradeLimit || user?.parentHighLowTradeLimit || '';
     const currentLimits = userDetails?.userInfo?.highLowTradeLimit || user?.highLowTradeLimit || '';
-    
+
     const obj: any = {};
-    
+
     // Add all parent limit exchanges as keys (default to unchecked)
     if (typeof parentLimits === 'string' && parentLimits) {
       parentLimits.split(',').forEach((key: string) => {
@@ -219,7 +219,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         }
       });
     }
-    
+
     // Mark currently allowed ones as checked
     if (typeof currentLimits === 'string' && currentLimits) {
       currentLimits.split(',').forEach((key: string) => {
@@ -237,7 +237,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         }
       });
     }
-    
+
     return obj;
   };
 
@@ -314,7 +314,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
   const handleSave = async () => {
     try {
       setIsUpdating(true);
-      
+
       // Get parent user ID from localStorage
       const userDataStr = localStorage.getItem('userData');
       const userData = userDataStr ? JSON.parse(userDataStr) : null;
@@ -375,7 +375,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
       if (response?.responseCode === '0' || response?.responseCode === '1000') {
         toast.success('User details updated successfully!');
         setIsEditMode(false);
-        
+
         // Refresh the user data
         if (onUserUpdated) {
           onUserUpdated();
@@ -440,11 +440,10 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         </div>
 
         {/* Balance Card */}
-        <div className={`rounded-xl p-3 text-white shadow-lg transform hover:scale-105 transition-all duration-200 ${
-          userDetails.userProfile.balance >= 0 
-            ? 'bg-gradient-to-br from-blue-500 to-indigo-600' 
+        <div className={`rounded-xl p-3 text-white shadow-lg transform hover:scale-105 transition-all duration-200 ${userDetails.userProfile.balance >= 0
+            ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
             : 'bg-gradient-to-br from-red-500 to-pink-600'
-        }`}>
+          }`}>
           <div className="flex items-center justify-between mb-1">
             <Activity className="w-6 h-6 opacity-80" />
           </div>
@@ -614,34 +613,34 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                     return parentExchanges.some(pex => String(pex.name).toLowerCase() === exchange.key);
                   })
                   .map((exchange) => (
-                  <label key={exchange.key} className="relative flex items-center p-3 bg-surface-secondary border-2 border-border-primary rounded-lg cursor-pointer hover:border-blue-500 transition-all"
-                    style={{
-                      borderColor: editedAllowedExchanges[exchange.key] ? '#3b82f6' : undefined,
-                      backgroundColor: editedAllowedExchanges[exchange.key] ? 'rgba(59, 130, 246, 0.1)' : undefined
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={editedAllowedExchanges[exchange.key] || false}
-                      onChange={(e) =>
-                        setEditedAllowedExchanges({
-                          ...editedAllowedExchanges,
-                          [exchange.key]: e.target.checked
-                        })
-                      }
-                      className="sr-only peer"
-                      disabled={isUpdating}
-                    />
-                    <div className="flex items-center gap-2 w-full">
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${editedAllowedExchanges[exchange.key] ? 'bg-blue-500 border-blue-500' : 'border-border-primary bg-surface-tertiary'}`}>
-                        {editedAllowedExchanges[exchange.key] && <span className="text-white text-xs">✓</span>}
+                    <label key={exchange.key} className="relative flex items-center p-3 bg-surface-secondary border-2 border-border-primary rounded-lg cursor-pointer hover:border-blue-500 transition-all"
+                      style={{
+                        borderColor: editedAllowedExchanges[exchange.key] ? '#3b82f6' : undefined,
+                        backgroundColor: editedAllowedExchanges[exchange.key] ? 'rgba(59, 130, 246, 0.1)' : undefined
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editedAllowedExchanges[exchange.key] || false}
+                        onChange={(e) =>
+                          setEditedAllowedExchanges({
+                            ...editedAllowedExchanges,
+                            [exchange.key]: e.target.checked
+                          })
+                        }
+                        className="sr-only peer"
+                        disabled={isUpdating}
+                      />
+                      <div className="flex items-center gap-2 w-full">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${editedAllowedExchanges[exchange.key] ? 'bg-blue-500 border-blue-500' : 'border-border-primary bg-surface-tertiary'}`}>
+                          {editedAllowedExchanges[exchange.key] && <span className="text-white text-xs">✓</span>}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-text-primary">{exchange.name}</p>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-bold text-text-primary">{exchange.name}</p>
-                      </div>
-                    </div>
-                  </label>
-                ))}
+                    </label>
+                  ))}
               </div>
             )}
           </div>
@@ -679,7 +678,7 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
         </div>
 
         {/* Master Only Section - P&L, Brokerage, Exchanges & High Trade Limit */}
-                {isMaster && (
+        {isMaster && (
           <div className="space-y-4">
             {/* Partnership Share Detail */}
             <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-gray-200 dark:border-slate-700 shadow-sm">
@@ -706,11 +705,10 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                         min="0"
                         max="100"
                         placeholder="Enter P&L sharing"
-                        className={`w-full h-12 px-4 py-3 bg-surface-secondary border-2 rounded-lg text-text-primary font-medium focus:ring-2 transition-all ${
-                          editedPnlSharing > ((userDetails.userInfo as any)?.parentPnlSharing || 100)
+                        className={`w-full h-12 px-4 py-3 bg-surface-secondary border-2 rounded-lg text-text-primary font-medium focus:ring-2 transition-all ${editedPnlSharing > ((userDetails.userInfo as any)?.parentPnlSharing || 100)
                             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
                             : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'
-                        }`}
+                          }`}
                       />
                       {editedPnlSharing > ((userDetails.userInfo as any)?.parentPnlSharing || 100) && (
                         <div className="mt-1 text-xs text-red-400">Cannot exceed available P&L sharing of {((userDetails.userInfo as any)?.parentPnlSharing || 100).toFixed(2)}</div>
@@ -745,11 +743,10 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                         min="0"
                         max="100"
                         placeholder="Enter brokerage sharing"
-                        className={`w-full h-12 px-4 py-3 bg-surface-secondary border-2 rounded-lg text-text-primary font-medium focus:ring-2 transition-all ${
-                          editedBrokerageSharing > ((userDetails.userInfo as any)?.parentBrkSharing || 100)
+                        className={`w-full h-12 px-4 py-3 bg-surface-secondary border-2 rounded-lg text-text-primary font-medium focus:ring-2 transition-all ${editedBrokerageSharing > ((userDetails.userInfo as any)?.parentBrkSharing || 100)
                             ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
                             : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'
-                        }`}
+                          }`}
                       />
                       {editedBrokerageSharing > ((userDetails.userInfo as any)?.parentBrkSharing || 100) && (
                         <div className="mt-1 text-xs text-red-400">Cannot exceed available brokerage of {((userDetails.userInfo as any)?.parentBrkSharing || 100).toFixed(2)}</div>
@@ -833,34 +830,34 @@ const UserDetailsTab: React.FC<UserDetailsTabProps> = ({ user, userDetails, getT
                       return false;
                     })
                     .map((exchange) => (
-                    <label key={`high-${exchange.key}`} className="relative flex items-center p-3 bg-surface-secondary border-2 border-border-primary rounded-lg cursor-pointer hover:border-emerald-500 transition-all"
-                      style={{
-                        borderColor: editedHighLowTradeLimit[exchange.key] ? '#10b981' : undefined,
-                        backgroundColor: editedHighLowTradeLimit[exchange.key] ? 'rgba(16, 185, 129, 0.1)' : undefined
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editedHighLowTradeLimit[exchange.key] || false}
-                        onChange={(e) =>
-                          setEditedHighLowTradeLimit({
-                            ...editedHighLowTradeLimit,
-                            [exchange.key]: e.target.checked
-                          })
-                        }
-                        className="sr-only peer"
-                        disabled={isUpdating}
-                      />
-                      <div className="flex items-center gap-2 w-full">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${editedHighLowTradeLimit[exchange.key] ? 'bg-emerald-500 border-emerald-500' : 'border-border-primary bg-surface-tertiary'}`}>
-                          {editedHighLowTradeLimit[exchange.key] && <span className="text-white text-xs">✓</span>}
+                      <label key={`high-${exchange.key}`} className="relative flex items-center p-3 bg-surface-secondary border-2 border-border-primary rounded-lg cursor-pointer hover:border-emerald-500 transition-all"
+                        style={{
+                          borderColor: editedHighLowTradeLimit[exchange.key] ? '#10b981' : undefined,
+                          backgroundColor: editedHighLowTradeLimit[exchange.key] ? 'rgba(16, 185, 129, 0.1)' : undefined
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editedHighLowTradeLimit[exchange.key] || false}
+                          onChange={(e) =>
+                            setEditedHighLowTradeLimit({
+                              ...editedHighLowTradeLimit,
+                              [exchange.key]: e.target.checked
+                            })
+                          }
+                          className="sr-only peer"
+                          disabled={isUpdating}
+                        />
+                        <div className="flex items-center gap-2 w-full">
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${editedHighLowTradeLimit[exchange.key] ? 'bg-emerald-500 border-emerald-500' : 'border-border-primary bg-surface-tertiary'}`}>
+                            {editedHighLowTradeLimit[exchange.key] && <span className="text-white text-xs">✓</span>}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-xs font-bold text-text-primary">{exchange.name}</p>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-xs font-bold text-text-primary">{exchange.name}</p>
-                        </div>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    ))}
                 </div>
               )}
             </div>

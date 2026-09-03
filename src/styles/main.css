@@ -120,10 +120,13 @@
 /* Slim horizontal scrollbar for tabs */
 .tabs-scrollbar {
   scrollbar-width: thin; /* Firefox */
+  scroll-behavior: smooth;
 }
 
+/* Horizontal scrollbar */
 .tabs-scrollbar::-webkit-scrollbar {
-  height: 6px; /* horizontal scrollbar height */
+  height: 8px; /* horizontal scrollbar height */
+  width: 8px; /* vertical scrollbar width */
 }
 
 .tabs-scrollbar::-webkit-scrollbar-track {
@@ -131,12 +134,22 @@
 }
 
 .tabs-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(139,45,139,0.28); /* semi-transparent brand color */
-  border-radius: 6px;
+  background: #cbd5e1; /* light slate for light mode */
+  border-radius: 4px;
 }
 
 .tabs-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(139,45,139,0.5);
+  background: #94a3b8; /* darker slate on hover */
+}
+
+/* Dark mode scrollbar */
+.dark .tabs-scrollbar::-webkit-scrollbar-thumb {
+  background: #64748b; /* slate-500 for dark mode */
+  border-radius: 4px;
+}
+
+.dark .tabs-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #78909c; /* lighter on hover */
 }
 
 /* Theme-specific body backgrounds */

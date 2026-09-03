@@ -665,16 +665,19 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             >
               User Details
             </button>
-            <button
-              onClick={() => setActiveTab('userList')}
-              className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'userList'
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                }`}
-            >
-              <User className="w-4 h-4" />
-              User List ({userDetails.userList.length})
-            </button>
+            {/* Only show User List tab if user is NOT a Client (roleId !== 4) */}
+            {userDetails.userProfile.roleId !== 4 && (
+              <button
+                onClick={() => setActiveTab('userList')}
+                className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'userList'
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                  }`}
+              >
+                <User className="w-4 h-4" />
+                User List ({userDetails.userList.length})
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('positions')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'positions'
@@ -819,8 +822,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   </Suspense>
                 )}
 
-                {/* User List Tab */}
-                {activeTab === 'userList' && userDetails.userList && userDetails.userList.length > 0 && (
+                {/* User List Tab - Hide for Client users (roleId 4) */}
+                {activeTab === 'userList' && userDetails.userList && userDetails.userList.length > 0 && userDetails.userProfile.roleId !== 4 && (
                   <div className="animate-fadeIn">
                     <div className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 overflow-hidden h-full flex flex-col">
                       <div className="overflow-x-auto overflow-y-auto flex-1">

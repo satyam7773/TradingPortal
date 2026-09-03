@@ -33,6 +33,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
   const [loading, setLoading] = useState(false);
   const [exchangesLoading, setExchangesLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [scriptSearch, setScriptSearch] = useState<string>(''); // Script name search filter
   
   const [bufferAmount, setBufferAmount] = useState('');
   const [updateToAll, setUpdateToAll] = useState(false);
@@ -54,6 +55,15 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
       .map((ex: any) => (typeof ex === 'object' && ex.name ? ex.name : ex))
       .filter((ex: any) => ex);
   }, [userDetails]);
+
+  // Filter scripts by search term
+  const filteredScripts = React.useMemo(() => {
+    if (!scriptSearch.trim()) return scripts;
+    const lowerSearch = scriptSearch.toLowerCase();
+    return scripts.filter(s => 
+      s.scripName.toLowerCase().includes(lowerSearch)
+    );
+  }, [scripts, scriptSearch]);
 
   // Ref to track if we've already loaded exchanges
   const exchangesLoadedRef = React.useRef(false);
@@ -337,6 +347,15 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
       filterWidthClass="lg:w-[16%]"
       filters={
         <div className="space-y-3 p-4">
+          <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold block">Script Name :</label>
+          <input 
+            className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            type="text" 
+            placeholder="Search script..."
+            value={scriptSearch}
+            onChange={e => setScriptSearch(e.target.value)}
+          />
+
           <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold block">Exchange :</label>
           <select 
             className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-slate-700"
@@ -403,8 +422,8 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
                 <th className="px-4 py-3 w-8">
                   <input 
                     type="checkbox"
-                    checked={selectedIds.size === scripts.length && scripts.length > 0}
-                    onChange={e => setSelectedIds(e.target.checked ? new Set(scripts.map(s => s.instrumentId)) : new Set())}
+                    checked={filteredScripts.length > 0 && selectedIds.size === filteredScripts.length}
+                    onChange={e => setSelectedIds(e.target.checked ? new Set(filteredScripts.map(s => s.instrumentId)) : new Set())}
                     className="rounded"
                   />
                 </th>
@@ -417,14 +436,14 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
-              {scripts.length === 0 ? (
+              {filteredScripts.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
-                    No scripts found
+                    {scripts.length === 0 ? 'No scripts found' : 'No scripts match your search'}
                   </td>
                 </tr>
               ) : (
-                scripts.map(s => (
+                filteredScripts.map(s => (
                   <tr key={s.instrumentId} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
                     <td className="px-4 py-3">
                       <input 

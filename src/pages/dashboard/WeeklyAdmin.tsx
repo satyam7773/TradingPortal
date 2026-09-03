@@ -30,6 +30,9 @@ interface WeeklyAdminSummary {
   m2mPnl: number
   totalPnl: number
   netPnl: number
+  adminPnl: number
+  adminBrk: number
+  adminNetPnl: number
 }
 
 const WeeklyAdmin: React.FC = () => {
@@ -38,6 +41,8 @@ const WeeklyAdmin: React.FC = () => {
   const userData = userDataStr ? JSON.parse(userDataStr) : null
   const loggedInUserId = userData?.userId || 31
 
+  const tableContainerRef = React.useRef<HTMLDivElement>(null)
+
   const [selectedUserId, setSelectedUserId] = useState<number>(0)
   const [reportData, setReportData] = useState<WeeklyAdminData[]>([])
   const [summaryData, setSummaryData] = useState<WeeklyAdminSummary>({
@@ -45,7 +50,10 @@ const WeeklyAdmin: React.FC = () => {
     brokerage: 0,
     m2mPnl: 0,
     totalPnl: 0,
-    netPnl: 0
+    netPnl: 0,
+    adminPnl: 0,
+    adminBrk: 0,
+    adminNetPnl: 0
   })
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -95,7 +103,10 @@ const WeeklyAdmin: React.FC = () => {
           brokerage: result.data?.brokerage || 0,
           m2mPnl: result.data?.m2mPnl || 0,
           totalPnl: result.data?.totalPnl || 0,
-          netPnl: result.data?.netPnl || 0
+          netPnl: result.data?.netPnl || 0,
+          adminPnl: result.data?.adminPnl || 0,
+          adminBrk: result.data?.adminBrk || 0,
+          adminNetPnl: result.data?.adminNetPnl || 0
         })
         setTotalPages(1)
         setCurrentPage(page)
@@ -106,7 +117,10 @@ const WeeklyAdmin: React.FC = () => {
           brokerage: 0,
           m2mPnl: 0,
           totalPnl: 0,
-          netPnl: 0
+          netPnl: 0,
+          adminPnl: 0,
+          adminBrk: 0,
+          adminNetPnl: 0
         })
         if (result?.responseMessage) toast.error(result.responseMessage)
       }
@@ -301,6 +315,13 @@ const WeeklyAdmin: React.FC = () => {
     }
   }, [selectedUserId])
 
+  // Scroll table to left when data loads
+  useEffect(() => {
+    if (tableContainerRef.current && reportData.length > 0) {
+      tableContainerRef.current.scrollLeft = 0
+    }
+  }, [reportData])
+
   const handleClearFilters = () => {
     if (users.length > 0) {
       setSelectedUserId(users[0].userId)
@@ -310,7 +331,10 @@ const WeeklyAdmin: React.FC = () => {
         brokerage: 0,
         m2mPnl: 0,
         totalPnl: 0,
-        netPnl: 0
+        netPnl: 0,
+        adminPnl: 0,
+        adminBrk: 0,
+        adminNetPnl: 0
       })
     }
   }
@@ -396,52 +420,76 @@ const WeeklyAdmin: React.FC = () => {
             </div> */}
 
             {/* Summary Cards */}
-            <div className="flex-shrink-0 px-6 py-3 border-b border-slate-200/50 dark:border-slate-700/50 bg-white/50 dark:bg-slate-800/30">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="flex-shrink-0 px-4 py-2 border-b border-slate-200/50 dark:border-slate-700/50 bg-white/50 dark:bg-slate-800/30">
+              <div className="grid grid-cols-2 md:grid-cols-8 gap-1.5">
                 {/* Realised PnL */}
-                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200/50 dark:border-slate-600/50">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Realised PnL</div>
-                  <div className={`text-sm font-bold mt-1 ${getSummaryColor(summaryData.realisedPnl)}`}>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.realisedPnl)}`}>
                     {formatCurrency(summaryData.realisedPnl)}
                   </div>
                 </div>
 
                 {/* Brokerage */}
-                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200/50 dark:border-slate-600/50">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Brokerage</div>
-                  <div className={`text-sm font-bold mt-1 ${getSummaryColor(summaryData.brokerage)}`}>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.brokerage)}`}>
                     {formatCurrency(summaryData.brokerage)}
                   </div>
                 </div>
 
                 {/* M2M PnL */}
-                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200/50 dark:border-slate-600/50">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">M2M PnL</div>
-                  <div className={`text-sm font-bold mt-1 ${getSummaryColor(summaryData.m2mPnl)}`}>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.m2mPnl)}`}>
                     {formatCurrency(summaryData.m2mPnl)}
                   </div>
                 </div>
 
                 {/* Total PnL */}
-                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200/50 dark:border-slate-600/50">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Total PnL</div>
-                  <div className={`text-sm font-bold mt-1 ${getSummaryColor(summaryData.totalPnl)}`}>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.totalPnl)}`}>
                     {formatCurrency(summaryData.totalPnl)}
                   </div>
                 </div>
 
                 {/* Net PnL */}
-                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-2 border border-slate-200/50 dark:border-slate-600/50">
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Net PnL</div>
-                  <div className={`text-sm font-bold mt-1 ${getSummaryColor(summaryData.netPnl)}`}>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.netPnl)}`}>
                     {formatCurrency(summaryData.netPnl)}
+                  </div>
+                </div>
+
+                {/* Admin PnL */}
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Admin PnL</div>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.adminPnl)}`}>
+                    {formatCurrency(summaryData.adminPnl)}
+                  </div>
+                </div>
+
+                {/* Admin Brokerage */}
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Admin Brk</div>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.adminBrk)}`}>
+                    {formatCurrency(summaryData.adminBrk)}
+                  </div>
+                </div>
+
+                {/* Admin Net PnL */}
+                <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Admin Net</div>
+                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.adminNetPnl)}`}>
+                    {formatCurrency(summaryData.adminNetPnl)}
                   </div>
                 </div>
               </div>
             </div>
  
             {/* Table Container */}
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto" ref={tableContainerRef}>
               {loading ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center">
@@ -461,41 +509,42 @@ const WeeklyAdmin: React.FC = () => {
                   <table className="w-full border-collapse min-w-max">
                     <colgroup>
                       <col style={{width: '90px'}} />
-                      <col style={{width: '100px'}} />
+                      <col style={{width: '85px'}} />
                       <col style={{width: '90px'}} />
-                      <col style={{width: '110px'}} />
-                      <col style={{width: '110px'}} />
-                      <col style={{width: '110px'}} />
-                      <col style={{width: '100px'}} />
-                      <col style={{width: '110px'}} />
                       <col style={{width: '90px'}} />
-                      <col style={{width: '110px'}} />
-                      <col style={{width: '100px'}} />
-                      <col style={{width: '110px'}} />
+                      <col style={{width: '90px'}} />
+                      <col style={{width: '90px'}} />
+                      <col style={{width: '85px'}} />
+                      <col style={{width: '90px'}} />
+                      <col style={{width: '85px'}} />
+                      <col style={{width: '85px'}} />
+                      <col style={{width: '90px'}} />
+                      <col style={{width: '85px'}} />
+                      <col style={{width: '90px'}} />
                     </colgroup>
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Username</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Name</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Parent</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Realised PnL</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">M2M PnL</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Total PnL</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Brokerage</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Net PnL</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin %</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin PnL</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Brk</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Net</th>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Username</th>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Name</th>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Parent</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Realised PnL</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">M2M PnL</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Total PnL</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Brokerage</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Net PnL</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin PnL %</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Brk %</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin PnL</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Brk</th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Net</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-slate-800">
                       {reportData.map((item, index) => (
                         <tr
                           key={index}
-                          className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 border-b border-slate-200/50 dark:border-slate-700/30"
-                        >
-                          <td className="px-3 py-2">
+                          className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 border-b border-slate-200/50 dark:border-slate-700/30">
+                          <td className="px-2 py-1.5">
                             <span 
                               className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer hover:underline"
                               onClick={() => handleOpenUserDetails(item.userId.toString())}
@@ -503,12 +552,12 @@ const WeeklyAdmin: React.FC = () => {
                               {item.username}
                             </span>
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-1.5">
                             <span className="text-xs text-slate-700 dark:text-slate-300">
                               {item.name}
                             </span>
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-1.5">
                             <span 
                               className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer hover:underline"
                               onClick={() => handleOpenUserDetails(item.parentUserId.toString())}
@@ -516,31 +565,34 @@ const WeeklyAdmin: React.FC = () => {
                               {item.parentUsername}
                             </span>
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-semibold ${getRowColor(item.realisedPnl)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-semibold ${getRowColor(item.realisedPnl)}`}>
                             {formatCurrency(item.realisedPnl)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-semibold ${getRowColor(item.m2mPnl)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-semibold ${getRowColor(item.m2mPnl)}`}>
                             {formatCurrency(item.m2mPnl)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-semibold ${getRowColor(item.totalPnl)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-semibold ${getRowColor(item.totalPnl)}`}>
                             {formatCurrency(item.totalPnl)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-semibold ${getRowColor(item.brokerage)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-semibold ${getRowColor(item.brokerage)}`}>
                             {formatCurrency(item.brokerage)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-bold ${getRowColor(item.netPnl)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-bold ${getRowColor(item.netPnl)}`}>
                             {formatCurrency(item.netPnl)}
                           </td>
-                          <td className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          <td className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-300">
                             {formatPercent(item.adminPnlPercent)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-semibold ${getRowColor(item.adminPnl)}`}>
+                          <td className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {formatPercent(item.adminBrkPercent)}
+                          </td>
+                          <td className={`px-2 py-1.5 text-right text-xs font-semibold ${getRowColor(item.adminPnl)}`}>
                             {formatCurrency(item.adminPnl)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-semibold ${getRowColor(item.adminBrk)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-semibold ${getRowColor(item.adminBrk)}`}>
                             {formatCurrency(item.adminBrk)}
                           </td>
-                          <td className={`px-3 py-2 text-right text-xs font-bold ${getRowColor(item.adminNetPnl)}`}>
+                          <td className={`px-2 py-1.5 text-right text-xs font-bold ${getRowColor(item.adminNetPnl)}`}>
                             {formatCurrency(item.adminNetPnl)}
                           </td>
                         </tr>
@@ -549,7 +601,7 @@ const WeeklyAdmin: React.FC = () => {
                   </table>
 
                   {/* Pagination Footer */}
-                  <div className="flex-shrink-0 px-6 py-3 border-t border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
+                  <div className="flex-shrink-0 px-4 py-2 border-t border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700">
                     <div className="flex items-center justify-between">
                       <div className="text-xs text-slate-600 dark:text-slate-400">
                         Showing <span className="font-semibold text-slate-900 dark:text-white">{reportData.length}</span> results
