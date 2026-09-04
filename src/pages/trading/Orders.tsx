@@ -17,6 +17,7 @@ interface OrderData {
   side?: any; price: number; quantity: number; referencePrice: number;
   tradeSymbol: string; userId: number; userName: string;
   placedByUsername: string; token?: number;
+  lotSize?: number; lotValue?: number;
 }
 
 interface OrdersResponse { limit: number; offset: number; side?: any; orders: OrderData[]; size: number; }
@@ -377,7 +378,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
       tradeSymbol: order.tradeSymbol,
       instrumentName: order.tradeSymbol,
       script: order.tradeSymbol,
-      lotSize: order.quantity || 1,
+      lotSize: order.lotSize || 1,
+      lotValue: order.lotValue || 1,
     };
 
     const quantity = (order.quantity || 1).toString();
@@ -421,8 +423,13 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
     setIsBuySubmitting(true);
     try {
       const userId = loggedInUser?.userId || loggedInUserId;
-      const quantity = parseInt(buyQuantity);
+      const userTypedQuantity = parseInt(buyQuantity);
       const price = parseFloat(buyPrice);
+      
+      // 🟢 SPECIAL EXCHANGE INTERCEPTOR (BUY)
+      const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(selectedOrder.exchange ?? '');
+      const finalQuantity = isSpecialExchange ? 1 : userTypedQuantity;
+      const finalLotValue = isSpecialExchange ? userTypedQuantity : (selectedOrder.lotValue || 1);
       
       const response = await orderService.modifyBuyOrder(
         userId,
@@ -431,9 +438,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
         selectedOrder.exchange,
         selectedOrder.tradeSymbol,
         selectedModalInstrument.token,
-        quantity,
+        finalQuantity,
         price,
-        quantity,
+        finalLotValue,
         'LIMIT',
         'WEB'
       );
@@ -477,8 +484,13 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
     setIsSellSubmitting(true);
     try {
       const userId = loggedInUser?.userId || loggedInUserId;
-      const quantity = parseInt(sellQuantity);
+      const userTypedQuantity = parseInt(sellQuantity);
       const price = parseFloat(sellPrice);
+      
+      // 🔴 SPECIAL EXCHANGE INTERCEPTOR (SELL)
+      const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(selectedOrder.exchange ?? '');
+      const finalQuantity = isSpecialExchange ? 1 : userTypedQuantity;
+      const finalLotValue = isSpecialExchange ? userTypedQuantity : (selectedOrder.lotValue || 1);
       
       const response = await orderService.modifySellOrder(
         userId,
@@ -487,9 +499,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
         selectedOrder.exchange,
         selectedOrder.tradeSymbol,
         selectedModalInstrument.token,
-        quantity,
+        finalQuantity,
         price,
-        quantity,
+        finalLotValue,
         'LIMIT',
         'WEB'
       );

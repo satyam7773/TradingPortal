@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2, Plus, Maximize2, Minimize2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import { createChart, ColorType } from 'lightweight-charts'
 import marketWatchService from '../../services/marketWatchService'
 import watchlistService from '../../services/watchlistService'
 import watchlistTabsService, { type WatchlistTab } from '../../services/watchlistTabsService'
@@ -297,6 +298,11 @@ const MarketWatch: React.FC = () => {
 
   // Guard flag to strictly prevent socket traffic unless the Scrip Info modal is active
   const isScripModalActiveRef = useRef(false)
+
+  // Chart Modal state
+  const [showChartModal, setShowChartModal] = useState(false)
+  const [selectedChartInstrument, setSelectedChartInstrument] = useState<{ token: number; config: InstrumentConfig | undefined } | null>(null)
+  const chartContainerRef = useRef<HTMLDivElement>(null)
   const [scripInfoLiveData, setScripInfoLiveData] = useState<FeedInstrument | null>(null)
   const reorderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -1864,7 +1870,11 @@ const MarketWatch: React.FC = () => {
             )}
             <button
               onClick={() => {
-                toast.success('View Chart clicked')
+                if (actionMenuToken !== null) {
+                  const config = instrumentConfigRef.current[actionMenuToken]
+                  setSelectedChartInstrument({ token: actionMenuToken, config })
+                  setShowChartModal(true)
+                }
                 setActionMenuPosition(null)
                 setActionMenuToken(null)
               }}
@@ -2865,9 +2875,883 @@ const MarketWatch: React.FC = () => {
           document.body
         )}
 
+      {/* Chart Modal */}
+      {showChartModal && selectedChartInstrument && createPortal(
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[99999] flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-2xl shadow-2xl w-[98%] h-[95%] flex flex-col border border-slate-700/50"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-purple-700 px-8 py-5 rounded-t-2xl flex items-center justify-between border-b border-slate-700/30">
+              <div className="flex items-center gap-4">
+                <TrendingUp className="w-6 h-6 text-white" />
+                <h2 className="text-2xl font-bold text-white">
+                  {selectedChartInstrument.config?.instrumentName || selectedChartInstrument.config?.script || `Token ${selectedChartInstrument.token}`}
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowChartModal(false)}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
+            {/* Chart Container */}
+            <div className="flex-1 overflow-hidden p-4">
+              <ChartComponent
+                token={selectedChartInstrument.token}
+                config={selectedChartInstrument.config}
+                containerRef={chartContainerRef}
+                feedData={feedData}
+              />
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
 
       </div>
+    </div>
+  )
+}
+
+// Chart Component using TradingView Lightweight Charts
+interface ChartComponentProps {
+  token: number
+  config: InstrumentConfig | undefined
+  containerRef: React.RefObject<HTMLDivElement | null>
+  feedData: FeedInstrument[]
+}
+
+interface CandleData {
+  time: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+interface TechnicalIndicators {
+  sma20: number[]
+  sma50: number[]
+  bbUpper: number[]
+  bbLower: number[]
+  bbMiddle: number[]
+  rsi: number[]
+}
+
+const ChartComponent: React.FC<ChartComponentProps> = ({ token, config, containerRef, feedData }) => {
+  const [chartType, setChartType] = useState<'line' | 'bar' | 'candle'>('candle')
+  const [showIndicators, setShowIndicators] = useState(true)
+  const [showVolume, setShowVolume] = useState(true)
+  const [zoomLevel, setZoomLevel] = useState(1)  // 1 = 100%, 0.5 = 50%, 2 = 200%
+  const candleDataRef = useRef<CandleData[]>([])
+  const priceHistoryRef = useRef<number[]>([])
+  const indicatorsRef = useRef<TechnicalIndicators>({ sma20: [], sma50: [], bbUpper: [], bbLower: [], bbMiddle: [], rsi: [] })
+  const maxDataPointsRef = useRef(200)
+
+  // Time-based candle tracking (30 seconds for testing, 60000 for 1 minute production)
+  const candleIntervalMs = 30000 // 30 seconds for testing
+  const currentCandleStartTimeRef = useRef<number>(Date.now())
+  const currentCandleOpenRef = useRef<number>(0)
+  const candleCountRef = useRef<number>(0)
+  const historicalDataLoadedRef = useRef<boolean>(false)  // Track if we've loaded historical data
+
+  // Fetch historical candles from API - MOVED OUTSIDE EFFECT FOR ACCESSIBILITY
+  const loadHistoricalCandles = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const url = `https://api-staging.rivoplus.live/quotes/kite/history?instrumentToken=${token}&interval=minute&from=${today}&to=${today}`
+      
+      console.log('📊 Fetching chart data from:', url)
+      const response = await fetch(url)
+      const data = await response.json()
+      
+      console.log('📊 API Response:', data)
+
+      if (data.candles && Array.isArray(data.candles)) {
+        console.log(`📊 Received ${data.candles.length} candles from API`)
+        
+        // Skip first 300 candles, keep only last 50 for cleaner chart
+        const maxRecords = 50
+        const startIndex = Math.max(0, data.candles.length - maxRecords)
+        const lastCandles = data.candles.slice(startIndex)
+        
+        console.log(`📊 Using last ${lastCandles.length} candles (starting from index ${startIndex})`)
+
+        const historicalCandles: CandleData[] = lastCandles.map((candle: any, index: number) => ({
+          time: index,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume: candle.volume || 0
+        }))
+
+        candleDataRef.current = historicalCandles
+        // Update candle count to continue from historical data
+        candleCountRef.current = historicalCandles.length
+        // Set start time to now for next live candle
+        currentCandleStartTimeRef.current = Date.now()
+        // Use last close as open for next live candle
+        currentCandleOpenRef.current = historicalCandles[historicalCandles.length - 1].close
+
+        console.log(`📊 Chart data loaded! Candles: ${historicalCandles.length}, First: ${historicalCandles[0]?.close}, Last: ${historicalCandles[historicalCandles.length - 1]?.close}`)
+        return true
+      } else {
+        console.warn('⚠️ No candles found in API response')
+      }
+    } catch (error) {
+      console.error('❌ Error loading historical candles:', error)
+    }
+    return false
+  }
+
+  // Calculate technical indicators
+  const calculateIndicators = () => {
+    const prices = candleDataRef.current.map(c => c.close)
+    if (prices.length < 50) return
+
+    // SMA 20 and 50
+    const sma20 = prices.map((_, i) => {
+      if (i < 19) return NaN
+      return prices.slice(i - 19, i + 1).reduce((a, b) => a + b, 0) / 20
+    })
+
+    const sma50 = prices.map((_, i) => {
+      if (i < 49) return NaN
+      return prices.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50
+    })
+
+    // Bollinger Bands (20-period)
+    const bbMiddle = sma20
+    const bbUpper = prices.map((_, i) => {
+      if (i < 19) return NaN
+      const slice = prices.slice(i - 19, i + 1)
+      const avg = slice.reduce((a, b) => a + b, 0) / 20
+      const variance = slice.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / 20
+      return avg + 2 * Math.sqrt(variance)
+    })
+
+    const bbLower = prices.map((_, i) => {
+      if (i < 19) return NaN
+      const slice = prices.slice(i - 19, i + 1)
+      const avg = slice.reduce((a, b) => a + b, 0) / 20
+      const variance = slice.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / 20
+      return avg - 2 * Math.sqrt(variance)
+    })
+
+    // RSI (14-period)
+    const rsi = prices.map((_, i) => {
+      if (i < 14) return NaN
+      const slice = prices.slice(i - 13, i + 1)
+      const deltas = slice.slice(1).map((p, idx) => p - slice[idx])
+      const gains = deltas.map(d => d > 0 ? d : 0).reduce((a, b) => a + b, 0) / 14
+      const losses = deltas.map(d => d < 0 ? -d : 0).reduce((a, b) => a + b, 0) / 14
+      return 100 - (100 / (1 + gains / (losses || 0.001)))
+    })
+
+    indicatorsRef.current = { sma20, sma50, bbUpper, bbLower, bbMiddle, rsi }
+  }
+
+  // EFFECT 1: Load historical data ONLY ONCE per token
+  useEffect(() => {
+    // Skip if already loaded
+    if (historicalDataLoadedRef.current) return
+    
+    // Create async wrapper to properly await the API call
+    const loadData = async () => {
+      console.log('📊 Effect 1: Starting historical data load for token:', token)
+      const success = await loadHistoricalCandles()
+      // Only mark as loaded if data was actually retrieved
+      if (success) {
+        historicalDataLoadedRef.current = true
+        console.log('📊 Effect 1: Historical data loaded successfully!')
+      } else {
+        console.warn('⚠️ Effect 1: Failed to load historical data, will use live data only')
+        // Still mark as attempted to avoid infinite retries
+        historicalDataLoadedRef.current = true
+      }
+    }
+    
+    loadData()
+  }, [token])  // Only depends on token!
+
+  // EFFECT 2: Setup canvas and live updates
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const canvas = document.createElement('canvas')
+    containerRef.current.appendChild(canvas)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const resizeCanvas = () => {
+      if (!containerRef.current) return
+      canvas.width = containerRef.current.clientWidth
+      canvas.height = containerRef.current.clientHeight
+      drawChart()
+    }
+
+    const drawChart = () => {
+      if (!ctx || !containerRef.current) return
+
+      const width = canvas.width
+      const height = canvas.height
+
+      // Enterprise-grade optimized layout - maximize chart area
+      const topPadding = 65
+      const leftPadding = 65
+      const rightPadding = 30
+      const bottomPadding = 40
+      const rsiPanelHeight = 75
+      const volumePanelHeight = 55
+      const separatorHeight = 12
+
+      const chartWidth = width - leftPadding - rightPadding
+      const chartHeight = height - topPadding - bottomPadding - (showVolume ? volumePanelHeight + separatorHeight : 0) - (showIndicators ? rsiPanelHeight + separatorHeight : 0)
+
+      // ===== BACKGROUND =====
+      ctx.fillStyle = '#0f172a'
+      ctx.fillRect(0, 0, width, height)
+
+      const candles = candleDataRef.current
+      if (candles.length === 0) {
+        ctx.fillStyle = '#94a3b8'
+        ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText('Loading chart data...', width / 2, height / 2 - 20)
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.fillStyle = '#64748b'
+        ctx.fillText(`${priceHistoryRef.current.length} ticks received`, width / 2, height / 2 + 20)
+        return
+      }
+
+      calculateIndicators()
+
+      // Get price range
+      const highs = candles.map(c => c.high)
+      const lows = candles.map(c => c.low)
+      const maxVal = Math.max(...highs)
+      const minVal = Math.min(...lows)
+      const range = maxVal - minVal || 1
+      const padding_val = range * 0.08
+
+      // ===== COMPACT HEADER WITH PRICE INFO =====
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)'
+      ctx.fillRect(0, 0, width, topPadding)
+
+      const lastCandle = candles[candles.length - 1]
+      const change = lastCandle.close - candles[0].open
+      const changePercent = (change / candles[0].open) * 100
+      const isPositive = change >= 0
+
+      // Price (large, bold)
+      ctx.fillStyle = '#f8fafc'
+      ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText(`₹${lastCandle.close.toFixed(2)}`, leftPadding, topPadding - 28)
+
+      // Change (compact)
+      ctx.fillStyle = isPositive ? '#10b981' : '#ef4444'
+      ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText(
+        `${isPositive ? '▲' : '▼'} ${Math.abs(change).toFixed(2)} (${changePercent.toFixed(2)}%)`,
+        leftPadding,
+        topPadding - 8
+      )
+
+      // OHLC Info - right side (single line, compact)
+      ctx.fillStyle = '#cbd5e1'
+      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.textAlign = 'right'
+      ctx.fillText(
+        `O: ${lastCandle.open.toFixed(2)} | H: ${lastCandle.high.toFixed(2)} | L: ${lastCandle.low.toFixed(2)} | C: ${lastCandle.close.toFixed(2)}`,
+        width - rightPadding,
+        topPadding - 32
+      )
+
+      // Stats
+      ctx.fillStyle = '#64748b'
+      ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.fillText(
+        `Candles: ${candles.length} | Ticks: ${priceHistoryRef.current.length} | Range: ${range.toFixed(2)}`,
+        width - rightPadding,
+        topPadding - 10
+      )
+
+      // ===== MAIN CHART AREA =====
+      const chartStartY = topPadding
+
+      // Draw professional grid with better contrast
+      ctx.strokeStyle = '#1e293b'
+      ctx.lineWidth = 0.8
+
+      // Horizontal grid lines (10 lines for better subdivision)
+      for (let i = 0; i <= 10; i++) {
+        const y = chartStartY + (i / 10) * chartHeight
+        ctx.beginPath()
+        ctx.moveTo(leftPadding, y)
+        ctx.lineTo(width - rightPadding, y)
+        ctx.stroke()
+      }
+
+      // Vertical grid lines (12 lines for better time division)
+      const verticalGridLines = 12
+      for (let i = 0; i <= verticalGridLines; i++) {
+        const x = leftPadding + (i / verticalGridLines) * chartWidth
+        ctx.beginPath()
+        ctx.moveTo(x, chartStartY)
+        ctx.lineTo(x, chartStartY + chartHeight)
+        ctx.stroke()
+      }
+
+      // Calculate candlestick dimensions - optimize spacing
+      const baseCandleWidth = Math.max(1.5, chartWidth / candles.length / 1.6)
+      const candleWidth = baseCandleWidth * zoomLevel  // Apply zoom level
+      const spaceBetweenCandles = (chartWidth - candleWidth * candles.length) / Math.max(candles.length, 1)
+
+      // ===== DRAW VOLUME BARS =====
+      if (showVolume) {
+        const volumeStartY = chartStartY + chartHeight + separatorHeight
+        const volumes = candles.map(c => c.volume)
+        const maxVolume = Math.max(...volumes)
+
+        // Volume background with gradient
+        const gradient = ctx.createLinearGradient(0, volumeStartY, 0, volumeStartY + volumePanelHeight)
+        gradient.addColorStop(0, 'rgba(30, 41, 59, 0.6)')
+        gradient.addColorStop(1, 'rgba(15, 23, 42, 0.8)')
+        ctx.fillStyle = gradient
+        ctx.fillRect(leftPadding, volumeStartY, chartWidth, volumePanelHeight)
+
+        // Volume gridlines
+        ctx.strokeStyle = '#1e293b'
+        ctx.lineWidth = 0.5
+        for (let i = 1; i < 3; i++) {
+          const y = volumeStartY + (i / 3) * volumePanelHeight
+          ctx.beginPath()
+          ctx.moveTo(leftPadding, y)
+          ctx.lineTo(width - rightPadding, y)
+          ctx.stroke()
+        }
+
+        // Volume bars
+        for (let i = 0; i < candles.length; i++) {
+          const candle = candles[i]
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles)
+          const volumeHeight = (candle.volume / maxVolume) * (volumePanelHeight - 8)
+          const isUp = candle.close >= candle.open
+
+          ctx.fillStyle = isUp ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+          ctx.fillRect(x, volumeStartY + volumePanelHeight - volumeHeight, candleWidth, volumeHeight)
+        }
+
+        // Volume label
+        ctx.fillStyle = '#64748b'
+        ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.textAlign = 'left'
+        ctx.fillText('VOL', 10, volumeStartY + 14)
+      }
+
+      // ===== DRAW CANDLESTICKS =====
+      for (let i = 0; i < candles.length; i++) {
+        const candle = candles[i]
+        const x = leftPadding + i * (candleWidth + spaceBetweenCandles)
+
+        const yHigh = chartStartY + (1 - (candle.high - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+        const yLow = chartStartY + (1 - (candle.low - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+        const yOpen = chartStartY + (1 - (candle.open - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+        const yClose = chartStartY + (1 - (candle.close - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+
+        const isUp = candle.close >= candle.open
+        const bodyColor = isUp ? '#10b981' : '#ef4444'
+
+        if (chartType === 'candle') {
+          // Wick line - thinner and more elegant
+          ctx.strokeStyle = isUp ? '#6ee7b7' : '#fca5a5'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(x + candleWidth / 2, yHigh)
+          ctx.lineTo(x + candleWidth / 2, yLow)
+          ctx.stroke()
+
+          // Body rectangle - smooth rendering
+          ctx.fillStyle = bodyColor
+          ctx.globalAlpha = 0.95
+          const bodyHeight = Math.abs(yClose - yOpen)
+          const minBodyHeight = 1
+          ctx.fillRect(x, Math.min(yOpen, yClose), candleWidth, Math.max(bodyHeight, minBodyHeight))
+          ctx.globalAlpha = 1
+
+          ctx.strokeStyle = bodyColor
+          ctx.lineWidth = 1
+          ctx.strokeRect(x, Math.min(yOpen, yClose), candleWidth, Math.max(bodyHeight, minBodyHeight))
+        } else if (chartType === 'bar') {
+          ctx.fillStyle = bodyColor
+          ctx.globalAlpha = 0.9
+          ctx.fillRect(x, yClose, candleWidth, yLow - yClose)
+          ctx.globalAlpha = 1
+        }
+      }
+
+      // Line chart overlay
+      if (chartType === 'line') {
+        ctx.strokeStyle = '#3b82f6'
+        ctx.lineWidth = 2.5
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.beginPath()
+        for (let i = 0; i < candles.length; i++) {
+          const candle = candles[i]
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles) + candleWidth / 2
+          const y = chartStartY + (1 - (candle.close - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+          if (i === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+      }
+
+      // ===== TECHNICAL INDICATORS =====
+      if (showIndicators && indicatorsRef.current.sma20.length > 0) {
+        // SMA 20 (Orange) - more visible
+        ctx.strokeStyle = '#f97316'
+        ctx.lineWidth = 2.2
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.globalAlpha = 0.95
+        ctx.beginPath()
+        for (let i = 0; i < candles.length; i++) {
+          const sma = indicatorsRef.current.sma20[i]
+          if (isNaN(sma)) continue
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles) + candleWidth / 2
+          const y = chartStartY + (1 - (sma - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+          if (i === 19) ctx.moveTo(x, y)
+          else if (i > 19) ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+
+        // SMA 50 (Indigo) - secondary indicator
+        ctx.strokeStyle = '#6366f1'
+        ctx.lineWidth = 2.2
+        ctx.beginPath()
+        for (let i = 0; i < candles.length; i++) {
+          const sma = indicatorsRef.current.sma50[i]
+          if (isNaN(sma)) continue
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles) + candleWidth / 2
+          const y = chartStartY + (1 - (sma - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+          if (i === 49) ctx.moveTo(x, y)
+          else if (i > 49) ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+
+        // Bollinger Bands - smooth shading
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.1)'
+        ctx.beginPath()
+        for (let i = 0; i < candles.length; i++) {
+          const upper = indicatorsRef.current.bbUpper[i]
+          if (isNaN(upper)) continue
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles) + candleWidth / 2
+          const y = chartStartY + (1 - (upper - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+          if (i === 19) ctx.moveTo(x, y)
+          else if (i > 19) ctx.lineTo(x, y)
+        }
+        for (let i = candles.length - 1; i >= 0; i--) {
+          const lower = indicatorsRef.current.bbLower[i]
+          if (isNaN(lower)) continue
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles) + candleWidth / 2
+          const y = chartStartY + (1 - (lower - (minVal - padding_val)) / (range + 2 * padding_val)) * chartHeight
+          ctx.lineTo(x, y)
+        }
+        ctx.closePath()
+        ctx.fill()
+
+        ctx.globalAlpha = 1
+      }
+
+      // ===== RSI INDICATOR PANEL =====
+      if (showIndicators && indicatorsRef.current.rsi.length > 0) {
+        const rsiStartY = chartStartY + chartHeight + separatorHeight + (showVolume ? volumePanelHeight + separatorHeight : 0)
+
+        // Background with gradient
+        const rsiGradient = ctx.createLinearGradient(0, rsiStartY, 0, rsiStartY + rsiPanelHeight)
+        rsiGradient.addColorStop(0, 'rgba(30, 41, 59, 0.5)')
+        rsiGradient.addColorStop(1, 'rgba(15, 23, 42, 0.8)')
+        ctx.fillStyle = rsiGradient
+        ctx.fillRect(leftPadding, rsiStartY, chartWidth, rsiPanelHeight)
+
+        // Grid
+        ctx.strokeStyle = '#1e293b'
+        ctx.lineWidth = 0.5
+        for (let i = 1; i < 4; i++) {
+          const y = rsiStartY + (i / 4) * rsiPanelHeight
+          ctx.beginPath()
+          ctx.moveTo(leftPadding, y)
+          ctx.lineTo(width - rightPadding, y)
+          ctx.stroke()
+        }
+
+        // Overbought/Oversold levels
+        ctx.strokeStyle = '#475569'
+        ctx.setLineDash([3, 3])
+        ctx.lineWidth = 1
+        const overbought = rsiStartY + (1 - 0.7) * rsiPanelHeight
+        const oversold = rsiStartY + (1 - 0.3) * rsiPanelHeight
+        ctx.beginPath()
+        ctx.moveTo(leftPadding, overbought)
+        ctx.lineTo(width - rightPadding, overbought)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(leftPadding, oversold)
+        ctx.lineTo(width - rightPadding, oversold)
+        ctx.stroke()
+        ctx.setLineDash([])
+
+        // RSI line - smooth and visible
+        ctx.strokeStyle = '#a78bfa'
+        ctx.lineWidth = 2.5
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.beginPath()
+        for (let i = 0; i < candles.length; i++) {
+          const rsi = indicatorsRef.current.rsi[i]
+          if (isNaN(rsi)) continue
+          const x = leftPadding + i * (candleWidth + spaceBetweenCandles) + candleWidth / 2
+          const y = rsiStartY + (1 - rsi / 100) * rsiPanelHeight
+          if (i === 14) ctx.moveTo(x, y)
+          else if (i > 14) ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+
+        // RSI labels
+        ctx.fillStyle = '#64748b'
+        ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.textAlign = 'left'
+        ctx.fillText('RSI', 10, rsiStartY + 13)
+
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.fillText('70', 10, overbought + 4)
+        ctx.fillText('30', 10, oversold + 4)
+      }
+
+      // ===== Y-AXIS LABELS (PRICES) - Better positioning =====
+      ctx.fillStyle = '#64748b'
+      ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      ctx.textAlign = 'right'
+      for (let i = 0; i <= 10; i++) {
+        const price = minVal + (i / 10) * range
+        const y = chartStartY + (i / 10) * chartHeight
+        ctx.fillText(price.toFixed(2), leftPadding - 12, y + 3)
+      }
+
+      // ===== AXES - Clean and subtle =====
+      ctx.strokeStyle = '#334155'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(leftPadding, chartStartY)
+      ctx.lineTo(leftPadding, chartStartY + chartHeight)
+      ctx.lineTo(width - rightPadding, chartStartY + chartHeight)
+      ctx.stroke()
+
+      // ===== LEGEND - Compact and informative =====
+      if (showIndicators) {
+        ctx.fillStyle = '#94a3b8'
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        ctx.textAlign = 'left'
+
+        let legendX = leftPadding + 5
+        const legendY = chartStartY + chartHeight - 8
+
+        // SMA20 indicator
+        ctx.fillStyle = '#f97316'
+        ctx.fillRect(legendX, legendY - 5, 10, 2)
+        ctx.fillStyle = '#cbd5e1'
+        ctx.fillText('SMA20', legendX + 14, legendY)
+        legendX += 75
+
+        // SMA50 indicator
+        ctx.fillStyle = '#6366f1'
+        ctx.fillRect(legendX, legendY - 5, 10, 2)
+        ctx.fillStyle = '#cbd5e1'
+        ctx.fillText('SMA50', legendX + 14, legendY)
+        legendX += 75
+
+        // Bollinger Bands indicator
+        ctx.fillStyle = '#3b82f6'
+        ctx.fillRect(legendX, legendY - 5, 10, 2)
+        ctx.fillStyle = '#cbd5e1'
+        ctx.fillText('BB', legendX + 14, legendY)
+      }
+    }
+
+    // Time-based candle generation (new candle every 30 seconds)
+    const updateTimeBasedCandles = (price: number) => {
+      const now = Date.now()
+      const timeSinceLastCandle = now - currentCandleStartTimeRef.current
+
+      // Initialize first candle when no historical data loaded yet
+      if (candleDataRef.current.length === 0 && currentCandleOpenRef.current === 0) {
+        currentCandleOpenRef.current = price
+      }
+
+      // Check if we should create a new candle (30 seconds passed)
+      if (timeSinceLastCandle >= candleIntervalMs && candleDataRef.current.length > 0) {
+        // Finalize previous candle
+        const lastCandle = candleDataRef.current[candleDataRef.current.length - 1]
+        lastCandle.close = price
+
+        // Create new candle
+        const newCandle: CandleData = {
+          time: candleCountRef.current++,
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+          volume: 1
+        }
+
+        candleDataRef.current.push(newCandle)
+
+        // Keep only last 50 candles for display
+        if (candleDataRef.current.length > 50) {
+          candleDataRef.current.shift()
+        }
+
+        // Reset timer for next candle
+        currentCandleStartTimeRef.current = now
+        currentCandleOpenRef.current = price
+      } else if (candleDataRef.current.length === 0) {
+        // Create first candle if no historical data
+        const firstCandle: CandleData = {
+          time: candleCountRef.current++,
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+          volume: 1
+        }
+        candleDataRef.current.push(firstCandle)
+        currentCandleStartTimeRef.current = now
+        currentCandleOpenRef.current = price
+      } else {
+        // Update current candle
+        const currentCandle = candleDataRef.current[candleDataRef.current.length - 1]
+        currentCandle.high = Math.max(currentCandle.high, price)
+        currentCandle.low = Math.min(currentCandle.low, price)
+        currentCandle.close = price
+        currentCandle.volume++
+      }
+    }
+
+    // Update chart
+    const updateChart = () => {
+      const instrument = feedData.find(item => item.insToken === token)
+      if (instrument && instrument.ltp) {
+        priceHistoryRef.current.push(instrument.ltp)
+        if (priceHistoryRef.current.length > maxDataPointsRef.current) {
+          priceHistoryRef.current.shift()
+        }
+        // Update time-based candles
+        updateTimeBasedCandles(instrument.ltp)
+        drawChart()
+      }
+    }
+
+    // Setup canvas immediately
+    resizeCanvas()
+    
+    // Only start live updates if historical data already loaded
+    let interval: NodeJS.Timeout | null = null
+    let waitForHistoricalData: NodeJS.Timeout | null = null
+    
+    const startChart = () => {
+      console.log('📊 Effect 2: Starting chart with', candleDataRef.current.length, 'candles')
+      drawChart()
+      interval = setInterval(updateChart, 200)
+    }
+    
+    if (historicalDataLoadedRef.current && candleDataRef.current.length > 0) {
+      console.log('📊 Effect 2: Historical data ready, starting chart immediately')
+      startChart()
+    } else {
+      console.log('📊 Effect 2: Waiting for historical data...')
+      // Wait for historical data to load
+      waitForHistoricalData = setInterval(() => {
+        console.log('📊 Effect 2: Checking... loaded:', historicalDataLoadedRef.current, 'candles:', candleDataRef.current.length)
+        if (historicalDataLoadedRef.current && candleDataRef.current.length > 0) {
+          console.log('📊 Effect 2: Historical data ready now, starting chart')
+          clearInterval(waitForHistoricalData!)
+          waitForHistoricalData = null
+          startChart()
+        }
+      }, 100)
+    }
+
+    window.addEventListener('resize', resizeCanvas)
+
+    return () => {
+      console.log('📊 Effect 2: Cleanup')
+      if (interval) clearInterval(interval)
+      if (waitForHistoricalData) clearInterval(waitForHistoricalData)
+      window.removeEventListener('resize', resizeCanvas)
+      if (containerRef.current && canvas.parentNode === containerRef.current) {
+        containerRef.current.removeChild(canvas)
+      }
+    }
+  }, [containerRef, feedData, chartType, showIndicators, showVolume, zoomLevel])
+
+
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#0f172a' }}>
+      {/* Professional Control Bar */}
+      <div style={{ 
+        padding: '14px 20px', 
+        borderBottom: '1px solid #334155', 
+        display: 'flex', 
+        gap: '16px', 
+        alignItems: 'center', 
+        flexWrap: 'wrap', 
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)'
+      }}>
+        {/* Chart Type Selector */}
+        <div style={{ display: 'flex', gap: '8px', borderRight: '1px solid #334155', paddingRight: '16px' }}>
+          {(['line', 'bar', 'candle'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => setChartType(type)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                backgroundColor: chartType === type ? '#3b82f6' : '#1e293b',
+                color: chartType === type ? '#fff' : '#94a3b8',
+                transition: 'all 0.25s',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+
+        {/* Indicator Toggles */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setShowVolume(!showVolume)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '6px',
+              border: '1.5px solid ' + (showVolume ? '#10b981' : '#334155'),
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              backgroundColor: showVolume ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+              color: showVolume ? '#10b981' : '#64748b',
+              transition: 'all 0.25s',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            📊 Volume
+          </button>
+
+          <button
+            onClick={() => setShowIndicators(!showIndicators)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '6px',
+              border: '1.5px solid ' + (showIndicators ? '#a78bfa' : '#334155'),
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              backgroundColor: showIndicators ? 'rgba(167, 139, 250, 0.1)' : 'transparent',
+              color: showIndicators ? '#a78bfa' : '#64748b',
+              transition: 'all 0.25s',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            📈 Tech Indicators
+          </button>
+
+          {/* Zoom Controls */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: '10px', paddingLeft: '10px', borderLeft: '1px solid #334155' }}>
+            <button
+              onClick={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.25))}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '4px',
+                border: '1px solid #64748b',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                backgroundColor: '#1e293b',
+                color: '#94a3b8',
+                transition: 'all 0.25s',
+              }}
+              title="Zoom Out (minimum 50%)"
+            >
+              🔍−
+            </button>
+            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', minWidth: '45px', textAlign: 'center' }}>
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button
+              onClick={() => setZoomLevel(Math.min(2, zoomLevel + 0.25))}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '4px',
+                border: '1px solid #64748b',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                backgroundColor: '#1e293b',
+                color: '#94a3b8',
+                transition: 'all 0.25s',
+              }}
+              title="Zoom In (maximum 200%)"
+            >
+              🔍+
+            </button>
+          </div>
+        </div>
+
+        {/* Info Display */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '20px', fontSize: '12px', color: '#94a3b8', fontFamily: 'monospace' }}>
+          <span>Candles: <span style={{ color: '#e2e8f0', fontWeight: '700' }}>{candleDataRef.current.length}</span></span>
+          <span>Ticks: <span style={{ color: '#e2e8f0', fontWeight: '700' }}>{priceHistoryRef.current.length}</span></span>
+          {showIndicators && (
+            <span>
+              <span style={{ color: '#f97316', fontWeight: '700' }}>SMA20</span>
+              <span> | </span>
+              <span style={{ color: '#6366f1', fontWeight: '700' }}>SMA50</span>
+              <span> | </span>
+              <span style={{ color: '#a78bfa', fontWeight: '700' }}>RSI</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Canvas Container */}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          position: 'relative',
+          backgroundColor: '#0f172a',
+          overflow: 'hidden'
+        }}
+      />
     </div>
   )
 }
