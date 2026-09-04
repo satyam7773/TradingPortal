@@ -252,7 +252,7 @@ const IntradayHistory: React.FC = () => {
                     {selectableSymbols.find(s => s.id === selectedSymbol)?.name || 'Select Symbol'} • <span className="text-blue-600 font-semibold">{selectedInterval}</span> • <span className="text-blue-600 font-semibold">{selectedDate}</span>
                   </p>
                 </div>
-                <div className="grid grid-cols-4 gap-6 text-center">
+                {/* <div className="grid grid-cols-4 gap-6 text-center">
                   <div>
                     <div className="text-2xl font-bold text-slate-900 dark:text-white">{stats.totalCandles}</div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div>
@@ -269,7 +269,7 @@ const IntradayHistory: React.FC = () => {
                     <div className="text-2xl font-bold text-blue-600">{stats.totalVolume.toLocaleString('en-IN')}</div>
                     <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Volume</div>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
 

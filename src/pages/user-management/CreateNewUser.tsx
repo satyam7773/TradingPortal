@@ -1447,6 +1447,12 @@ const CreateNewUser: React.FC = () => {
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, true)
                                           setFieldValue(`exchanges.${key}.symbolBrk`, false)
                                         }
+                                        
+                                        // For CALLPUT: always force Symbol Brk ON and Turnover Brk OFF
+                                        if (e.target.checked && key === 'callput') {
+                                          setFieldValue(`exchanges.${key}.turnoverBrk`, false)
+                                          setFieldValue(`exchanges.${key}.symbolBrk`, true)
+                                        }
                                       }}
                                       disabled={!isExchangeAllowed(exchange.key)}
                                     />
@@ -1479,9 +1485,9 @@ const CreateNewUser: React.FC = () => {
                                           setFieldValue(`exchanges.${key}.symbolBrk`, false);
                                         }
                                       }}
-                                      disabled={!isExchangeAllowed(exchange.key.toLowerCase())}
+                                      disabled={!isExchangeAllowed(exchange.key.toLowerCase()) || exchange.key.toLowerCase() === 'callput' || (!!values?.exchanges?.[exchange.key.toLowerCase()]?.turnoverBrk && !values?.exchanges?.[exchange.key.toLowerCase()]?.symbolBrk)}
                                     />
-                                    <div className="relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
+                                    <div className="relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
                                   </label>
                                 </td>
 
@@ -1512,9 +1518,9 @@ const CreateNewUser: React.FC = () => {
                                           setFieldValue(`exchanges.${key}.turnoverBrk`, false);
                                         }
                                       }}
-                                      disabled={['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) || !isExchangeAllowed(exchange.key.toLowerCase())}
+                                      disabled={['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) || !isExchangeAllowed(exchange.key.toLowerCase()) || exchange.key.toLowerCase() === 'callput'}
                                     />
-                                    <div className={`relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600 ${['nse', 'sgx', 'others'].includes(exchange.key.toLowerCase()) ? 'opacity-30' : ''}`}></div>
+                                    <div className={`relative w-8 h-5 bg-gray-200 dark:bg-surface-secondary rounded-full peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600 ${['nse', 'sgx', 'others', 'callput'].includes(exchange.key.toLowerCase()) ? 'opacity-30' : ''}`}></div>
                                   </label>
                                 </td>
 

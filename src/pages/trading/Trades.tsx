@@ -147,7 +147,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
   
   // Initialize download report hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/portal/trades/download',
+    apiEndpoint: 'https://api-staging.rivoplus.live/user/portal/trades/download',
     filename: 'Trades'
   });
   

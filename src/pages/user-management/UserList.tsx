@@ -18,6 +18,7 @@ import CarryForwardMarginModal from './CarryForwardMarginModal';
 import MarginSquareOffModal from './MarginSquareOffModal';
 import TradeDurationRankModal from './TradeDurationRankModal';
 import ExchangewiseLotLimitModal from './ExchangewiseLotLimitModal';
+import AccountLimit from './user-details-tabs/AccountLimit';
 
 interface UserData {
   id: string;
@@ -130,6 +131,8 @@ const UserList: React.FC = () => {
   const [selectedUserForDuration, setSelectedUserForDuration] = useState<any>(null);
   const [showExchangewiseLotLimitModal, setShowExchangewiseLotLimitModal] = useState(false);
   const [selectedUserForExchangewiseLotLimit, setSelectedUserForExchangewiseLotLimit] = useState<any>(null);
+  const [showAccountLimitModal, setShowAccountLimitModal] = useState(false);
+  const [selectedUserForAccountLimit, setSelectedUserForAccountLimit] = useState<any>(null);
 
   const clearUserListCache = useCallback(() => {
     sessionStorage.removeItem(USER_LIST_CACHE_KEY);
@@ -359,12 +362,16 @@ const UserList: React.FC = () => {
           setShowMarketTradeRightsModal(false);
           setSelectedUserForMarketTradeRights(null);
         }
+        else if (showAccountLimitModal) {
+          setShowAccountLimitModal(false);
+          setSelectedUserForAccountLimit(null);
+        }
       }
     };
 
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
-  }, [showSharingModal, showPasswordModal, showAddCreditsModal, showIntradaySquareOffModal, showMarketTradeRightsModal]);
+  }, [showSharingModal, showPasswordModal, showAddCreditsModal, showIntradaySquareOffModal, showMarketTradeRightsModal, showAccountLimitModal]);
 
   const filteredUsers = users.filter(user => {
     // Apply search term filter - Search only in username
@@ -1266,6 +1273,59 @@ const UserList: React.FC = () => {
         />
       )}
 
+      {/* Account Limit Modal */}
+      {showAccountLimitModal && selectedUserForAccountLimit && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
+          style={{ zIndex: 99999 }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAccountLimitModal(false);
+            }
+          }}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
+            style={{ width: '98vw', height: '96vh', maxWidth: '1200px' }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="relative bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 px-6 py-3 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-xl border border-white/30 shadow-lg">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Account Limit</h2>
+                  <p className="text-cyan-100 text-xs">
+                    User: {selectedUserForAccountLimit.username}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAccountLimitModal(false)}
+                className="w-9 h-9 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all duration-200 backdrop-blur-xl border border-white/30 hover:rotate-90 transform group"
+              >
+                <X className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+              <AccountLimit
+                user={selectedUserForAccountLimit}
+                userDetails={selectedUserForAccountLimit}
+                onClose={() => setShowAccountLimitModal(false)}
+                onRefresh={async () => {
+                  setShowAccountLimitModal(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Action Menu Portal */}
       {openActionMenu && actionMenuPosition && actionMenuUserId && createPortal(
         <div
@@ -1359,7 +1419,19 @@ const UserList: React.FC = () => {
                       className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>💰</span> Add Credit
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForAccountLimit(user);
+                          setShowAccountLimitModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📋</span> Account Limit
                     </button>
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">

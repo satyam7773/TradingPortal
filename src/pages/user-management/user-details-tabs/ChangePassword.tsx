@@ -107,20 +107,7 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onCl
             {({ values, errors, touched, handleChange, handleBlur, handleSubmit, isValid, dirty }) => (
               <Form onSubmit={handleSubmit} className="space-y-5">
                 {/* Master Password */}
-                <div>
-                  <Input
-                    label="Master Password*"
-                    icon={Key}
-                    name="masterPassword"
-                    type="password"
-                    placeholder="Enter master password"
-                    value={values.masterPassword || ''}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    error={touched.masterPassword && errors.masterPassword ? errors.masterPassword : ''}
-                    showPasswordToggle
-                  />
-                </div>
+               
 
                 {/* New Password */}
                 <div>
@@ -134,6 +121,21 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onCl
                     onChange={handleChange}
                     onBlur={handleBlur}
                     error={touched.newPassword && errors.newPassword ? errors.newPassword : ''}
+                    showPasswordToggle
+                  />
+                </div>
+
+                 <div>
+                  <Input
+                    label="Master Password*"
+                    icon={Key}
+                    name="masterPassword"
+                    type="password"
+                    placeholder="Enter master password"
+                    value={values.masterPassword || ''}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={touched.masterPassword && errors.masterPassword ? errors.masterPassword : ''}
                     showPasswordToggle
                   />
                 </div>

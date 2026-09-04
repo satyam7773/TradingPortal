@@ -735,10 +735,9 @@ const ManageTraders: React.FC = () => {
           </>
         )}
       >
-        <div className="flex-1 overflow-auto flex flex-col">
-          <div className="flex-1 bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl">
-            <div className="overflow-x-auto h-full">
-              <table className="w-full">
+        <div className="flex-1 flex flex-col bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg overflow-hidden">
+          <div className="flex-1 overflow-auto min-h-0 scrollbar-thin">
+            <table className="w-full border-collapse min-w-max">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
                     {isAdminUser && (
@@ -950,7 +949,7 @@ const ManageTraders: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          <div className="sticky bottom-0 z-20 flex-shrink-0 px-4 py-4 border-t border-gray-200/50 dark:border-slate-600/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 shadow-lg">
+          <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200/50 dark:border-slate-600/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-600 dark:text-slate-400">
                 Showing <span className="font-semibold text-slate-900 dark:text-white">1</span> to{' '}
@@ -978,8 +977,7 @@ const ManageTraders: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
-      </FilterLayout>
+        </FilterLayout>
 
       {selectedUser && createPortal(
         <div className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-[9999]" onClick={() => setSelectedUser(null)}>

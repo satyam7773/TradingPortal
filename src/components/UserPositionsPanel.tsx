@@ -515,7 +515,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         );
 
       if (response?.responseCode === '0') {
-        toast.success(`Manual order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast });
+        toast.success(`Manual order placed successfully!`, { id: submitToast });
         await handleView(selectedExchange, userId ? [Number(userId)] : [], true, 0);
         resetManualOrderForm();
       } else {

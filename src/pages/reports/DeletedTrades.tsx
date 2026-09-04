@@ -498,9 +498,9 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         )}
       >
         <div className="flex-1 overflow-auto flex flex-col">
-          <div className="flex-1 bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl">
-            <div className="overflow-x-auto h-full">
-              <table className="w-full">
+          <div className="flex-1 flex flex-col bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg overflow-hidden">
+            <div className="flex-1 overflow-auto min-h-0 scrollbar-thin">
+              <table className="w-full border-collapse min-w-max">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-red-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
                     {isAdminUser && (
@@ -523,6 +523,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[150px]">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Time</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Execution Time</th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Deleted On</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">IP Address</th>
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Method</th>
                   </tr>
@@ -614,6 +615,11 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                         {/* Execution Time */}
                         <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
                           {trade.executionTime ? new Date(trade.executionTime).toLocaleString() : '-'}
+                        </td>
+
+                        {/* Deleted On */}
+                        <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          {trade.deletedOn ? new Date(trade.deletedOn).toLocaleString() : '-'}
                         </td>
 
                         {/* IP Address */}

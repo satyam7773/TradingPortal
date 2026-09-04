@@ -56,6 +56,25 @@ const IntradaySquareOffModal: React.FC<IntradaySquareOffModalProps> = ({
     }
   };
 
+  const handleAllExchangesToggle = (isChecked: boolean) => {
+    const updatedExchanges: Record<string, boolean> = {};
+    Object.keys(intradayExchanges).forEach((exchange) => {
+      // Skip "All Exchanges" itself
+      if (exchange !== 'All Exchanges') {
+        updatedExchanges[exchange] = isChecked;
+      }
+    });
+    setIntradayExchanges(prev => ({
+      ...prev,
+      ...updatedExchanges
+    }));
+  };
+
+  const isAllExchangesChecked = () => {
+    const nonAllExchanges = Object.keys(intradayExchanges).filter(ex => ex !== 'All Exchanges');
+    return nonAllExchanges.length > 0 && nonAllExchanges.every(ex => intradayExchanges[ex]);
+  };
+
   const handleSave = async () => {
     try {
       setIsSaving(true);
@@ -136,7 +155,34 @@ const IntradaySquareOffModal: React.FC<IntradaySquareOffModalProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {Object.keys(intradayExchanges).map((exchange) => (
+              {/* All Exchanges Toggle */}
+              {intradayExchanges['All Exchanges'] !== undefined && (
+                <div 
+                  className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-700 dark:to-slate-600 rounded-lg border-2 border-blue-300 dark:border-blue-500 shadow-md mb-4"
+                >
+                  <span className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">Select All Exchanges</span>
+                  <button
+                    onClick={() => handleAllExchangesToggle(!isAllExchangesChecked())}
+                    disabled={isSaving}
+                    className={`w-12 h-6 rounded-full transition-all ${
+                      isAllExchangesChecked()
+                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600'
+                        : 'bg-gray-300 dark:bg-slate-600'
+                    } disabled:opacity-50`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full bg-white shadow-lg transition-transform transform ${
+                        isAllExchangesChecked() ? 'translate-x-6' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+
+              {/* Individual Exchanges */}
+              {Object.keys(intradayExchanges)
+                .filter(exchange => exchange !== 'All Exchanges')
+                .map((exchange) => (
                 <div 
                   key={exchange}
                   className="flex items-center justify-between p-3 bg-white dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 hover:shadow-md transition-shadow"

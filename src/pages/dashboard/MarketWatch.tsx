@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2, Plus } from 'lucide-react'
+import { Eye, Search, X, MoreVertical, TrendingUp, TrendingDown, Trash2, Plus, Maximize2, Minimize2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
 import marketWatchService from '../../services/marketWatchService'
@@ -323,6 +323,7 @@ const MarketWatch: React.FC = () => {
   const [resizingColumn, setResizingColumn] = useState<string | null>(null)
   const [resizeStartX, setResizeStartX] = useState(0)
   const [resizeStartWidth, setResizeStartWidth] = useState(0)
+  const [isMarketWatchFullscreen, setIsMarketWatchFullscreen] = useState(false)
 
   const feedUnsubscribeRef = useRef<(() => void) | null>(null)
   const instrumentConfigRef = useRef<Record<number, any>>({})
@@ -1661,214 +1662,161 @@ const MarketWatch: React.FC = () => {
 
 
 
-        {/* Live Feed Data Section */}
+        {/* Market Watch Table Header - Shared */}
         {feedData.length > 0 && selectedTabId && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex-1 bg-surface-primary border border-border-primary rounded-xl overflow-hidden shadow-lg mx-4 mb-4 flex flex-col min-h-0"
-          >
-            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-violet-600 p-4 flex items-center justify-between relative overflow-hidden flex-shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-2xl">📊</span>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    Live Market Feed
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500 rounded-full text-xs font-medium">
-                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-                      LIVE
-                    </span>
-                  </h2>
-                  <p className="text-sm text-blue-50 mt-0.5">Real-time price updates • {new Date().toLocaleTimeString()}</p>
-                </div>
-              </div>
-
-            </div>
-            {/* Scrollable table wrapper with fixed header */}
-            <DragDropContext onDragEnd={handleReorderSave}>
-              <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 scrollbar-thin scrollbar-thumb-blue-400 dark:scrollbar-thumb-blue-600" style={{ maxHeight: 'calc(100vh - 350px)' }}>
-                {/* Fixed Table Header */}
-                <table className="w-full table-fixed border-collapse">
-              <colgroup>
-                <col style={{ width: `${columnWidths.actions}px` }} />
-                <col style={{ width: `${columnWidths.buyBtn}px` }} />
-                <col style={{ width: `${columnWidths.sellBtn}px` }} />
-                <col style={{ width: `${columnWidths.exchange}px` }} />
-                <col style={{ width: `${columnWidths.symbol}px` }} />
-                <col style={{ width: `${columnWidths.expiry}px` }} />
-                <col style={{ width: `${columnWidths.buyQty}px` }} />
-                <col style={{ width: `${columnWidths.buyPrice}px` }} />
-                <col style={{ width: `${columnWidths.sellPrice}px` }} />
-                <col style={{ width: `${columnWidths.sellQty}px` }} />
-                <col style={{ width: `${columnWidths.ltp}px` }} />
-                <col style={{ width: `${columnWidths.netChange}px` }} />
-                <col style={{ width: `${columnWidths.open}px` }} />
-                <col style={{ width: `${columnWidths.high}px` }} />
-                <col style={{ width: `${columnWidths.low}px` }} />
-                <col style={{ width: `${columnWidths.close}px` }} />
-                <col style={{ width: `${columnWidths.ltt}px` }} />
-              </colgroup>
-              <thead>
-                  <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600 sticky top-0 z-10">
-                    <th className="px-3 py-3 text-center text-xs font-bold text-white uppercase tracking-wider sticky left-0 bg-slate-800 z-10 relative">
-                      Actions
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'actions')}
-                      />
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Buy
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'buyBtn')}
-                      />
-                    </th>
-                    <th className="px-2 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Sell
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'sellBtn')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
-                      Exchange
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'exchange')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-white uppercase tracking-wider relative">
-                      Symbol
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'symbol')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Expiry
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'expiry')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Buy Qty
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'buyQty')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Buy Price
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'buyPrice')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Sell Price
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'sellPrice')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Sell Qty
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'sellQty')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      LTP
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'ltp')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Net Change
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'netChange')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Open
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'open')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      High
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'high')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Low
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'low')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      Close
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'close')}
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold text-white uppercase tracking-wider relative">
-                      LTT
-                      <div
-                        className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
-                        onMouseDown={(e) => handleResizeStart(e, 'ltt')}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <Droppable droppableId="watchlist" type="ITEM">
-                  {(provided, snapshot) => (
-                    <tbody
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className="divide-y divide-slate-700 bg-slate-900"
-                      style={{
-                        ...provided.droppableProps.style
-                      }}
-                    >
-                      {filteredFeedData.map((instrument, index) => (
-                        <TableRow
-                          key={instrument.insToken}
-                          instrument={instrument}
-                          index={index}
-                          config={instrumentConfigRef.current[instrument.insToken]}
-                          changes={throttledPriceChanges[instrument.insToken] || {}}
-                          onActionMenuOpen={(token, position) => {
-                            setActionMenuToken(token)
-                            setActionMenuPosition(position)
-                          }}
-                          onBuyClick={onDirectBuyClick}
-                          onSellClick={onDirectSellClick}
-                          deletingToken={deletingToken}
-                        />
+          <>
+            {/* Shared Table Content */}
+            {(() => {
+              const tableContent = (
+                <DragDropContext onDragEnd={handleReorderSave}>
+                  <table className="w-full table-fixed border-collapse">
+                    <colgroup>
+                      {['actions', 'buyBtn', 'sellBtn', 'exchange', 'symbol', 'expiry', 'buyQty', 'buyPrice', 'sellPrice', 'sellQty', 'ltp', 'netChange', 'open', 'high', 'low', 'close', 'ltt'].map(col => (
+                        <col key={col} style={{ width: `${columnWidths[col as keyof typeof columnWidths]}px` }} />
                       ))}
-                      {provided.placeholder}
-                    </tbody>
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600 sticky top-0 z-10">
+                        {[
+                          { name: 'Actions', key: 'actions', align: 'center', sticky: true },
+                          { name: 'Buy', key: 'buyBtn', align: 'center' },
+                          { name: 'Sell', key: 'sellBtn', align: 'center' },
+                          { name: 'Exchange', key: 'exchange', align: 'left' },
+                          { name: 'Symbol', key: 'symbol', align: 'left' },
+                          { name: 'Expiry', key: 'expiry', align: 'center' },
+                          { name: 'Buy Qty', key: 'buyQty', align: 'center' },
+                          { name: 'Buy Price', key: 'buyPrice', align: 'center' },
+                          { name: 'Sell Price', key: 'sellPrice', align: 'center' },
+                          { name: 'Sell Qty', key: 'sellQty', align: 'center' },
+                          { name: 'LTP', key: 'ltp', align: 'center' },
+                          { name: 'Net Change', key: 'netChange', align: 'center' },
+                          { name: 'Open', key: 'open', align: 'center' },
+                          { name: 'High', key: 'high', align: 'center' },
+                          { name: 'Low', key: 'low', align: 'center' },
+                          { name: 'Close', key: 'close', align: 'center' },
+                          { name: 'LTT', key: 'ltt', align: 'center' },
+                        ].map(col => (
+                          <th
+                            key={col.key}
+                            className={`px-${col.sticky ? '3' : '4'} py-3 text-${col.align} text-xs font-bold text-white uppercase tracking-wider ${col.sticky ? 'sticky left-0 bg-slate-800 z-10' : ''} relative`}
+                          >
+                            {col.name}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-1 bg-slate-600 hover:bg-blue-400 hover:w-1.5 cursor-col-resize transition-all"
+                              onMouseDown={(e) => handleResizeStart(e, col.key)}
+                            />
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <Droppable droppableId="watchlist" type="ITEM">
+                      {(provided) => (
+                        <tbody
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className="divide-y divide-slate-700 bg-slate-900"
+                        >
+                          {filteredFeedData.map((instrument, index) => (
+                            <TableRow
+                              key={instrument.insToken}
+                              instrument={instrument}
+                              index={index}
+                              config={instrumentConfigRef.current[instrument.insToken]}
+                              changes={throttledPriceChanges[instrument.insToken] || {}}
+                              onActionMenuOpen={(token, position) => {
+                                setActionMenuToken(token)
+                                setActionMenuPosition(position)
+                              }}
+                              onBuyClick={onDirectBuyClick}
+                              onSellClick={onDirectSellClick}
+                              deletingToken={deletingToken}
+                            />
+                          ))}
+                          {provided.placeholder}
+                        </tbody>
+                      )}
+                    </Droppable>
+                  </table>
+                </DragDropContext>
+              )
+
+              return (
+                <>
+                  {/* Fullscreen Portal */}
+                  {isMarketWatchFullscreen && createPortal(
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 bg-surface-primary flex flex-col z-[99999]"
+                    >
+                      <div className="absolute inset-0 z-0" onClick={() => setIsMarketWatchFullscreen(false)} />
+                      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-violet-600 p-4 flex items-center justify-between relative overflow-hidden flex-shrink-0 z-10">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+                        <div className="flex items-center gap-4 relative z-10">
+                          <span className="text-2xl">📊</span>
+                          <div>
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                              Live Market Feed
+                              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500 rounded-full text-xs font-medium">
+                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>LIVE
+                              </span>
+                            </h2>
+                            <p className="text-sm text-blue-50 mt-0.5">Real-time price updates • {new Date().toLocaleTimeString()}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsMarketWatchFullscreen(false)}
+                          className="relative z-10 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-200 text-white group"
+                        >
+                          <Minimize2 className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto overflow-x-auto scrollbar-thin scrollbar-thumb-blue-400 dark:scrollbar-thumb-blue-600 z-10">
+                        {tableContent}
+                      </div>
+                    </motion.div>,
+                    document.body
                   )}
-                </Droppable>
-              </table>
-              </div>
-            </DragDropContext>
-            </motion.div>
+
+                  {/* Normal View */}
+                  {!isMarketWatchFullscreen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="flex-1 bg-surface-primary border border-border-primary rounded-xl overflow-hidden shadow-lg mx-4 mb-4 flex flex-col min-h-0"
+                    >
+                      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-violet-600 p-4 flex items-center justify-between relative overflow-hidden flex-shrink-0">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+                        <div className="flex items-center gap-4 relative z-10">
+                          <span className="text-2xl">📊</span>
+                          <div>
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                              Live Market Feed
+                              <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500 rounded-full text-xs font-medium">
+                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>LIVE
+                              </span>
+                            </h2>
+                            <p className="text-sm text-blue-50 mt-0.5">Real-time price updates • {new Date().toLocaleTimeString()}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsMarketWatchFullscreen(true)}
+                          className="relative z-10 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-200 text-white group"
+                        >
+                          <Maximize2 className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 scrollbar-thin scrollbar-thumb-blue-400 dark:scrollbar-thumb-blue-600" style={{ maxHeight: 'calc(100vh - 350px)' }}>
+                        {tableContent}
+                      </div>
+                    </motion.div>
+                  )}
+                </>
+              )
+            })()}
+          </>
         )}
 
         {/* Action Menu Popup */}

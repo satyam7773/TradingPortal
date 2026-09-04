@@ -574,7 +574,7 @@ const SummaryItem = ({ label, value, color, size = "lg" }: any) => {
       <div className={`font-mono font-bold tracking-tighter ${size === 'xl' ? 'text-3xl' : 'text-lg'} ${colorMap[color]}`}>
         ₹{(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
       </div>
-      <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-500 mt-1">
+      <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-300 dark:text-slate-200 mt-1">
         {label}
       </div>
     </div>
@@ -631,7 +631,7 @@ const PnLTable = ({
         </tr>
       ) : (
         data.map((p, idx) => (
-          <tr key={idx} className={`group transition-all duration-200 border-b border-slate-400 dark:border-slate-500 hover:bg-slate-700/30 dark:hover:bg-slate-700/50 ${idx % 2 === 0 ? 'bg-slate-800/10 dark:bg-slate-900/30' : 'bg-slate-800/5 dark:bg-transparent'}`}>
+          <tr key={idx} className={`group transition-all duration-200 hover:bg-slate-700/30 dark:hover:bg-slate-700/50 ${idx % 2 === 0 ? 'bg-slate-800/10 dark:bg-slate-900/30' : 'bg-slate-800/5 dark:bg-transparent'}`}>
             <td className="px-6 py-2.5 text-left">
               <div className="flex items-center gap-2">
                 {onUserClick ? (

@@ -162,7 +162,7 @@ const UserWisePosition: React.FC = () => {
       const exchangeToUse = targetExchange || selectedExchange;
       const tokenToUse = selectedToken || 0;
 
-      const response = await userManagementService.fetchUserPositionsForExchange(
+      const response = await userManagementService.fetchUserWisePositions(
         exchangeToUse,
         tokenToUse,
         selectedUserId
