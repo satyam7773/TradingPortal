@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
-import SearchableSelect from '../../components/ui/SearchableSelect';
+
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DealBrkDetailsModal from './DealBrkDetailsModal';
 import DurationDetailsModal from './DurationDetailsModal';
@@ -49,13 +49,10 @@ const ManageTraders: React.FC = () => {
     time: false,
     fromTime: '00:00:00',
     toTime: '23:59:59',
-    selectedUserId: 0,
     status: '',
     orderType: '',
     buySell: '',
     exchange: '',
-    symbols: '',
-    selectedSymbolToken: 0,
     ipDev: 'Default',
     duration: '',
     pnl: ''
@@ -76,6 +73,8 @@ const ManageTraders: React.FC = () => {
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const pageSize = 10;
 
   // Dynamic dropdown options
@@ -122,7 +121,7 @@ const ManageTraders: React.FC = () => {
           toTime: filters.toTime,
           page: currentPage,
           exchange: filters.exchange || 'All Exchanges',
-          userId: filters.selectedUserId || loggedInUserId
+          userId: loggedInUserId
         }
       }, {
         pdf: format === 'pdf'
@@ -131,14 +130,6 @@ const ManageTraders: React.FC = () => {
       console.error('Download error:', error);
     }
   };
-
-  const userOptions = useMemo(() => [
-    ...users.map(u => ({ id: u.userId, name: u.userName }))
-  ], [users]);
-
-  const symbolOptions = useMemo(() => [
-    ...symbols.map(s => ({ id: s.token, name: s.tradeSymbol || s }))
-  ], [symbols]);
 
   // Fetch trades data
   const handleFetchTrades = async (page: number = 0, currentFilters?: typeof filters) => {
@@ -151,7 +142,7 @@ const ManageTraders: React.FC = () => {
     try {
       const filtersToUse = currentFilters || filters;
 
-      const targetUserId = filtersToUse.selectedUserId || loggedInUserId;
+      const targetUserId = loggedInUserId;
       const payload: any = {
         userId: targetUserId,
         requestTimestamp: '',
@@ -171,7 +162,6 @@ const ManageTraders: React.FC = () => {
       if (filtersToUse.status) payload.data.status = filtersToUse.status;
       if (filtersToUse.orderType) payload.data.orderType = filtersToUse.orderType;
       if (filtersToUse.buySell) payload.data.side = filtersToUse.buySell;
-      if (filtersToUse.selectedSymbolToken) payload.data.token = filtersToUse.selectedSymbolToken;
       if (filtersToUse.ipDev && filtersToUse.ipDev !== 'Default') payload.data.ipDev = filtersToUse.ipDev;
       if (filtersToUse.duration) payload.data.duration = filtersToUse.duration;
       if (filtersToUse.pnl) payload.data.pnl = filtersToUse.pnl;
@@ -241,8 +231,7 @@ const ManageTraders: React.FC = () => {
     try {
       const selectedIndices = Array.from(selectedTradeIds);
       const tradeIdsToDelete = selectedIndices.map(index => trades[index]?.tradeId || trades[index]?.id || 0);
-      const targetUserId = filters.selectedUserId || loggedInUserId;
-      const response = await userManagementService.deleteTrades(loggedInUserId, targetUserId, tradeIdsToDelete);
+      const response = await userManagementService.deleteTrades(loggedInUserId, loggedInUserId, tradeIdsToDelete);
 
       if (response?.responseCode === '0' || response?.success) {
         toast.success(`${selectedTradeIds.size} trade(s) deleted successfully`);
@@ -406,18 +395,58 @@ const ManageTraders: React.FC = () => {
       time: false,
       fromTime: '00:00:00',
       toTime: '23:59:59',
-      selectedUserId: 0,
       status: '',
       orderType: '',
       buySell: '',
       exchange,
-      symbols: '',
-      selectedSymbolToken: 0,
       ipDev: 'Default',
       duration: '',
       pnl: ''
     });
     setTrades([]);
+    setSortColumn(null);
+    setCurrentPage(0);
+  };
+
+  // Column sorting logic
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Apply sorting to trades
+  const sortedTrades = useMemo(() => {
+    let result = [...trades];
+
+    // Apply sorting
+    if (sortColumn) {
+      result.sort((a, b) => {
+        let aVal: any = a[sortColumn as keyof TradeData];
+        let bVal: any = b[sortColumn as keyof TradeData];
+
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = (bVal as string).toLowerCase();
+        }
+
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [trades, sortColumn, sortDirection]);
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3 h-3 text-slate-400" />;
+    return sortDirection === 'asc' ? 
+      <ArrowUp className="w-3 h-3 text-blue-600 dark:text-blue-400" /> : 
+      <ArrowDown className="w-3 h-3 text-blue-600 dark:text-blue-400" />;
   };
 
   return (
@@ -527,15 +556,6 @@ const ManageTraders: React.FC = () => {
                 </>
               )}
 
-              {/* Username */}
-              <SearchableSelect
-                label="Username :"
-                items={userOptions}
-                selectedId={filters.selectedUserId}
-                onSelect={(userId) => handleFilterChange('selectedUserId', Number(userId))}
-                placeholder="Search user..."
-              />
-
               {/* Status */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Status</label>
@@ -609,15 +629,6 @@ const ManageTraders: React.FC = () => {
                   ))}
                 </select>
               </div>
-
-              {/* Symbols */}
-              <SearchableSelect
-                label="Symbol :"
-                items={symbolOptions}
-                selectedId={filters.selectedSymbolToken}
-                onSelect={(id) => handleFilterChange('selectedSymbolToken', Number(id))}
-                placeholder="Search symbol..."
-              />
 
               {/* Action Buttons */}
               <div className="flex gap-3 pt-2">
@@ -744,32 +755,60 @@ const ManageTraders: React.FC = () => {
                       <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         <input
                           type="checkbox"
-                          checked={selectedTradeIds.size === trades.length && trades.length > 0}
+                          checked={selectedTradeIds.size === sortedTrades.length && sortedTrades.length > 0}
                           onChange={handleSelectAll}
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
                         />
                       </th>
                     )}
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Username</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Symbol</th>
-                    <th className="text-center px-8 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Type</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Quantity</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Price</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Brk</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Deal</th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('username')}>
+                      <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('symbol')}>
+                      <div className="flex items-center gap-2">Symbol {getSortIcon('symbol')}</div>
+                    </th>
+                    <th className="text-center px-8 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('type')}>
+                      <div className="flex items-center justify-center gap-2">Type {getSortIcon('type')}</div>
+                    </th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('quantity')}>
+                      <div className="flex items-center justify-center gap-2">Quantity {getSortIcon('quantity')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('price')}>
+                      <div className="flex items-center justify-end gap-2">Price {getSortIcon('price')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('brokerage')}>
+                      <div className="flex items-center justify-end gap-2">Brk {getSortIcon('brokerage')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('pnl')}>
+                      <div className="flex items-center justify-end gap-2">Deal {getSortIcon('pnl')}</div>
+                    </th>
                     <th className="text-center px-16 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[200px]">Duration</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Time</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Execution Time</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">IPAddress</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">DeviceId</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Reference Price</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Method</th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('status')}>
+                      <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderTime')}>
+                      <div className="flex items-center gap-2">Order Time {getSortIcon('orderTime')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('executionTime')}>
+                      <div className="flex items-center gap-2">Execution Time {getSortIcon('executionTime')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('ipAddress')}>
+                      <div className="flex items-center gap-2">IPAddress {getSortIcon('ipAddress')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('deviceId')}>
+                      <div className="flex items-center gap-2">DeviceId {getSortIcon('deviceId')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('referencePrice')}>
+                      <div className="flex items-center justify-end gap-2">Reference Price {getSortIcon('referencePrice')}</div>
+                    </th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderMethod')}>
+                      <div className="flex items-center justify-center gap-2">Order Method {getSortIcon('orderMethod')}</div>
+                    </th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Placed By</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
-                  {trades.length === 0 ? (
+                  {sortedTrades.length === 0 ? (
                     <tr>
                       <td colSpan={17} className="px-4 py-12 text-center">
                         <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -777,7 +816,7 @@ const ManageTraders: React.FC = () => {
                         <p className="text-slate-500 dark:text-slate-400">Adjust your filters and click "View" to load trades</p>
                       </td>
                     </tr>
-                  ) : trades.map((trade, index) => {
+                  ) : sortedTrades.map((trade, index) => {
                     const typeColorClass = trade.type?.toUpperCase().startsWith('BUY')
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-red-600 dark:text-red-400';
@@ -952,9 +991,8 @@ const ManageTraders: React.FC = () => {
           <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200/50 dark:border-slate-600/50 bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-600 dark:text-slate-400">
-                Showing <span className="font-semibold text-slate-900 dark:text-white">1</span> to{' '}
-                <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> of{' '}
-                <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> results
+                Showing <span className="font-semibold text-slate-900 dark:text-white">{sortedTrades.length}</span> of{' '}
+                <span className="font-semibold text-slate-900 dark:text-white">{totalRecords}</span> trades
               </div>
               <div className="flex items-center gap-3">
                 <button

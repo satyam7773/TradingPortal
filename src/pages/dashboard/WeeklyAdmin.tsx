@@ -425,7 +425,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Realised PnL */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Realised PnL</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.realisedPnl)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.realisedPnl)}`}>
                     {formatCurrency(summaryData.realisedPnl)}
                   </div>
                 </div>
@@ -433,7 +433,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Brokerage */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Brokerage</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.brokerage)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.brokerage)}`}>
                     {formatCurrency(summaryData.brokerage)}
                   </div>
                 </div>
@@ -441,7 +441,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* M2M PnL */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">M2M PnL</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.m2mPnl)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.m2mPnl)}`}>
                     {formatCurrency(summaryData.m2mPnl)}
                   </div>
                 </div>
@@ -449,7 +449,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Total PnL */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Total PnL</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.totalPnl)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.totalPnl)}`}>
                     {formatCurrency(summaryData.totalPnl)}
                   </div>
                 </div>
@@ -457,7 +457,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Net PnL */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Net PnL</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.netPnl)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.netPnL)}`}>
                     {formatCurrency(summaryData.netPnl)}
                   </div>
                 </div>
@@ -465,7 +465,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Admin PnL */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Admin PnL</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.adminPnl)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.adminPnl)}`}>
                     {formatCurrency(summaryData.adminPnl)}
                   </div>
                 </div>
@@ -473,7 +473,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Admin Brokerage */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Admin Brk</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.adminBrk)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.adminBrk)}`}>
                     {formatCurrency(summaryData.adminBrk)}
                   </div>
                 </div>
@@ -481,7 +481,7 @@ const WeeklyAdmin: React.FC = () => {
                 {/* Admin Net PnL */}
                 <div className="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-1.5 border border-slate-200/50 dark:border-slate-600/50">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Admin Net</div>
-                  <div className={`text-xs font-bold mt-0.5 ${getSummaryColor(summaryData.adminNetPnl)}`}>
+                  <div className={`text-sm font-extrabold mt-0.5 ${getSummaryColor(summaryData.adminNetPnl)}`}>
                     {formatCurrency(summaryData.adminNetPnl)}
                   </div>
                 </div>

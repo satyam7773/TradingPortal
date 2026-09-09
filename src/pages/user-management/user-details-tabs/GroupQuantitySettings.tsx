@@ -138,7 +138,14 @@ const GroupQuantitySettings: React.FC<{ user: any }> = ({ user }) => {
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
   const handleToggleGroup = (groupId: number) => {
+    const group = groups.find(g => g.id === groupId);
     const next = new Set(selectedGroupIds);
+    
+    // Prevent unchecking if isDefault is true
+    if (group?.isDefault && next.has(groupId)) {
+      toast.error('Cannot uncheck the default group');
+      return;
+    }
     
     if (isUserRole) {
       // Logic for 'user' type: only one allowed at all times
@@ -276,7 +283,14 @@ const GroupQuantitySettings: React.FC<{ user: any }> = ({ user }) => {
           {groups.map((group) => (
             <tr key={group.id} className="border-b dark:border-slate-700">
               <td className="p-2">
-                <input type="checkbox" checked={selectedGroupIds.has(group.id)} onChange={() => handleToggleGroup(group.id)} />
+                <input 
+                  type="checkbox" 
+                  checked={selectedGroupIds.has(group.id)} 
+                  onChange={() => handleToggleGroup(group.id)}
+                  disabled={group.isDefault && selectedGroupIds.has(group.id)}
+                  title={group.isDefault && selectedGroupIds.has(group.id) ? 'Cannot uncheck the default group' : ''}
+                  className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                />
               </td>
               <td className="p-2">{group.groupName}</td>
               {!isUserRole && (

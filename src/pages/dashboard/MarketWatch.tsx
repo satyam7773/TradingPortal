@@ -214,18 +214,18 @@ const TableRow = memo(({
         </div>
       </td>
 
-      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{expiry}</span></td>
-      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.buyQty ? (changes.buyQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bids?.[0]?.qty || '-'}</span></td>
-      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.bid ? (changes.bid === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bid.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.ask ? (changes.ask === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.ask.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.sellQty ? (changes.sellQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.asks?.[0]?.qty || '-'}</span></td>
-      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base ${changes.ltp ? (changes.ltp === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.ltp.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base text-slate-200`}>{isPositive ? '+' : ''}{change.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.open.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.high.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.low.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-300 text-base font-medium">{instrument.close.toFixed(2)}</span></td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-400 text-xs font-mono whitespace-nowrap">{lastTradedTime}</span></td>
+      <td className="px-4 py-2 text-center"><span className="text-slate-300 text-base font-medium">{expiry}</span></td>
+      <td className="px-4 py-2 text-center"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.buyQty ? (changes.buyQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bids?.[0]?.qty || '-'}</span></td>
+      <td className="px-4 py-2 text-center"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.bid ? (changes.bid === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.bid.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className={`inline-block px-3 py-1.5 rounded-lg font-semibold text-base ${changes.ask ? (changes.ask === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.ask.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className={`inline-block px-3 py-1.5 rounded-lg font-medium text-base ${changes.sellQty ? (changes.sellQty === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.asks?.[0]?.qty || '-'}</span></td>
+      <td className="px-4 py-2 text-center"><span className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base ${changes.ltp ? (changes.ltp === 'up' ? 'bg-blue-700 text-white' : 'bg-red-700 text-white') : 'text-slate-200'}`}>{instrument.ltp.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className={`inline-block px-3 py-1.5 rounded-lg font-bold text-base text-slate-200`}>{isPositive ? '+' : ''}{change.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className="text-slate-300 text-base font-medium">{instrument.open.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className="text-slate-300 text-base font-medium">{instrument.high.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className="text-slate-300 text-base font-medium">{instrument.low.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className="text-slate-300 text-base font-medium">{instrument.close.toFixed(2)}</span></td>
+      <td className="px-4 py-2 text-center"><span className="text-slate-400 text-xs font-mono whitespace-nowrap">{lastTradedTime}</span></td>
         </tr>
       )}
     </Draggable>

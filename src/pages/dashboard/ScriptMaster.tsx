@@ -47,7 +47,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
   const [tradeAttribute, setTradeAttribute] = useState('');
   const [allowTrade, setAllowTrade] = useState('');
   const [reverseDelay, setReverseDelay] = useState('');
-  const [updateToAll, setUpdateToAll] = useState(false);
+  const [updateAllUsersCheckbox, setUpdateAllUsersCheckbox] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [selectedScript, setSelectedScript] = useState<ScriptMaster | null>(null);
@@ -71,13 +71,114 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
     filename: 'ScriptMasterSettings'
   });
   
-  // In modal mode, use allowed exchanges from userDetails
+  // ✅ HANDLE BOTH MODES: Modal mode uses userDetails, Dashboard mode uses loggedInUser from localStorage
+  // Use userDetails if passed (modal mode), otherwise use loggedInUser (dashboard/reports mode)
+  const viewedUserData = userDetails || loggedInUser;
+  
+  // In modal mode, use allowed exchanges from userDetails; in dashboard mode, use loggedInUser
   const allowedExchanges = React.useMemo(() => {
-    const exList = userDetails?.userInfo?.allowedExchanges || [];
+    const exList = viewedUserData?.userInfo?.allowedExchanges || [];
     return exList
       .map((ex: any) => (typeof ex === 'object' && ex.name ? ex.name : ex))
       .filter((ex: any) => ex);
-  }, [userDetails]);
+  }, [viewedUserData]);
+
+  // ✅ Get the viewed user's roleId to check if they're a Master or Admin
+  // This shows "Update to All Users" only if the USER BEING VIEWED is a Master/Admin
+  // In modal mode: use userDetails.userProfile.roleId
+  // In dashboard mode: use loggedInUser.roleId from localStorage
+  const userRoleId = React.useMemo(() => {
+    const roleId = userDetails?.userProfile?.roleId || loggedInUser?.roleId;
+    return roleId || null; // roleId: 1,2=Admin, 3=Master, 4=Client
+  }, [userDetails, loggedInUser]);
+
+  const handleApply = () => {
+    if (selectedIds.size === 0) {
+      toast.error('Select at least one script');
+      return;
+    }
+    if (!tradeAttribute && !allowTrade && !reverseDelay) {
+      toast.error('Enter at least one value');
+      return;
+    }
+
+    setScripts(prev => prev.map(s => {
+      if (selectedIds.has(s.instrumentId)) {
+        return {
+          ...s,
+          ...(tradeAttribute && { tradeAttribute, tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
+          ...(allowTrade && { allowTrade, allowTradeDisplay: allowTradeOptions[allowTrade] }),
+          ...(reverseDelay && { reverseDelay: parseInt(reverseDelay) })
+        };
+      }
+      return s;
+    }));
+    
+    toast.success(`Applied to ${selectedIds.size} script(s)`);
+  };
+
+  const handleUpdate = async () => {
+    if (selectedIds.size === 0) {
+      toast.error('Please select at least one script');
+      return;
+    }
+    if (!tradeAttribute && !allowTrade && !reverseDelay) {
+      toast.error('Enter at least one value');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const scriptsByExchange = scripts
+        .filter(s => selectedIds.has(s.instrumentId) && s.exchange)
+        .reduce((acc: any, s) => {
+          const exchange = s.exchange!;
+          if (!acc[exchange]) acc[exchange] = [];
+          acc[exchange].push(s);
+          return acc;
+        }, {});
+
+      for (const exchange of Object.keys(scriptsByExchange)) {
+        const scripMasters = scriptsByExchange[exchange].map((s: any) => ({
+          ...s,
+          ...(tradeAttribute && { tradeAttribute, tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
+          ...(allowTrade && { allowTrade, allowTradeDisplay: allowTradeOptions[allowTrade] }),
+          ...(reverseDelay && { reverseDelay: parseInt(reverseDelay) })
+        }));
+
+        const payload = {
+          userId: adminUserId,
+          requestTimestamp: new Date().getTime().toString(),
+          data: {
+            userId: targetUserId,
+            exchange,
+            ...(updateAllUsersCheckbox && { updateAllUsers: true }),
+            scripMasters
+          }
+        };
+
+        await fetch('https://api-staging.rivoplus.live/user/portal/updateScripMasterSettings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      toast.success('Updated successfully');
+      await fetchScripts([selectedExchange]);
+      setTradeAttribute('');
+      setAllowTrade('');
+      setReverseDelay('');
+      setUpdateAllUsersCheckbox(false);
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error('Update failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   // Ref to track if we've already loaded exchanges
   const exchangesLoadedRef = React.useRef(false);
@@ -274,138 +375,9 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
     setSelectedIds(newSelected);
   };
 
-  const handleApply = () => {
-    if (selectedIds.size === 0) return toast.error('Select at least one script');
-    
-    const hasValues = tradeAttribute || allowTrade || reverseDelay;
-    if (!hasValues) return toast.error('Please enter at least one value');
 
-    setScripts(prev => prev.map(s => {
-      if (selectedIds.has(s.instrumentId)) {
-        return {
-          ...s,
-          ...(tradeAttribute && {
-            tradeAttribute: tradeAttribute,
-            tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] || tradeAttribute
-          }),
-          ...(allowTrade && {
-            allowTrade: allowTrade,
-            allowTradeDisplay: allowTradeOptions[allowTrade] || allowTrade
-          }),
-          ...(reverseDelay && { reverseDelay: parseInt(reverseDelay) })
-        };
-      }
-      return s;
-    }));
 
-    toast.success(`Applied to ${selectedIds.size} script(s)`);
-  };
 
-  const handleUpdate = async () => {
-    if (selectedIds.size === 0) return toast.error('Select scripts to update');
-    
-    const hasValues = tradeAttribute || allowTrade || reverseDelay;
-    if (!hasValues) return toast.error('Please enter at least one value');
-
-    setLoading(true);
-    try {
-      let successCount = 0;
-      let errorCount = 0;
-      const errorMessages: string[] = [];
-
-      // Get unique exchanges from selected scripts
-      const scriptsByExchange = scripts
-        .filter(s => selectedIds.has(s.instrumentId) && s.exchange)
-        .reduce((acc: any, s) => {
-          const exchange = s.exchange!; // Non-null assertion since we filtered above
-          if (!acc[exchange]) acc[exchange] = [];
-          acc[exchange].push(s);
-          return acc;
-        }, {});
-
-      for (const exchange of Object.keys(scriptsByExchange)) {
-        const scripMasters = scriptsByExchange[exchange].map((s: any) => ({
-          ...s,
-          ...(tradeAttribute && {
-            tradeAttribute: tradeAttribute,
-            tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] || tradeAttribute
-          }),
-          ...(allowTrade && {
-            allowTrade: allowTrade,
-            allowTradeDisplay: allowTradeOptions[allowTrade] || allowTrade
-          }),
-          ...(reverseDelay && { reverseDelay: parseInt(reverseDelay) })
-        }));
-
-        const payload = {
-          userId: adminUserId, // Admin making request
-          requestTimestamp: new Date().getTime().toString(),
-          data: {
-            userId: targetUserId, // Target user to update for
-            updateAllUsers: updateToAll,
-            exchange: exchange,
-            scripMasters: scripMasters
-          }
-        };
-
-        const response = await fetch('https://api-staging.rivoplus.live/user/portal/updateScripMasterSettings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const res = await response.json();
-        
-        if (res?.responseCode === '0') {
-          successCount++;
-        } else {
-          errorCount++;
-          // Capture API error message
-          if (res?.responseMessage) {
-            errorMessages.push(`${exchange}: ${res.responseMessage}`);
-          }
-        }
-      }
-
-      // Show result
-      if (successCount > 0 && errorCount === 0) {
-        toast.success(`Updated successfully for ${successCount} exchange(s)`);
-        await fetchScripts([selectedExchange]);
-        setTradeAttribute('');
-        setAllowTrade('');
-        setReverseDelay('');
-        setUpdateToAll(false);
-        setSelectedIds(new Set());
-      } else if (successCount > 0 && errorCount > 0) {
-        toast.success(`Updated ${successCount} exchange(s)`);
-        // Show each error message
-        errorMessages.forEach((msg) => {
-          toast.error(msg);
-        });
-        await fetchScripts([selectedExchange]);
-        setTradeAttribute('');
-        setAllowTrade('');
-        setReverseDelay('');
-        setUpdateToAll(false);
-        setSelectedIds(new Set());
-      } else {
-        // All failed - show error messages
-        if (errorMessages.length > 0) {
-          errorMessages.forEach((msg) => {
-            toast.error(msg);
-          });
-        } else {
-          toast.error('Failed to update any exchange');
-        }
-      }
-    } catch (error) {
-      toast.error('Update failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleViewUpdatedUsers = async (script: ScriptMaster) => {
     setSelectedScript(script);
@@ -499,14 +471,6 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
             ))}
           </div>
 
-          <button 
-            onClick={handleApply}
-            disabled={loading}
-            className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
-          >
-            Save
-          </button>
-
           <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold block mt-4">Trade Delay</label>
 
           <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold block">Reverse Delay (Min) :</label>
@@ -518,22 +482,53 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
             onChange={e => setReverseDelay(e.target.value)}
           />
 
-          <div className="flex gap-2 pt-2">
-            <button 
-              onClick={handleApply}
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
-            >
-              Apply
-            </button>
-            <button 
-              onClick={handleUpdate}
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
-            >
-              Update
-            </button>
-          </div>
+          {userRoleId !== null && userRoleId !== 4 && (
+            <div className="space-y-2 pt-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={updateAllUsersCheckbox}
+                  onChange={(e) => setUpdateAllUsersCheckbox(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                />
+                <span className="text-slate-700 dark:text-slate-300">Update All Users</span>
+              </label>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleApply}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+                >
+                  Apply
+                </button>
+                <button 
+                  onClick={handleUpdate}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+          )}
+          {(userRoleId === null || userRoleId === 4) && (
+            <div className="flex gap-2 pt-2">
+              <button 
+                onClick={handleApply}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+              >
+                Apply
+              </button>
+              <button 
+                onClick={handleUpdate}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+              >
+                Update
+              </button>
+            </div>
+          )}
 
           {/* Download Section */}
           <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
@@ -543,16 +538,6 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
               label="Download Report"
             />
           </div>
-
-          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 mt-3">
-            <input 
-              type="checkbox"
-              checked={updateToAll}
-              onChange={(e) => setUpdateToAll(e.target.checked)}
-              className="rounded cursor-pointer"
-            />
-            <span>Update To All</span>
-          </label>
         </div>
       }
     >

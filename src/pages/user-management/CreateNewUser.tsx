@@ -126,7 +126,7 @@ const CreateNewUser: React.FC = () => {
   const [editingUser, setEditingUser] = useState<any>(null)
   const [selectedUserAllowedExchanges, setSelectedUserAllowedExchanges] = useState<string[]>([])
   const [selectedUserAllowedExchangeCount, setSelectedUserAllowedExchangeCount] = useState(0)
-  const [selectedUserHighLowTradeLimit, setSelectedUserHighLowTradeLimit] = useState<{ nse: boolean; mcx: boolean; sgx: boolean; cds: boolean; callput: boolean }>({ nse: false, mcx: false, sgx: false, cds: false, callput: false })
+  const [selectedUserHighLowTradeLimit, setSelectedUserHighLowTradeLimit] = useState<{ nse: boolean; mcx: boolean; sgx: boolean; cds: boolean; callput: boolean; others: boolean }>({ nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false })
   const [selectedUserParentPnlSharing, setSelectedUserParentPnlSharing] = useState<number>(100)
   const [selectedUserParentBrkSharing, setSelectedUserParentBrkSharing] = useState<number>(100)
   const [isFetchingSelectedUserDetails, setIsFetchingSelectedUserDetails] = useState(false)
@@ -287,12 +287,13 @@ const CreateNewUser: React.FC = () => {
               if (key in patchedExchanges) {
                 const availableExchangeArray = currentFetchedGroups[key] || [];
                 const defaultGroupIdFallback = availableExchangeArray.length > 0 ? String(availableExchangeArray[0].groupId) : '';
+                const isLockedTurnover = ['nse', 'sgx', 'others'].includes(key);
 
                 patchedExchanges[key] = {
                   ...patchedExchanges[key],
                   enabled: false,
-                  turnoverBrk: false,
-                  symbolBrk: false,
+                  turnoverBrk: isLockedTurnover ? true : !!ex.turnover,
+                  symbolBrk: isLockedTurnover ? false : (!!ex.turnover ? false : !!ex.lot),
                   group: ex.groupId ? String(ex.groupId) : defaultGroupIdFallback
                 }
               }
@@ -598,7 +599,7 @@ const CreateNewUser: React.FC = () => {
         })
 
         // Reset and populate High/Low Trade Limit checkboxes using parentHighLowTradeLimit
-        let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false };
+        let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false };
         
         // Use parentHighLowTradeLimit to respect parent's restrictions
         const highLowTradeLimit = userInfo?.parentHighLowTradeLimit || '';
@@ -609,7 +610,7 @@ const CreateNewUser: React.FC = () => {
           
           highArr.forEach((ex: string) => {
             const key = ex.trim().toLowerCase();
-            if (key === 'nse' || key === 'mcx' || key === 'sgx' || key === 'cds' || key === 'callput') {
+            if (key === 'nse' || key === 'mcx' || key === 'sgx' || key === 'cds' || key === 'callput' || key === 'others') {
               highTradeLimitObj[key as keyof typeof highTradeLimitObj] = true;
             }
           });
@@ -630,7 +631,7 @@ const CreateNewUser: React.FC = () => {
       setAvailableUserTypes(userTypeOptions)
       setSelectedUserAllowedExchanges([])
       setSelectedUserAllowedExchangeCount(0)
-      setSelectedUserHighLowTradeLimit({ nse: false, mcx: false, sgx: false, cds: false, callput: false })
+      setSelectedUserHighLowTradeLimit({ nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false })
     }
   }
 
@@ -766,7 +767,7 @@ const CreateNewUser: React.FC = () => {
             name: key.toUpperCase(),
             turnover: exchange.turnoverBrk,
             lot: exchange.symbolBrk,
-            groupId: exchange.group ? Number(exchange.group) : null
+            groupId: values.userType === 'master' ? null : (exchange.group ? Number(exchange.group) : null)
           }))
 
         const highLowTradeLimit = Object.entries(values.highTradeLimit)
@@ -937,7 +938,7 @@ const CreateNewUser: React.FC = () => {
                             <RefreshCw className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
 
                             {showDropdown && forUserAccount && userConfig?.userList && (
-                              <div className="absolute z-10 w-full mt-1 bg-surface-secondary border border-border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                              <div className="absolute z-50 w-full mt-1 bg-surface-secondary border border-border-primary rounded-lg shadow-lg max-h-60 overflow-y-auto pointer-events-auto">
                                 {userConfig.userList
                                   .filter((user) =>
                                     user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -946,7 +947,8 @@ const CreateNewUser: React.FC = () => {
                                   .map((user) => (
                                     <div
                                       key={user.userId}
-                                      onClick={() => {
+                                      onMouseDown={(e) => {
+                                        e.preventDefault()
                                         setSearchQuery(user.username)
                                         setFieldValue('accountName', user.username)
                                         handleAccountChange(user.username, setFieldValue)
@@ -1567,7 +1569,7 @@ const CreateNewUser: React.FC = () => {
                             <input
                               type="checkbox"
                               checked={(() => {
-                                let exchangesToShow = exchangeData.filter(ex => ex.key !== 'others');
+                                let exchangesToShow = exchangeData;
                                 if (isEditMode && editingUser?.parentHighLowTradeLimit) {
                                   const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
                                     ? editingUser.parentHighLowTradeLimit
@@ -1579,7 +1581,7 @@ const CreateNewUser: React.FC = () => {
                                 return exchangesToShow.every(ex => !!values?.highTradeLimit?.[ex.key]);
                               })()}
                               onChange={(e) => {
-                                let exchangesToShow = exchangeData.filter(ex => ex.key !== 'others');
+                                let exchangesToShow = exchangeData;
                                 if (isEditMode && editingUser?.parentHighLowTradeLimit) {
                                   const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
                                     ? editingUser.parentHighLowTradeLimit
@@ -1604,7 +1606,7 @@ const CreateNewUser: React.FC = () => {
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
                         {(() => {
                           // Determine which exchanges to show
-                          let exchangesToShow = exchangeData.filter(ex => ex.key !== 'others');
+                          let exchangesToShow = exchangeData;
                           
                           if (isEditMode && editingUser?.parentHighLowTradeLimit) {
                             // Parse parentHighLowTradeLimit to get allowed exchanges

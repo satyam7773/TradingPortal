@@ -5,19 +5,23 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import { Briefcase, Eye } from "lucide-react";
+import { Briefcase, Eye, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import userManagementService from "../../services/userManagementService";
 import marketWatchService from "../../services/marketWatchService";
 import FilterLayout from "../../components/FilterLayout";
 import { useOrderModal } from "../../hooks/useOrderModal";
 import OrderModal from "../../components/modals/OrderModal";
+import PositionDetailsModal from "../../components/PositionDetailsModal";
 import ConfigManager from "../../utils/configManager";
 import { orderUpdateService } from "../../services";
 import SearchableSelect from "../../components/ui/SearchableSelect";
 
 interface PositionData {
   positionId: number;
+  positionIds?: number[]; // ✅ Array of positionIds from users array
   positionDate: number | null;
   positionDays: number;
   username: string;
@@ -54,6 +58,20 @@ const Positions: React.FC = () => {
   const [selectedPositions, setSelectedPositions] = useState<Set<number>>(
     new Set(),
   );
+  const [selectedOwnPosition, setSelectedOwnPosition] = useState<PositionData | null>(null);
+  const [ownPositionModalData, setOwnPositionModalData] = useState<any>(null);
+  const [loadingOwnPosition, setLoadingOwnPosition] = useState(false);
+
+  const [selectedViewPosition, setSelectedViewPosition] = useState<PositionData | null>(null);
+  const [viewPositionData, setViewPositionData] = useState<PositionData | null>(null);
+  const [loadingViewPosition, setLoadingViewPosition] = useState(false);
+  const [viewModalExchange, setViewModalExchange] = useState<string>("All Exchanges");
+  const [viewModalSymbol, setViewModalSymbol] = useState<string>("");
+
+  const [showOwnPositionDetailModal, setShowOwnPositionDetailModal] = useState(false);
+  const [ownDetailModalData, setOwnDetailModalData] = useState<PositionData[]>([]);
+  const [ownDetailModalExchange, setOwnDetailModalExchange] = useState<string>("All Exchanges");
+  const [ownDetailModalSymbol, setOwnDetailModalSymbol] = useState<string>("");
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -313,7 +331,35 @@ const Positions: React.FC = () => {
 
       if (response?.responseCode === "0" && response.data) {
         setPositionData(response.data);
-        let positions = response.data || [];
+        let positions = (response.data || []).map((p: any) => {
+          // ✅ Extract all positionIds from the users array
+          const positionIdsArray = (p.users || []).flatMap((u: any) => u.positionId || []);
+          const firstUser = p.users?.[0];
+          
+          return {
+            positionId: positionIdsArray[0] || 0, // First positionId as primary
+            positionIds: positionIdsArray, // ✅ All positionIds for closing
+            positionDate: p.positionDate,
+            positionDays: p.positionDays,
+            username: firstUser?.username || p.username || "",
+            parentUsername: p.parentUsername || "",
+            exchange: p.exchange,
+            tradeSymbol: p.tradeSymbol,
+            position: p.position,
+            quantity: p.quantity,
+            averagePrice: p.averagePrice,
+            ltp: p.ltp,
+            pnl: p.pnl,
+            pnlPercentage: p.pnlPercentage,
+            totalPnl: p.totalPnl,
+            token: p.token,
+            userId: firstUser?.userId || p.userId || selectedUserId || undefined,
+            netQuantity: p.netQuantity,
+            realisedPnl: p.realisedPnl,
+            marginUsed: p.marginUsed,
+          } as PositionData;
+        });
+
         if (selectedSymbol)
           positions = positions.filter(
             (p: PositionData) => p.tradeSymbol === selectedSymbol,
@@ -406,12 +452,25 @@ const Positions: React.FC = () => {
 
     try {
       setLoading(true);
+      // ✅ Extract all positionIds from selected positions
+      const allPositionIds: number[] = [];
+      filteredPositions.forEach((p) => {
+        if (selectedPositions.has(p.positionId)) {
+          // If we have multiple positionIds (from users array), add them all
+          if (p.positionIds && p.positionIds.length > 0) {
+            allPositionIds.push(...p.positionIds);
+          } else {
+            allPositionIds.push(p.positionId);
+          }
+        }
+      });
+
       const payload = {
         userId: loggedInUserId,
         requestTimestamp: new Date().getTime().toString(),
         deviceId: "WEB",
         tradeOrderMethod: "WEB",
-        data: Array.from(selectedPositions),
+        data: allPositionIds, // ✅ Send all extracted positionIds
       };
 
       const response = await fetch(
@@ -509,6 +568,71 @@ const Positions: React.FC = () => {
       orderModal.setSellOrderType("MARKET");
       orderModal.openSellModal({ token: p.token || 0, config: mergedConfig });
     }
+  };
+
+  const handleOpenOwnPositionModal = async (p: PositionData) => {
+    try {
+      setSelectedOwnPosition(p);
+      setLoadingOwnPosition(true);
+
+      // Fetch client positions from API
+      const response = await userManagementService.fetchClientPositions(
+        loggedInUserId,
+        p.userId || 0,
+        p.token || 0,
+      );
+
+      if (response?.responseCode === "0" && response.data?.portalPositionsData) {
+        // Get all positions for this user
+        const userPositions: PositionData[] = response.data.portalPositionsData.map((pos: any) => ({
+          positionId: pos.positionId,
+          positionDate: pos.positionDate,
+          positionDays: pos.positionDays,
+          username: pos.username,
+          parentUsername: pos.parentUsername,
+          exchange: pos.exchange,
+          tradeSymbol: pos.tradeSymbol,
+          position: pos.position,
+          quantity: pos.quantity,
+          averagePrice: pos.averagePrice,
+          ltp: pos.ltp,
+          pnl: pos.pnl,
+          pnlPercentage: pos.pnlPercentage,
+          totalPnl: pos.totalPnl,
+          realisedPnl: pos.realisedPnl,
+          marginUsed: pos.marginUsed,
+          token: pos.token,
+          userId: pos.userId,
+          netQuantity: pos.netQuantity,
+        }));
+        
+        // Open detail modal with all user positions
+        setOwnDetailModalData(userPositions);
+        setShowOwnPositionDetailModal(true);
+        setOwnDetailModalExchange(p.exchange);
+        setOwnDetailModalSymbol(p.tradeSymbol);
+      } else {
+        toast.error("Failed to fetch positions");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching own position:", error);
+      toast.error("Failed to fetch position details");
+    } finally {
+      setLoadingOwnPosition(false);
+    }
+  };
+
+  const handleOpenViewPositionModal = (p: PositionData) => {
+    setSelectedViewPosition(p);
+    setViewPositionData(p);
+    // Show all filtered positions in the detail modal
+    setViewModalExchange(p.exchange);
+    setViewModalSymbol(p.tradeSymbol);
+  };
+
+  const handleOpenOwnPositionDetailModal = (positions: PositionData[]) => {
+    setOwnDetailModalData(positions);
+    setShowOwnPositionDetailModal(true);
   };
 
   const handleValidatedQuantityChange = (
@@ -728,13 +852,13 @@ const Positions: React.FC = () => {
                         View
                       </th>
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                        Own
+                      </th>
+                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
                         Buy
                       </th>
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">
                         Sell
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">
-                        Username
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">
                         Exchange
@@ -780,8 +904,20 @@ const Positions: React.FC = () => {
                           />
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg">
+                          <button 
+                            onClick={() => handleOpenViewPositionModal(p)}
+                            className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg transition"
+                          >
                             <Eye className="w-4 h-4 text-blue-600" />
+                          </button>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button 
+                            onClick={() => handleOpenOwnPositionModal(p)}
+                            disabled={loadingOwnPosition}
+                            className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900 rounded-lg font-bold text-purple-600 hover:text-purple-700 disabled:opacity-50"
+                          >
+                            {loadingOwnPosition ? "..." : "Own"}
                           </button>
                         </td>
                         <td className="px-4 py-4 text-center">
@@ -799,9 +935,6 @@ const Positions: React.FC = () => {
                           >
                             S
                           </button>
-                        </td>
-                        <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">
-                          {p.username}
                         </td>
                         <td className="px-6 py-4 text-left">
                           <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 uppercase">
@@ -847,6 +980,52 @@ const Positions: React.FC = () => {
           </div>
         </FilterLayout>
       </div>
+
+      {/* View Position Details Modal */}
+      {selectedViewPosition && viewPositionData && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <PositionDetailsModal
+            positions={filteredPositions}
+            exchanges={exchanges}
+            symbols={symbols}
+            selectedExchange={viewModalExchange}
+            selectedSymbol={viewModalSymbol}
+            onExchangeChange={setViewModalExchange}
+            onSymbolChange={setViewModalSymbol}
+            onClose={() => {
+              setSelectedViewPosition(null);
+              setViewPositionData(null);
+            }}
+            title="View Position Details"
+            liveTicks={liveTicks}
+          />
+        </div>,
+        document.body
+      )}
+
+      {/* Own User Position Details Modal */}
+      {showOwnPositionDetailModal && ownDetailModalData.length > 0 && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <PositionDetailsModal
+            positions={ownDetailModalData}
+            exchanges={exchanges}
+            symbols={symbols}
+            selectedExchange={ownDetailModalExchange}
+            selectedSymbol={ownDetailModalSymbol}
+            onExchangeChange={setOwnDetailModalExchange}
+            onSymbolChange={setOwnDetailModalSymbol}
+            onClose={() => {
+              setShowOwnPositionDetailModal(false);
+              setOwnDetailModalData([]);
+              setSelectedOwnPosition(null);
+              setLoadingOwnPosition(false);
+            }}
+            title="Own User Positions"
+            liveTicks={liveTicks}
+          />
+        </div>,
+        document.body
+      )}
 
       <OrderModal
         isOpen={orderModal.showBuyOrderModal}

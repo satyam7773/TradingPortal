@@ -1564,6 +1564,40 @@ class UserManagementService {
       throw error;
     }
   }
+
+  /**
+   * Fetch client positions (Own User Positions)
+   * POST /oms/positions/portal/ClientPositions
+   * @param userId - Admin user ID
+   * @param clientUserId - Client user ID whose positions to fetch
+   * @param token - Position token
+   */
+  async fetchClientPositions(
+    adminUserId: number,
+    clientUserId: number,
+    token: number,
+  ): Promise<any> {
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId: adminUserId,
+      data: {
+        userId: clientUserId,
+        token: token,
+      },
+    };
+
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/oms/positions/portal/ClientPositions",
+        request,
+      );
+      console.log("📊 Client Positions API Response:", response);
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch client positions:", error);
+      throw error;
+    }
+  }
 }
 
 export const userManagementService = new UserManagementService();

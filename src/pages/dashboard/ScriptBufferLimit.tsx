@@ -36,7 +36,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
   const [scriptSearch, setScriptSearch] = useState<string>(''); // Script name search filter
   
   const [bufferAmount, setBufferAmount] = useState('');
-  const [updateToAll, setUpdateToAll] = useState(false);
+  const [updateAllUsersCheckbox, setUpdateAllUsersCheckbox] = useState(false);
   const [selectedScript, setSelectedScript] = useState<ScriptBuffer | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [updatedUsers, setUpdatedUsers] = useState<any[]>([]);
@@ -48,13 +48,26 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
   const adminUserId = loggedInUser?.userId; // Admin making the request
   const targetUserId = propsUserId || adminUserId; // User to update for (target user)
   
-  // In modal mode, use allowed exchanges from userDetails
+  // ✅ HANDLE BOTH MODES: Modal mode uses userDetails, Dashboard mode uses loggedInUser from localStorage
+  // Use userDetails if passed (modal mode), otherwise use loggedInUser (dashboard/reports mode)
+  const viewedUserData = userDetails || loggedInUser;
+  
+  // In modal mode, use allowed exchanges from userDetails; in dashboard mode, use loggedInUser
   const allowedExchanges = React.useMemo(() => {
-    const exList = userDetails?.userInfo?.allowedExchanges || [];
+    const exList = viewedUserData?.userInfo?.allowedExchanges || [];
     return exList
       .map((ex: any) => (typeof ex === 'object' && ex.name ? ex.name : ex))
       .filter((ex: any) => ex);
-  }, [userDetails]);
+  }, [viewedUserData]);
+
+  // ✅ Get the viewed user's roleId to check if they're a Master or Admin
+  // This shows "Update to All Users" only if the USER BEING VIEWED is a Master/Admin
+  // In modal mode: use userDetails.userProfile.roleId
+  // In dashboard mode: use loggedInUser.roleId from localStorage
+  const userRoleId = React.useMemo(() => {
+    const roleId = userDetails?.userProfile?.roleId || loggedInUser?.roleId;
+    return roleId || null; // roleId: 1,2=Admin, 3=Master, 4=Client
+  }, [userDetails, loggedInUser]);
 
   // Filter scripts by search term
   const filteredScripts = React.useMemo(() => {
@@ -64,6 +77,71 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
       s.scripName.toLowerCase().includes(lowerSearch)
     );
   }, [scripts, scriptSearch]);
+
+  const handleApply = () => {
+    if (selectedIds.size === 0) return toast.error('Select at least one script');
+    if (!bufferAmount) return toast.error('Please enter buffer amount');
+
+    const newBufferAmount = parseFloat(bufferAmount);
+    setScripts(prev => prev.map(s => {
+      if (selectedIds.has(s.instrumentId)) {
+        return { ...s, bufferAmount: newBufferAmount };
+      }
+      return s;
+    }));
+    
+    toast.success(`Applied to ${selectedIds.size} script(s)`);
+  };
+
+  const handleUpdate = async () => {
+    if (selectedIds.size === 0) return toast.error('Select scripts to update');
+    if (!bufferAmount) return toast.error('Please enter buffer amount');
+
+    setLoading(true);
+    try {
+      const scriptsByExchange = scripts
+        .filter(s => selectedIds.has(s.instrumentId))
+        .reduce((acc: any, s) => {
+          if (!acc[s.exchange]) acc[s.exchange] = [];
+          acc[s.exchange].push(s);
+          return acc;
+        }, {});
+
+      for (const exchange of Object.keys(scriptsByExchange)) {
+        const scripBuffers = scriptsByExchange[exchange].map((s: any) => ({
+          ...s,
+          bufferAmount: parseFloat(bufferAmount)
+        }));
+
+        const payload = {
+          userId: adminUserId,
+          requestTimestamp: new Date().getTime().toString(),
+          data: {
+            userId: targetUserId,
+            exchange,
+            ...(updateAllUsersCheckbox && { updateAllUsers: true }),
+            scripBuffers
+          }
+        };
+
+        await fetch('https://api-staging.rivoplus.live/user/portal/updateScripBufferSettings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      toast.success('Updated successfully');
+      await fetchScripts([selectedExchange]);
+      setBufferAmount('');
+      setUpdateAllUsersCheckbox(false);
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error('Update failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Ref to track if we've already loaded exchanges
   const exchangesLoadedRef = React.useRef(false);
@@ -196,113 +274,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
     }
   }, [selectedExchange]);
 
-  const handleApply = () => {
-    if (selectedIds.size === 0) return toast.error('Select at least one script');
-    if (!bufferAmount) return toast.error('Please enter buffer amount');
 
-    const newBufferAmount = parseFloat(bufferAmount);
-
-    setScripts(prev => prev.map(s => {
-      if (selectedIds.has(s.instrumentId)) {
-        return { ...s, bufferAmount: newBufferAmount };
-      }
-      return s;
-    }));
-    
-    toast.success(`Applied to ${selectedIds.size} script(s)`);
-  };
-
-  const handleUpdate = async () => {
-    if (selectedIds.size === 0) return toast.error('Select scripts to update');
-    if (!bufferAmount) return toast.error('Please enter buffer amount');
-
-    setLoading(true);
-    try {
-      // Get unique exchanges from selected scripts
-      const scriptsByExchange = scripts
-        .filter(s => selectedIds.has(s.instrumentId))
-        .reduce((acc: any, s) => {
-          if (!acc[s.exchange]) acc[s.exchange] = [];
-          acc[s.exchange].push(s);
-          return acc;
-        }, {});
-
-      let successCount = 0;
-      let errorCount = 0;
-      const errorMessages: string[] = [];
-
-      // Update for each exchange that has selected scripts
-      for (const exchange of Object.keys(scriptsByExchange)) {
-        const scripBuffers = scriptsByExchange[exchange].map((s: any) => ({
-          ...s,
-          bufferAmount: parseFloat(bufferAmount)
-        }));
-
-        const payload = {
-          userId: adminUserId, // Admin making request
-          requestTimestamp: new Date().getTime().toString(),
-          data: {
-            userId: targetUserId, // Target user to update for
-            updateAllUsers: updateToAll,
-            exchange: exchange,
-            scripBuffers: scripBuffers
-          }
-        };
-
-        const response = await fetch('https://api-staging.rivoplus.live/user/portal/updateScripBufferSettings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const res = await response.json();
-        
-        if (res?.responseCode === '0') {
-          successCount++;
-        } else {
-          errorCount++;
-          // Capture API error message
-          if (res?.responseMessage) {
-            errorMessages.push(`${exchange}: ${res.responseMessage}`);
-          }
-        }
-      }
-
-      // Show result
-      if (successCount > 0 && errorCount === 0) {
-        toast.success(`Updated successfully for ${successCount} exchange(s)`);
-        await fetchScripts([selectedExchange]);
-        setBufferAmount('');
-        setUpdateToAll(false);
-        setSelectedIds(new Set());
-      } else if (successCount > 0 && errorCount > 0) {
-        toast.success(`Updated ${successCount} exchange(s)`);
-        // Show each error message
-        errorMessages.forEach((msg) => {
-          toast.error(msg);
-        });
-        await fetchScripts([selectedExchange]);
-        setBufferAmount('');
-        setUpdateToAll(false);
-        setSelectedIds(new Set());
-      } else {
-        // All failed - show error messages
-        if (errorMessages.length > 0) {
-          errorMessages.forEach((msg) => {
-            toast.error(msg);
-          });
-        } else {
-          toast.error('Failed to update any exchange');
-        }
-      }
-    } catch (error) {
-      toast.error('Update failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleViewDetails = async (script: ScriptBuffer) => {
     setSelectedScript(script);
@@ -377,32 +349,53 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
             onChange={e => setBufferAmount(e.target.value)}
           />
 
-          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 mt-3">
-            <input 
-              type="checkbox"
-              checked={updateToAll}
-              onChange={(e) => setUpdateToAll(e.target.checked)}
-              className="rounded cursor-pointer"
-            />
-            <span>Update To All</span>
-          </label>
-
-          <div className="flex gap-2 pt-4">
-            <button 
-              onClick={handleApply}
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
-            >
-              Apply
-            </button>
-            <button 
-              onClick={handleUpdate}
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
-            >
-              Update
-            </button>
-          </div>
+          {userRoleId !== null && userRoleId !== 4 && (
+            <div className="space-y-2 pt-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={updateAllUsersCheckbox}
+                  onChange={(e) => setUpdateAllUsersCheckbox(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                />
+                <span className="text-slate-700 dark:text-slate-300">Update All Users</span>
+              </label>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleApply}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+                >
+                  Apply
+                </button>
+                <button 
+                  onClick={handleUpdate}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+          )}
+          {(userRoleId === null || userRoleId === 4) && (
+            <div className="flex gap-2 pt-2">
+              <button 
+                onClick={handleApply}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+              >
+                Apply
+              </button>
+              <button 
+                onClick={handleUpdate}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-semibold text-sm transition-colors"
+              >
+                Update
+              </button>
+            </div>
+          )}
         </div>
       }
     >

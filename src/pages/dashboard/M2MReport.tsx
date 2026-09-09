@@ -116,34 +116,21 @@ const M2MProfitLoss: React.FC = () => {
       setIsDownloading(true)
       const userIdForRequest = selectedUserId || loggedInUserId
       const userFilterType = selectedUserId === 0 ? 'ALL' : 'SINGLE'
-      const endpoint = `https://api-staging.rivoplus.live/user/download/${userIdForRequest}?pdf=${format === 'pdf'}&userFilterType=${userFilterType}`
+      const endpoint = `https://api-staging.rivoplus.live/oms/user/download/${userIdForRequest}?pdf=${format === 'pdf'}&userFilterType=${userFilterType}`
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userIdForRequest,
-          requestTimestamp: new Date().toISOString(),
-          data: ''
-        })
-      })
+      const response = await fetch(endpoint)
+      
       if (!response.ok) throw new Error('Download failed')
-      const jsonData = await response.json()
-      if (jsonData.data) {
-        const binary = atob(jsonData.data)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        const blob = new Blob([bytes])
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `M2MReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        toast.success(`Downloaded ${format.toUpperCase()}`)
-      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `M2MReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success(`Downloaded ${format.toUpperCase()}`)
     } catch (error) {
       console.error('Download error:', error)
       toast.error('Download failed')

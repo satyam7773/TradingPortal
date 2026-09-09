@@ -6,7 +6,6 @@ import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import DownloadReport from '../../components/DownloadReport'
-import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 interface LoginHistoryRecord {
   loginHistoryId: number
@@ -53,11 +52,6 @@ const LoginHistory: React.FC = () => {
     // Load users on mount
     loadUsers()
   }, [])
-
-  const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/login/history/uId/download',
-    filename: 'LoginHistoryReport'
-  })
 
   const loadUsers = async () => {
     try {
@@ -142,34 +136,37 @@ const LoginHistory: React.FC = () => {
     }
     try {
       setIsDownloading(true)
-      const targetUserId = selectedUserId || 0
-      const endpoint = `https://api-staging.rivoplus.live/login/history/${targetUserId}/download`
+      const userData = localStorage.getItem('userData')
+      const user = userData ? JSON.parse(userData) : null
+      const userId = user?.userId || 0
+      
+      const endpoint = `https://api-staging.rivoplus.live/user/login/history/uId/download?pdf=${format === 'pdf'}`
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: targetUserId,
-          requestTimestamp: new Date().toISOString(),
-          data: ''
+          userId: userId,
+          requestTimestamp: Date.now().toString(),
+          data: {
+            fromDate: fromDate ? new Date(fromDate).toLocaleString('en-IN') : '',
+            toDate: toDate ? new Date(toDate).toLocaleString('en-IN') : '',
+            page: currentPage,
+            size: 10
+          }
         })
       })
+      
       if (!response.ok) throw new Error('Download failed')
-      const jsonData = await response.json()
-      if (jsonData.data) {
-        const binary = atob(jsonData.data)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        const blob = new Blob([bytes])
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `LoginHistoryReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        toast.success(`Downloaded ${format.toUpperCase()}`)
-      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `LoginHistoryReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success(`Downloaded ${format.toUpperCase()}`)
     } catch (error) {
       console.error('Download error:', error)
       toast.error('Download failed')

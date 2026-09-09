@@ -36,6 +36,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
   const [minVolumeInput, setMinVolumeInput] = useState<string>('');
   const [volumeStepInput, setVolumeStepInput] = useState<string>('');
   const [callputMarginInput, setCallputMarginInput] = useState<string>('');
+  const [updateAllUsersCheckbox, setUpdateAllUsersCheckbox] = useState(false);
   const [marginData, setMarginData] = useState<TradeMarginItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set()); // Store instrumentId, not index
@@ -183,6 +184,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         requestTimestamp: Date.now().toString(),
         data: {
           userId: Number(userDetails?.id || user?.id),
+          ...(updateAllUsersCheckbox && { updateAllUsers: true }),
           tradeMargins: selectedTradeMargins
         }
       };
@@ -208,6 +210,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         setMinVolumeInput('');
         setVolumeStepInput('');
         setCallputMarginInput('');
+        setUpdateAllUsersCheckbox(false);
       } else if (response?.responseCode === '1032') {
         // Specific validation error for parent margin
         toast.error(response?.responseMessage || 'Trade Margin cannot be less than parent trade margin');
@@ -245,14 +248,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     }
   };
 
-  const handleUpdateToAllUsers = async () => {
-    if (selectedItems.size === 0) {
-      toast.error('Please select at least one script to update');
-      return;
-    }
 
-    toast('Update to all users functionality to be implemented');
-  };
 
   const toggleSelectAll = () => {
     if (selectedItems.size === filteredMarginData.length) {
@@ -402,35 +398,50 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
           )}
 
           <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleApply}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
-            >
-              Apply
-            </button>
-            <button
-              onClick={handleUpdate}
-              className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
-            >
-              Update
-            </button>
+            {userRoleId !== null && userRoleId !== 4 && (
+              <div className="w-full space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={updateAllUsersCheckbox}
+                    onChange={(e) => setUpdateAllUsersCheckbox(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                  />
+                  <span className="text-slate-700 dark:text-slate-300">Update All Users</span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleApply}
+                    className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={handleUpdate}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-sm hover:brightness-105 transition"
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
+            )}
+            {(userRoleId === null || userRoleId === 4) && (
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={handleApply}
+                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={handleUpdate}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold text-sm hover:brightness-105 transition"
+                >
+                  Update
+                </button>
+              </div>
+            )}
           </div>
-
-          {(() => {
-            // Only show "Update to All Users" if the USER BEING VIEWED is a Master (3) or Admin (1, 2)
-            // Hide if: Client (4) or unknown roleId
-            const canShowButton = userRoleId !== null && userRoleId !== 4;
-            console.log('🔘 [TradeMarginSettings] Show "Update to All Users" button for user?', canShowButton, 'userRoleId:', userRoleId);
-            
-            return canShowButton ? (
-              <button
-                onClick={handleUpdateToAllUsers}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded font-semibold text-sm hover:brightness-105 transition"
-              >
-                Update to All Users
-              </button>
-            ) : null;
-          })()}
         </div>
       }
     >

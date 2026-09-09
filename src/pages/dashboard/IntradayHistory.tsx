@@ -43,7 +43,7 @@ const IntradayHistory: React.FC = () => {
   // Fetch symbols for selected exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
     try {
-      const symbolsResponse = await userManagementService.fetchSymbols(exchangeName)
+      const symbolsResponse = await userManagementService.fetchAllSymbols(exchangeName)
       if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
         setSymbols(symbolsResponse.data)
         if (symbolsResponse.data.length > 0) {
@@ -101,7 +101,7 @@ const IntradayHistory: React.FC = () => {
           setSelectedExchange(defaultExchange)
           
           // Fetch symbols for default exchange
-          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
+          const symbolsResponse = await userManagementService.fetchAllSymbols(defaultExchange)
           if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
             setSymbols(symbolsResponse.data)
             if (symbolsResponse.data.length > 0) {

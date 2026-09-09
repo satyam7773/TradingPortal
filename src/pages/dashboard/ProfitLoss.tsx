@@ -44,7 +44,7 @@ const ProfitLossPage: React.FC<PnLPageProps> = ({ cacheData, apiData, onCacheSav
 
   // Initialize download report hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/pnl/download',
+    apiEndpoint: 'https://api-staging.rivoplus.live/oms/pnl/download',
     filename: 'PnLReport'
   })
 

@@ -45,10 +45,10 @@ interface MenuProps {
 }
 
 // Shortcuts Menu Component
-const ShortcutsMenu: React.FC<{ items: MenuItem[], addTab: (tab: any) => void }> = ({ items, addTab }) => {
+const ShortcutsMenu: React.FC<{ items: MenuItem[], addTab: (tab: any) => void, roleId?: number }> = ({ items, addTab, roleId }) => {
   const navigate = useNavigate()
 
-  const shortcuts = [
+  let shortcuts = [
     { label: 'Market Watch', icon: Eye, path: '/dashboard/market-watch', color: 'bg-blue-500/20 text-blue-600' },
     { label: 'Trade', icon: TrendingUp, path: '/dashboard/trades', color: 'bg-purple-500/20 text-purple-600' },
     { label: 'Position', icon: Briefcase, path: '/dashboard/positions', color: 'bg-green-500/20 text-green-600' },
@@ -56,6 +56,11 @@ const ShortcutsMenu: React.FC<{ items: MenuItem[], addTab: (tab: any) => void }>
     { label: 'Create User', icon: Plus, path: '/dashboard/create-user', color: 'bg-pink-500/20 text-pink-600' },
     { label: 'Search User', icon: Search, path: '/dashboard/search-user', color: 'bg-cyan-500/20 text-cyan-600' }
   ]
+
+  // Hide Create User and Search User for roleId 4
+  if (roleId === 4) {
+    shortcuts = shortcuts.filter(s => s.label !== 'Create User' && s.label !== 'Search User')
+  }
 
   const handleShortcut = (path: string, label: string) => {
     const tabConfig = dashboardTabConfigs[path as keyof typeof dashboardTabConfigs]
@@ -245,6 +250,12 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
 
   const { parentLabel: activeParent, subLabel: activeSub } = getActiveMenuItem()
 
+  const getUserRoleId = (): number | undefined => {
+    const userData = localStorage.getItem('userData')
+    const user = userData ? JSON.parse(userData) : null
+    return user?.roleId
+  }
+
   return (
     <div ref={menuRef} className="flex flex-col">
       {/* Main Menu */}
@@ -319,7 +330,7 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
 
       {/* Shortcuts Menu */}
       <div className="flex items-center gap-3 px-4 py-2 bg-surface-secondary/50">
-        <ShortcutsMenu items={items} addTab={addTab} />
+        <ShortcutsMenu items={items} addTab={addTab} roleId={getUserRoleId()} />
       </div>
     </div>
   )
