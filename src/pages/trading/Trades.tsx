@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { ArrowUpRight, ArrowDownLeft, Search, Clock, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, Search, Clock, TrendingUp, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
@@ -7,11 +7,13 @@ import orderService from '../../services/orderService'
 import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import DurationDetailsModal from '../reports/DurationDetailsModal'
+import DealBrkDetailsModal from '../reports/DealBrkDetailsModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import ConfigManager from '../../utils/configManager'
 import DownloadReport from '../../components/DownloadReport'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
+import { useSorting } from '../../hooks/useSorting'
 
 interface TradeData {
   tradeId: number
@@ -35,6 +37,7 @@ interface TradeData {
   dealAmount: number
   orderType: string
   tradeOrderMethod: string | null
+  tradeOrderMethodDisplay:string | null
   orderTime: string
   executionTime?: string
   createdAt: string
@@ -183,6 +186,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
   const [totalRecords, setTotalRecords] = useState<number>(initialFilters.totalRecords)
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
   const [isDurationModalOpen, setIsDurationModalOpen] = useState(false)
+  const [isDealBrkModalOpen, setIsDealBrkModalOpen] = useState(false)
   const [selectedTradeId, setSelectedTradeId] = useState<number | null>(null)
   const [selectedTradeUserId, setSelectedTradeUserId] = useState<number | null>(null)
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set())
@@ -347,7 +351,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
 
       // In modal mode, use targetUserId; in dashboard mode, use selectedUserId
       const userIdForRequest = isModalMode ? targetUserId : (selectedUserId || loggedInUserId)
-      const response = await userManagementService.fetchTrades(loggedInUserId, { ...requestData, userId: userIdForRequest })
+      const response = await userManagementService.fetchTrades(userIdForRequest, { ...requestData, userId: userIdForRequest })
 
       if (response?.responseCode === '0') {
         const tradesList = response.data?.trades || response.data?.content || response.data || []
@@ -564,6 +568,9 @@ const TradesPage: React.FC<TradesPageProps> = ({
   const userRoleId = user?.roleId
   const isAdminUser = userRoleId === 1 || userRoleId === 2 || userRoleId === 3
 
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedTrades, getSortIcon } = useSorting({ data: tradesData })
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
       <div className="flex flex-col h-full max-w-[1800px] mx-auto w-full">
@@ -676,27 +683,58 @@ const TradesPage: React.FC<TradesPageProps> = ({
                         />
                       </th>
                     )}
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Execution Time</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Placed By</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Symbol</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Exchange</th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Method</th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Quantity</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Price</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Reference Price</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Brk</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Others</th>
-                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Deal</th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Duration</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Order Time</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">IP Address</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider min-w-[280px]">Device ID</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('executionTime')}>
+                      <div className="flex items-center gap-2">Execution Time {getSortIcon('executionTime')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('username')}>
+                      <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+                    </th>
+                    {/* <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('placedByUsername')}>
+                      <div className="flex items-center gap-2">Placed By {getSortIcon('placedByUsername')}</div>
+                    </th> */}
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('tradeSymbol')}>
+                      <div className="flex items-center gap-2">Symbol {getSortIcon('tradeSymbol')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('exchange')}>
+                      <div className="flex items-center gap-2">Exchange {getSortIcon('exchange')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('side')}>
+                      <div className="flex items-center justify-center gap-2">Type {getSortIcon('side')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('method')}>
+                      <div className="flex items-center justify-center gap-2">Method {getSortIcon('tradeOrderMethodDisplay')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('quantity')}>
+                      <div className="flex items-center justify-center gap-2">Quantity {getSortIcon('quantity')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('price')}>
+                      <div className="flex items-center justify-end gap-2">Price {getSortIcon('price')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('refPrice')}>
+                      <div className="flex items-center justify-end gap-2">Reference Price {getSortIcon('refPrice')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('brokerage')}>
+                      <div className="flex items-center justify-end gap-2">Brk {getSortIcon('brokerage')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('realisedPnl')}>
+                      <div className="flex items-center justify-end gap-2">Deal {getSortIcon('realisedPnl')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('durationSeconds')}>
+                      <div className="flex items-center justify-center gap-2">Duration {getSortIcon('durationSeconds')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('orderTime')}>
+                      <div className="flex items-center gap-2">Order Time {getSortIcon('orderTime')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('ipAddress')}>
+                      <div className="flex items-center gap-2">IP Address {getSortIcon('ipAddress')}</div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider min-w-[280px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('deviceId')}>
+                      <div className="flex items-center gap-2">Device ID {getSortIcon('deviceId')}</div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {tradesData.map((trade) => {
+                  {sortedTrades.map((trade) => {
                     const tradeColorClass = trade.side === 'BUY' ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400';
                     const dynamicBgClass = trade.side === 'BUY' ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-red-50 dark:bg-red-950/40';
 
@@ -712,7 +750,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                             />
                           </td>
                         )}
-                        <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.executionTime)}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{trade.executionTime ? new Date(trade.executionTime).toLocaleString() : '-'}</td>
                         <td className="px-6 py-4 text-left whitespace-nowrap">
                           <span
                             className="text-sm font-semibold text-blue-600 underline cursor-pointer hover:text-blue-800 transition-colors"
@@ -722,9 +760,9 @@ const TradesPage: React.FC<TradesPageProps> = ({
                           </span>
                         </td>
                         
-                        <td className="px-6 py-4 text-left text-xs font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {/* <td className="px-6 py-4 text-left text-xs font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
                           {trade.placedByUsername || '-'}
-                        </td>
+                        </td> */}
 
                         <td className="px-6 py-4 text-left whitespace-nowrap">
                           <span className={`text-sm font-bold ${tradeColorClass}`}>{trade.tradeSymbol}</span>
@@ -744,7 +782,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                         </td>
 
                         <td className="px-6 py-4 text-center text-xs font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                          {trade.tradeOrderMethod || '-'}
+                          {trade.tradeOrderMethodDisplay || '-'}
                         </td>
 
                         <td className={`px-6 py-4 text-center text-sm font-bold ${tradeColorClass}`}>
@@ -760,39 +798,54 @@ const TradesPage: React.FC<TradesPageProps> = ({
                           {trade.referencePrice ? trade.referencePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
                         </td>
 
-                        <td className="px-6 py-4 text-right text-sm font-mono text-slate-600 dark:text-slate-400">
+                        <td 
+                          className="px-6 py-4 text-right text-sm font-mono text-blue-600 dark:text-blue-400 cursor-pointer hover:underline hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            const tradeId = trade.tradeId;
+                            if (tradeId) {
+                              setSelectedTradeId(tradeId);
+                              setIsDealBrkModalOpen(true);
+                            } else {
+                              toast.error('Trade ID not found');
+                            }
+                          }}
+                        >
                           {trade.brokerage}
                         </td>
-                        <td className="px-6 py-4 text-right text-sm font-mono text-slate-600 dark:text-slate-400">0</td>
-
-                        <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${trade.realisedPnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <td className={`px-6 py-4 text-right text-sm font-mono font-bold cursor-pointer hover:underline hover:opacity-80 transition-opacity ${trade.realisedPnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                          onClick={() => {
+                            const tradeId = trade.tradeId;
+                            if (tradeId) {
+                              setSelectedTradeId(tradeId);
+                              setIsDealBrkModalOpen(true);
+                            } else {
+                              toast.error('Trade ID not found');
+                            }
+                          }}
+                        >
                           {trade.realisedPnl?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
 
                         <td className={`px-6 py-4 text-center ${
-                          trade.durationSeconds && trade.durationSeconds > 0
+                          trade.tradeDuration
                             ? 'cursor-pointer'
                             : 'cursor-default'
                         }`}
                         onClick={() => {
-                          if (!trade.durationSeconds || trade.durationSeconds <= 0) return;
+                          if (!trade.tradeDuration) return;
                           setSelectedTradeId(trade.tradeId);
                           setSelectedTradeUserId(trade.userId || loggedInUserId);
                           setIsDurationModalOpen(true);
                         }}>
                           <span className={`text-xs ${
-                            trade.durationSeconds && trade.durationSeconds > 0
+                            trade.tradeDuration
                               ? 'text-blue-600 dark:text-blue-400 underline decoration-blue-300 hover:opacity-80 transition-opacity'
                               : 'text-slate-500 dark:text-slate-400'
                           }`}>
-                            {trade.durationSeconds && trade.durationSeconds > 0
-                              ? trade.durationSeconds >= 3600
-                                ? `${Math.floor(trade.durationSeconds / 3600)}h ${Math.floor((trade.durationSeconds % 3600) / 60)}m`
-                                : `${Math.floor(trade.durationSeconds / 60)} minutes`
-                              : '-'}
+                            {trade.tradeDuration || '-'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-left text-xs text-slate-500 whitespace-nowrap">{formatDateTime(trade.orderTime)}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">{trade.orderTime ? new Date(trade.orderTime).toLocaleString() : '-'}</td>
                         <td className="px-6 py-4 text-left text-xs text-slate-400 font-mono">{trade.ipAddress || '127.0.0.1'}</td>
                         {/* DEVICE ID - Expanded container space */}
                         <td className="px-6 py-4 text-left text-xs text-slate-400 max-w-[320px] break-all">{trade.deviceId || '-'}</td>
@@ -839,6 +892,17 @@ const TradesPage: React.FC<TradesPageProps> = ({
           setIsDurationModalOpen(false);
           setSelectedTradeId(null);
           setSelectedTradeUserId(null);
+        }}
+      />
+
+      {/* Deal Brokerage Details Modal */}
+      <DealBrkDetailsModal
+        isOpen={isDealBrkModalOpen}
+        tradeId={selectedTradeId || 0}
+        userId={loggedInUserId}
+        onClose={() => {
+          setIsDealBrkModalOpen(false);
+          setSelectedTradeId(null);
         }}
       />
     </div>

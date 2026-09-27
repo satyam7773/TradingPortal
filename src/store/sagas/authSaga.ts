@@ -27,7 +27,7 @@ function* handleLogin(action: any): any {
     // Store the token
     TokenManager.setToken(loginResponse.token)
     
-    // Save complete user data to localStorage, including role and changePasswordFlag if present
+    // Save complete user data to localStorage, including role, marketTradeRight, and changePasswordFlag if present
     const userData = {
       userId: loginResponse.userId,
       username: loginResponse.username,
@@ -36,7 +36,8 @@ function* handleLogin(action: any): any {
       role: loginResponse.role, // Store the role string
       token: loginResponse.token,
       changePasswordFlag: loginResponse.changePasswordFlag || false,
-      firstLogin: loginResponse.firstLogin || false
+      firstLogin: loginResponse.firstLogin || false,
+      marketTradeRight: loginResponse.marketTradeRight || false // Permission to buy/sell
     }
     localStorage.setItem('userData', JSON.stringify(userData))
 
@@ -138,7 +139,7 @@ function* handleLogin(action: any): any {
       // Don't fail login if config fetch fails
     }
 
-    // Dispatch success action, including role and changePasswordFlag
+    // Dispatch success action, including role, marketTradeRight, and changePasswordFlag
     yield put(loginSuccess({ 
       token: loginResponse.token, 
       user: { 
@@ -149,7 +150,8 @@ function* handleLogin(action: any): any {
         roleId: loginResponse.roleId,
         role: loginResponse.role, // Add role to Redux user
         changePasswordFlag: loginResponse.changePasswordFlag || false,
-        firstLogin: loginResponse.firstLogin || false
+        firstLogin: loginResponse.firstLogin || false,
+        marketTradeRight: loginResponse.marketTradeRight || false // Add market trade right permission
       } 
     }))
     

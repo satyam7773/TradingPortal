@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Clock, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authService } from '../../services/authService'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import DownloadReport from '../../components/DownloadReport'
+import { useSorting } from '../../hooks/useSorting'
 
 interface LoginHistoryRecord {
   loginHistoryId: number
@@ -33,6 +34,9 @@ const LoginHistory: React.FC = () => {
   const [loginHistory, setLoginHistory] = useState<LoginHistoryRecord[]>([])
   const [currentPage, setCurrentPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedLoginHistory, getSortIcon } = useSorting({ data: loginHistory })
   const [totalRecords, setTotalRecords] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [fromDate, setFromDate] = useState('')
@@ -438,26 +442,43 @@ const LoginHistory: React.FC = () => {
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
                         <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">S.No</th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Username</th>
-                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Type</th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Login Date & Time</th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Logout Date & Time</th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('userName')}>
+                          <div className="flex items-center gap-2">Username {getSortIcon('userName')}</div>
+                        </th>
+                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('userType')}>
+                          <div className="flex items-center justify-center gap-2">Type {getSortIcon('userType')}</div>
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('loginDateTime')}>
+                          <div className="flex items-center gap-2">Login Date & Time {getSortIcon('loginDateTime')}</div>
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('logoutDateTime')}>
+                          <div className="flex items-center gap-2">Logout Date & Time {getSortIcon('logoutDateTime')}</div>
+                        </th>
                         <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Duration</th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Last App Access</th>
-                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">IP Address</th>
-                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Device ID</th>
-                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Remarks</th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('lastAppAccessTime')}>
+                          <div className="flex items-center gap-2">Last App Access {getSortIcon('lastAppAccessTime')}</div>
+                        </th>
+                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('ipAddress')}>
+                          <div className="flex items-center justify-center gap-2">IP Address {getSortIcon('ipAddress')}</div>
+                        </th>
+                        <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('deviceId')}>
+                          <div className="flex items-center justify-center gap-2">Device ID {getSortIcon('deviceId')}</div>
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('remarks')}>
+                          <div className="flex items-center gap-2">Remarks {getSortIcon('remarks')}</div>
+                        </th>
                         <th className="px-3 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-slate-800">
-                      {loginHistory.map((record, index) => {
+                      {sortedLoginHistory.map((record, index) => {
                         const isActive = !record.logoutDateTime
-                        const userTypeBadgeColor = {
+                        const userTypeColorMap = {
                           'ADMIN': 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
                           'MASTER': 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
                           'CLIENT': 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                        }[record.userType] || 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400'
+                        } as const
+                        const userTypeBadgeColor = userTypeColorMap[record.userType as keyof typeof userTypeColorMap] || 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400'
                         
                         return (
                           <tr

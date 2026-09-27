@@ -9,6 +9,7 @@ interface User {
   role?: string // e.g., 'admin', 'super_admin', etc.
   changePasswordFlag?: boolean
   firstLogin?: boolean
+  marketTradeRight?: boolean // Permission to buy/sell
 }
 
 interface AuthState {
@@ -34,7 +35,8 @@ const restoreAuthState = (): AuthState => {
           roleId: parsedData.roleId,
           role: parsedData.role,
           changePasswordFlag: parsedData.changePasswordFlag,
-          firstLogin: parsedData.firstLogin
+          firstLogin: parsedData.firstLogin,
+          marketTradeRight: parsedData.marketTradeRight
         },
         loading: false,
         error: null

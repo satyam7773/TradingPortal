@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { X, ArrowLeft } from 'lucide-react';
+import { X, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
+import { useSorting } from '../../hooks/useSorting';
 
 const Settlement: React.FC = () => {
   const getMondayOfCurrentWeek = () => {
@@ -190,6 +191,10 @@ const Settlement: React.FC = () => {
 
 const SettlementTable = ({ data, onUserClick }: any) => {
   const getSummary = (key: string) => (key === 'profit' ? data.netProfit : data.netLoss);
+  
+  // Sorting for both profit and loss tables
+  const { sortColumn: profitSortColumn, sortDirection: profitSortDirection, handleSort: handleProfitSort, sortedData: sortedProfit, getSortIcon: getProfitSortIcon } = useSorting({ data: data.profit || [] });
+  const { sortColumn: lossSortColumn, sortDirection: lossSortDirection, handleSort: handleLossSort, sortedData: sortedLoss, getSortIcon: getLossSortIcon } = useSorting({ data: data.loss || [] });
 
   return (
     <div className="flex gap-4 h-full min-h-[400px]">
@@ -197,6 +202,9 @@ const SettlementTable = ({ data, onUserClick }: any) => {
         const summary = getSummary(key);
         // Determine if we should show the Net PL label based on totalNetPnl
         const showNetPl = summary.totalNetPnl !== 0;
+        const sortedTableData = key === 'profit' ? sortedProfit : sortedLoss;
+        const handleSort = key === 'profit' ? handleProfitSort : handleLossSort;
+        const getSortIcon = key === 'profit' ? getProfitSortIcon : getLossSortIcon;
 
         return (
           <div key={key} className="flex-1 bg-slate-800/50 rounded-xl overflow-hidden border border-slate-700 flex flex-col min-h-0">
@@ -207,14 +215,22 @@ const SettlementTable = ({ data, onUserClick }: any) => {
               <table className="w-full text-sm text-slate-300">
                 <thead className="bg-slate-900 sticky top-0 z-10 border-b border-slate-700">
                   <tr>
-                    <th className="p-3 text-left">Username</th>
-                    <th className="p-3 text-right">P/L</th>
-                    <th className="p-3 text-right">Brk</th>
-                    <th className="p-3 text-right">Total</th>
+                    <th className="p-3 text-left cursor-pointer hover:bg-slate-800 transition" onClick={() => handleSort('username')}>
+                      <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+                    </th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-800 transition" onClick={() => handleSort('pnl')}>
+                      <div className="flex items-center justify-end gap-2">P/L {getSortIcon('pnl')}</div>
+                    </th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-800 transition" onClick={() => handleSort('brokerage')}>
+                      <div className="flex items-center justify-end gap-2">Brk {getSortIcon('brokerage')}</div>
+                    </th>
+                    <th className="p-3 text-right cursor-pointer hover:bg-slate-800 transition" onClick={() => handleSort('total')}>
+                      <div className="flex items-center justify-end gap-2">Total {getSortIcon('total')}</div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data[key]?.map((item: any, i: number) => (
+                  {sortedTableData?.map((item: any, i: number) => (
                     <tr key={i} onClick={() => item.userId && onUserClick(item.userId)} className="cursor-pointer hover:bg-slate-700 border-b border-slate-700">
                       <td className="p-3 truncate">{item.username}</td>
                       <td className="p-3 text-right">{item.pnl?.toLocaleString()}</td>

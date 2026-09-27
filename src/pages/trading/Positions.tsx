@@ -5,19 +5,24 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import { Briefcase, Eye, X } from "lucide-react";
+import { Briefcase, Eye, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import userManagementService from "../../services/userManagementService";
 import marketWatchService from "../../services/marketWatchService";
 import FilterLayout from "../../components/FilterLayout";
+import PositionDetailModal from "../../components/PositionDetailModal";
 import { useOrderModal } from "../../hooks/useOrderModal";
 import OrderModal from "../../components/modals/OrderModal";
 import PositionDetailsModal from "../../components/PositionDetailsModal";
 import ConfigManager from "../../utils/configManager";
 import { orderUpdateService } from "../../services";
 import SearchableSelect from "../../components/ui/SearchableSelect";
+import { useSorting } from "../../hooks/useSorting";
+import { BUY_SELL_DISABLED_MESSAGE } from "../../utils/permissionUtils";
+import { useAppSelector } from "../../hooks/reduxHooks";
+import { selectMarketTradeRight } from "../../store/selectors/authSelectors";
 
 interface PositionData {
   positionId: number;
@@ -73,6 +78,11 @@ const Positions: React.FC = () => {
   const [ownDetailModalExchange, setOwnDetailModalExchange] = useState<string>("All Exchanges");
   const [ownDetailModalSymbol, setOwnDetailModalSymbol] = useState<string>("");
 
+  // Row click modal state
+  const [showRowClickModal, setShowRowClickModal] = useState(false);
+  const [rowClickModalData, setRowClickModalData] = useState<any>(null);
+  const [loadingRowClickModal, setLoadingRowClickModal] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [positionData, setPositionData] = useState<PositionResponse | null>(
@@ -98,6 +108,7 @@ const Positions: React.FC = () => {
   const loggedInUserId = userData?.userId;
   const isAdminUser =
     userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3;
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
   const orderModal = useOrderModal(isAdminUser);
 
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
@@ -217,6 +228,9 @@ const Positions: React.FC = () => {
     [filteredPositions],
   );
 
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedPositions, getSortIcon } = useSorting({ data: filteredPositions });
+
   const unsubscribeCurrentFeed = useCallback(() => {
     marketWatchService.stopPositionsPollingLoop();
     if (feedUnsubscribeRef.current) {
@@ -303,6 +317,53 @@ const Positions: React.FC = () => {
     [establishStompSubscription, userData],
   );
 
+  // Fetch positions from old API for roleId === 4 (Clients)
+  const fetchOldPositionsAPI = async () => {
+    try {
+      // Use existing service method for /oms/positions POST API
+      const result = await userManagementService.getUserPositions(loggedInUserId);
+
+      if (result?.responseCode === "0" && result?.data?.positionsData) {
+        // Transform old API response to PositionData format
+        let positions = (result.data.positionsData || []).map((p: any) => ({
+          positionId: 0,
+          positionIds: [0],
+          positionDate: null,
+          positionDays: 0,
+          username: userData?.username || "",
+          parentUsername: "",
+          exchange: p.exchange,
+          tradeSymbol: p.tradeSymbol,
+          position: p.positionSide === "BUY" ? "BUY" : "SELL",
+          quantity: p.netQuantity || 0,
+          averagePrice: p.averagePrice || 0,
+          ltp: null,
+          pnl: p.unrealisedPnl || 0,
+          pnlPercentage: 0,
+          totalPnl: p.realisedPnl || 0,
+          token: p.token,
+          userId: loggedInUserId,
+          netQuantity: p.netQuantity,
+          realisedPnl: p.realisedPnl || 0,
+          marginUsed: p.marginUsed || 0,
+        }));
+
+        if (selectedSymbol)
+          positions = positions.filter(
+            (p: PositionData) => p.tradeSymbol === selectedSymbol,
+          );
+
+        setFilteredPositions(positions);
+        if (positions.length > 0) setupLivePositionFeed(positions);
+      } else {
+        setFilteredPositions([]);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching old positions API:", error);
+      setFilteredPositions([]);
+    }
+  };
+
   // 1. Updated handleView to prioritize passed arguments over state
   const handleView = async (
     targetExchange?: string,
@@ -315,61 +376,69 @@ const Positions: React.FC = () => {
     setSelectedPositions(new Set());
 
     try {
-      let uids: number[] = [];
-
-      // PRIORITY: If explicit IDs were passed (like during loadInitialData), use them
-      if (targetUserIds && targetUserIds.length > 0) {
-        uids = targetUserIds;
-      }
-   
-      const response =
-        await userManagementService.fetchUserPositionsForExchange(
-          exchange,
-          selectedToken || 0,
-          selectedUserId,
-        );
-
-      if (response?.responseCode === "0" && response.data) {
-        setPositionData(response.data);
-        let positions = (response.data || []).map((p: any) => {
-          // ✅ Extract all positionIds from the users array
-          const positionIdsArray = (p.users || []).flatMap((u: any) => u.positionId || []);
-          const firstUser = p.users?.[0];
-          
-          return {
-            positionId: positionIdsArray[0] || 0, // First positionId as primary
-            positionIds: positionIdsArray, // ✅ All positionIds for closing
-            positionDate: p.positionDate,
-            positionDays: p.positionDays,
-            username: firstUser?.username || p.username || "",
-            parentUsername: p.parentUsername || "",
-            exchange: p.exchange,
-            tradeSymbol: p.tradeSymbol,
-            position: p.position,
-            quantity: p.quantity,
-            averagePrice: p.averagePrice,
-            ltp: p.ltp,
-            pnl: p.pnl,
-            pnlPercentage: p.pnlPercentage,
-            totalPnl: p.totalPnl,
-            token: p.token,
-            userId: firstUser?.userId || p.userId || selectedUserId || undefined,
-            netQuantity: p.netQuantity,
-            realisedPnl: p.realisedPnl,
-            marginUsed: p.marginUsed,
-          } as PositionData;
-        });
-
-        if (selectedSymbol)
-          positions = positions.filter(
-            (p: PositionData) => p.tradeSymbol === selectedSymbol,
-          );
-        setFilteredPositions(positions);
-        if (positions.length > 0) setupLivePositionFeed(positions);
+      // 🔍 Check roleId to determine which API to use
+      if (userData?.roleId === 4) {
+        // For client (roleId 4): Use old /oms/positions API
+        await fetchOldPositionsAPI();
       } else {
-        setFilteredPositions([]);
+        // For admin/master: Use new /oms/positions/portal/cumulative API
+        let uids: number[] = [];
+
+        // PRIORITY: If explicit IDs were passed (like during loadInitialData), use them
+        if (targetUserIds && targetUserIds.length > 0) {
+          uids = targetUserIds;
+        }
+     
+        const response =
+          await userManagementService.fetchUserPositionsForExchange(
+            exchange,
+            selectedToken || 0,
+            selectedUserId,
+          );
+
+        if (response?.responseCode === "0" && response.data) {
+          setPositionData(response.data);
+          let positions = (response.data || []).map((p: any) => {
+            // ✅ Extract all positionIds from the users array
+            const positionIdsArray = (p.users || []).flatMap((u: any) => u.positionId || []);
+            const firstUser = p.users?.[0];
+            
+            return {
+              positionId: positionIdsArray[0] || 0, // First positionId as primary
+              positionIds: positionIdsArray, // ✅ All positionIds for closing
+              positionDate: p.positionDate,
+              positionDays: p.positionDays,
+              username: firstUser?.username || p.username || "",
+              parentUsername: p.parentUsername || "",
+              exchange: p.exchange,
+              tradeSymbol: p.tradeSymbol,
+              position: p.position,
+              quantity: p.quantity,
+              averagePrice: p.averagePrice,
+              ltp: p.ltp,
+              pnl: p.pnl,
+              pnlPercentage: p.pnlPercentage,
+              totalPnl: p.totalPnl,
+              token: p.token,
+              userId: firstUser?.userId || p.userId || selectedUserId || undefined,
+              netQuantity: p.netQuantity,
+              realisedPnl: p.realisedPnl,
+              marginUsed: p.marginUsed,
+            } as PositionData;
+          });
+
+          if (selectedSymbol)
+            positions = positions.filter(
+              (p: PositionData) => p.tradeSymbol === selectedSymbol,
+            );
+          setFilteredPositions(positions);
+          if (positions.length > 0) setupLivePositionFeed(positions);
+        } else {
+          setFilteredPositions([]);
+        }
       }
     } catch (error) {
+      console.error("❌ Error in handleView:", error);
       setFilteredPositions([]);
     } finally {
       setLoading(false);
@@ -622,12 +691,46 @@ const Positions: React.FC = () => {
     }
   };
 
-  const handleOpenViewPositionModal = (p: PositionData) => {
-    setSelectedViewPosition(p);
-    setViewPositionData(p);
-    // Show all filtered positions in the detail modal
-    setViewModalExchange(p.exchange);
-    setViewModalSymbol(p.tradeSymbol);
+  const handleOpenViewPositionModal = async (p: PositionData) => {
+    try {
+      setLoadingRowClickModal(true);
+      setSelectedViewPosition(p);
+
+      // 🆕 Fetch from /oms/positions/portal API
+      const payload = {
+        requestTimestamp: Date.now().toString(),
+        userId: loggedInUserId,
+        data: {
+          userId: loggedInUserId,
+          token: p.token || 0,
+        }
+      };
+
+      const response = await fetch(
+        "https://api-staging.rivoplus.live/oms/positions/portal",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const result = await response.json();
+
+      if (result?.responseCode === "0" && result?.data) {
+        setRowClickModalData(result.data);
+        setShowRowClickModal(true);
+        setViewModalExchange(p.exchange);
+        setViewModalSymbol(p.tradeSymbol);
+      } else {
+        toast.error(result?.responseMessage || "Failed to fetch position details");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching row click modal data:", error);
+      toast.error("Failed to fetch position details");
+    } finally {
+      setLoadingRowClickModal(false);
+    }
   };
 
   const handleOpenOwnPositionDetailModal = (positions: PositionData[]) => {
@@ -804,7 +907,7 @@ const Positions: React.FC = () => {
               </div>
             </div>
 
-            {selectedPositions.size > 0 && (
+            {selectedPositions.size > 0 && hasMarketTradeRights && (
               <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
                 <span className="text-sm font-bold text-red-700 dark:text-red-300">
                   {selectedPositions.size} positions selected
@@ -828,81 +931,89 @@ const Positions: React.FC = () => {
                 <table className="w-full border-collapse min-w-max">
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                     <tr>
-                      <th className="px-3 py-4 text-center">
-                        <input
-                          type="checkbox"
-                          checked={
-                            filteredPositions.length > 0 &&
-                            selectedPositions.size === filteredPositions.length
-                          }
-                          onChange={() =>
-                            setSelectedPositions(
-                              selectedPositions.size ===
-                                filteredPositions.length
-                                ? new Set()
-                                : new Set(
-                                  filteredPositions.map((p) => p.positionId),
-                                ),
-                            )
-                          }
-                          className="cursor-pointer"
-                        />
-                      </th>
+                      {hasMarketTradeRights && (
+                        <th className="px-3 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={
+                              filteredPositions.length > 0 &&
+                              selectedPositions.size === filteredPositions.length
+                            }
+                            onChange={() =>
+                              setSelectedPositions(
+                                selectedPositions.size ===
+                                  filteredPositions.length
+                                  ? new Set()
+                                  : new Set(
+                                    filteredPositions.map((p) => p.positionId),
+                                  ),
+                              )
+                            }
+                            className="cursor-pointer"
+                          />
+                        </th>
+                      )}
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
                         View
                       </th>
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
                         Own
                       </th>
-                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
-                        Buy
+                      {hasMarketTradeRights && (
+                        <>
+                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                            Buy
+                          </th>
+                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">
+                            Sell
+                          </th>
+                        </>
+                      )}
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('exchange')}>
+                        <div className="flex items-center gap-2">Exchange {getSortIcon('exchange')}</div>
                       </th>
-                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">
-                        Sell
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('position')}>
+                        <div className="flex items-center gap-2">Position {getSortIcon('position')}</div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">
-                        Exchange
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('tradeSymbol')}>
+                        <div className="flex items-center gap-2">Symbol {getSortIcon('tradeSymbol')}</div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">
-                        Position
+                      <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('quantity')}>
+                        <div className="flex items-center justify-center gap-2">Qty {getSortIcon('quantity')}</div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">
-                        Symbol
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('averagePrice')}>
+                        <div className="flex items-center justify-end gap-2">Avg Rate {getSortIcon('averagePrice')}</div>
                       </th>
-                      <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">
-                        Qty
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('ltp')}>
+                        <div className="flex items-center justify-end gap-2">CMP {getSortIcon('ltp')}</div>
                       </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">
-                        Avg Rate
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">
-                        CMP
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">
-                        P&L
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('pnl')}>
+                        <div className="flex items-center justify-end gap-2">P&L {getSortIcon('pnl')}</div>
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {filteredPositions.map((p) => (
+                    {sortedPositions.map((p) => (
                       <tr
                         key={p.positionId}
                         className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors ${selectedPositions.has(p.positionId) ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
                       >
-                        <td className="px-3 py-4 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedPositions.has(p.positionId)}
-                            onChange={() => {
-                              const next = new Set(selectedPositions);
-                              next.has(p.positionId)
-                                ? next.delete(p.positionId)
-                                : next.add(p.positionId);
-                              setSelectedPositions(next);
-                            }}
-                            className="cursor-pointer"
-                          />
-                        </td>
+                        {hasMarketTradeRights && (
+                          <td className="px-3 py-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedPositions.has(p.positionId)}
+                              onChange={() => {
+                                const next = new Set(selectedPositions);
+                                next.has(p.positionId)
+                                  ? next.delete(p.positionId)
+                                  : next.add(p.positionId);
+                                setSelectedPositions(next);
+                              }}
+                              className="cursor-pointer"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-4 text-center">
                           <button 
                             onClick={() => handleOpenViewPositionModal(p)}
@@ -920,22 +1031,38 @@ const Positions: React.FC = () => {
                             {loadingOwnPosition ? "..." : "Own"}
                           </button>
                         </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => handleOpenModifyModal(p, "BUY")}
-                            className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
-                          >
-                            B
-                          </button>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => handleOpenModifyModal(p, "SELL")}
-                            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
-                          >
-                            S
-                          </button>
-                        </td>
+                        {hasMarketTradeRights && (
+                          <>
+                            <td className="px-4 py-4 text-center">
+                              <button
+                                onClick={() => handleOpenModifyModal(p, "BUY")}
+                                disabled={!hasMarketTradeRights}
+                                title={!hasMarketTradeRights ? BUY_SELL_DISABLED_MESSAGE : "Buy"}
+                                className={`bg-green-600 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow ${
+                                  hasMarketTradeRights
+                                    ? 'hover:bg-green-700 hover:scale-105 cursor-pointer'
+                                    : 'opacity-50 cursor-not-allowed'
+                                }`}
+                              >
+                                B
+                              </button>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <button
+                                onClick={() => handleOpenModifyModal(p, "SELL")}
+                                disabled={!hasMarketTradeRights}
+                                title={!hasMarketTradeRights ? BUY_SELL_DISABLED_MESSAGE : "Sell"}
+                                className={`bg-red-600 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow ${
+                                  hasMarketTradeRights
+                                    ? 'hover:bg-red-700 hover:scale-105 cursor-pointer'
+                                    : 'opacity-50 cursor-not-allowed'
+                                }`}
+                              >
+                                S
+                              </button>
+                            </td>
+                          </>
+                        )}
                         <td className="px-6 py-4 text-left">
                           <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 uppercase">
                             {p.exchange}
@@ -1026,6 +1153,20 @@ const Positions: React.FC = () => {
         </div>,
         document.body
       )}
+
+      {/* 🆕 Position Detail Modal - Row Click */}
+      <PositionDetailModal
+        isOpen={showRowClickModal}
+        data={rowClickModalData}
+        selectedPosition={selectedViewPosition}
+        loading={loadingRowClickModal}
+        liveTicks={liveTicks}
+        onClose={() => {
+          setShowRowClickModal(false);
+          setRowClickModalData(null);
+          setSelectedViewPosition(null);
+        }}
+      />
 
       <OrderModal
         isOpen={orderModal.showBuyOrderModal}

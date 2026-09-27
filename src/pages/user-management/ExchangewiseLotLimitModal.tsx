@@ -25,6 +25,7 @@ const ExchangewiseLotLimitModal: React.FC<ExchangewiseLotLimitModalProps> = ({
   const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [loading, setLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [selectAll, setSelectAll] = useState(false)
 
   // Fetch data on modal open
   useEffect(() => {
@@ -32,6 +33,14 @@ const ExchangewiseLotLimitModal: React.FC<ExchangewiseLotLimitModalProps> = ({
       fetchExchangeLotLimits()
     }
   }, [isOpen, user?.id])
+
+  // Sync selectAll state with individual toggles
+  useEffect(() => {
+    if (exchanges.length > 0) {
+      const allEnabled = exchanges.every(ex => ex.lotLimit)
+      setSelectAll(allEnabled)
+    }
+  }, [exchanges])
 
   const fetchExchangeLotLimits = async () => {
     setLoading(true)
@@ -50,6 +59,14 @@ const ExchangewiseLotLimitModal: React.FC<ExchangewiseLotLimitModalProps> = ({
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSelectAll = () => {
+    const newSelectAllState = !selectAll
+    setSelectAll(newSelectAllState)
+    setExchanges(prev =>
+      prev.map(ex => ({ ...ex, lotLimit: newSelectAllState })),
+    )
   }
 
   const handleToggleExchange = (exchangeId: number) => {
@@ -155,6 +172,33 @@ const ExchangewiseLotLimitModal: React.FC<ExchangewiseLotLimitModalProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Select All Toggle */}
+              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-700/70 dark:to-slate-700/50 rounded-lg p-4 border border-blue-200 dark:border-blue-600/50">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-gray-800 dark:text-white">Select All Exchanges</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Enable lot limit for all exchanges at once</p>
+                  </div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={handleSelectAll}
+                      disabled={isSaving}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${
+                        selectAll
+                          ? 'bg-blue-500'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                      } disabled:opacity-50`}
+                    >
+                      <span
+                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          selectAll ? 'translate-x-6' : ''
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {exchanges.map(exchange => (
                 <div
                   key={exchange.exchangeId}

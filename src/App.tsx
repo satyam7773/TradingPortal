@@ -37,6 +37,8 @@ import WeeklyAdmin from './pages/dashboard/WeeklyAdmin'
 import RejectionLog from './pages/dashboard/RejectionLog'
 import UserSettingsChangePassword from './pages/dashboard/UserSettingsChangePassword'
 import BillGenerate from './pages/reports/BillGenerate'
+import AnalysisIPBased from './pages/dashboard/AnalysisIPBased'
+import ExchangeSchedule from './pages/dashboard/ExchangeSchedule'
 
 const App: React.FC = () => {
   return (
@@ -72,6 +74,8 @@ const App: React.FC = () => {
           <Route path="account-summary" element={<AccountSummary />} />
           <Route path="trade-account" element={<TradeAccount />} />
           <Route path="settlement" element={<Settlement />} />
+          <Route path="analysis-ip-based" element={<AnalysisIPBased />} />
+          <Route path="exchange-schedule" element={<ExchangeSchedule />} />
           <Route path="file-upload" element={<FileUploadPage />} />
           <Route path="bill-generate" element={<BillGenerate />} />
           <Route path="run-settlement" element={<RunSettlement />} />

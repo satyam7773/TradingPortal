@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
-import { X, Briefcase, Search, ArrowLeft } from 'lucide-react'
+import { X, Briefcase, Search, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import userManagementService from '../../services/userManagementService'
@@ -8,6 +8,7 @@ import marketWatchService from '../../services/marketWatchService'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import DownloadReport from '../../components/DownloadReport'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
+import { useSorting } from '../../hooks/useSorting'
 
 // --- Interfaces ---
 interface PnLData {
@@ -612,25 +613,36 @@ const PnLTable = ({
   onUserClick?: (id: number) => void,
   isDark?: boolean,
   isSticky?: boolean
-}) => (
+}) => {
+  const { sortColumn, sortDirection, handleSort, sortedData, getSortIcon } = useSorting({ data });
+
+  return (
   <table className="w-full border-collapse">
     <thead className={`${isSticky ? 'sticky top-0 z-20' : ''} bg-[#0f172a] text-slate-500 text-[10px] uppercase tracking-widest font-bold shadow-sm`}>
       <tr>
-        <th className="px-6 py-2 text-left">Username</th>
-        <th className="px-6 py-2 text-right">Realised P&L</th>
-        <th className="px-6 py-2 text-right">M2M P&L</th>
-        <th className="px-6 py-2 text-right">Total P&L</th>
+        <th className="px-6 py-2 text-left cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('username')}>
+          <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+        </th>
+        <th className="px-6 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('realisedPnl')}>
+          <div className="flex items-center justify-end gap-2">Realised P&L {getSortIcon('realisedPnl')}</div>
+        </th>
+        <th className="px-6 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('m2m')}>
+          <div className="flex items-center justify-end gap-2">M2M P&L {getSortIcon('m2m')}</div>
+        </th>
+        <th className="px-6 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('total')}>
+          <div className="flex items-center justify-end gap-2">Total P&L {getSortIcon('total')}</div>
+        </th>
       </tr>
     </thead>
     <tbody>
-      {data.length === 0 ? (
+      {sortedData.length === 0 ? (
         <tr>
           <td colSpan={4} className="px-6 py-10 text-center text-xs text-slate-500 uppercase tracking-wider">
             No dynamic positions found
           </td>
         </tr>
       ) : (
-        data.map((p, idx) => (
+        sortedData.map((p, idx) => (
           <tr key={idx} className={`group transition-all duration-200 hover:bg-slate-700/30 dark:hover:bg-slate-700/50 ${idx % 2 === 0 ? 'bg-slate-800/10 dark:bg-slate-900/30' : 'bg-slate-800/5 dark:bg-transparent'}`}>
             <td className="px-6 py-2.5 text-left">
               <div className="flex items-center gap-2">
@@ -665,6 +677,7 @@ const PnLTable = ({
       )}
     </tbody>
   </table>
-);
+  );
+};
 
 export default withTabCache(ProfitLossPage, { title: 'Profit & Loss' })

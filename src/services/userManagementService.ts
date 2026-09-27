@@ -1056,7 +1056,8 @@ class UserManagementService {
     userId: number;
     requestTimestamp: number;
     data: {
-      isTradeLock: boolean;
+      userId: number;
+      mtrToggleEnabled: boolean;
     };
   }): Promise<any> {
     try {
@@ -1277,6 +1278,56 @@ class UserManagementService {
       return response;
     } catch (error) {
       console.error("❌ Failed to fetch settlement report:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch IP/Device summary report
+   * POST: https://api-staging.rivoplus.live/reports/ipdevicesummary
+   */
+  async fetchIPDeviceSummary(payload: {
+    fromDate: string;
+    toDate: string;
+    username: string | null;
+    type: "IP" | "Device";
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/ipDeviceSummary",
+        {
+          data: payload,
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch IP/Device summary:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch IP/Device details report
+   * POST: https://api-staging.rivoplus.live/reports/ipdevicedetails
+   */
+  async fetchIPDeviceDetails(payload: {
+    fromDate: string;
+    toDate: string;
+    ipAddress?: string;
+    deviceId?: string;
+    type: "IP" | "Device";
+    username: string | null;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/ipDeviceDetails",
+        {
+          data: payload,
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch IP/Device details:", error);
       throw error;
     }
   }
@@ -1595,6 +1646,92 @@ class UserManagementService {
       return response;
     } catch (error) {
       console.error("❌ Failed to fetch client positions:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch admin rights for a user
+   */
+  async fetchAdminRights(userId: number): Promise<any> {
+    const request = {
+      userId,
+      requestTimestamp: "",
+      data: "",
+    };
+
+    const response = await apiClient.post<any>(
+      `${this.baseUrl}/portal/fetchAdminRights`,
+      request,
+    );
+
+    return response.data || response;
+  }
+
+  /**
+   * Fetch IP/Device summary report
+   * POST: https://api-staging.rivoplus.live/reports/ipdevicesummary
+   */
+  async fetchIPDeviceSummary(filters: {
+    fromDate: string;
+    toDate: string;
+    username?: string | null;
+    type: 'IP' | 'Device';
+  }): Promise<any> {
+    try {
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/ipDeviceSummary",
+        {
+          userId: userData?.userId,
+          requestTimestamp: "",
+          data: {
+            fromDate: filters.fromDate,
+            toDate: filters.toDate,
+            username: filters.username || null,
+            type: filters.type
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch IP/Device summary:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch IP/Device details
+   * POST: https://api-staging.rivoplus.live/reports/ipdevicedetails
+   */
+  async fetchIPDeviceDetails(filters: {
+    fromDate: string;
+    toDate: string;
+    ipAddress?: string;
+    deviceId?: string;
+    type: 'IP' | 'Device';
+    username?: string | null;
+  }): Promise<any> {
+    try {
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+      const response = await apiClient.post<any>(
+        "https://api-staging.rivoplus.live/reports/ipDeviceDetails",
+        {
+          userId: userData?.userId,
+          requestTimestamp: "",
+          data: {
+            fromDate: filters.fromDate,
+            toDate: filters.toDate,
+            ...(filters.type === 'IP' && { ipAddress: filters.ipAddress }),
+            ...(filters.type === 'Device' && { deviceId: filters.deviceId }),
+            type: filters.type,
+            username: filters.username || null
+          },
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch IP/Device details:", error);
       throw error;
     }
   }

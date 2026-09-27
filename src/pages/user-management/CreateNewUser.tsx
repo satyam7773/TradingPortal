@@ -129,6 +129,7 @@ const CreateNewUser: React.FC = () => {
   const [selectedUserHighLowTradeLimit, setSelectedUserHighLowTradeLimit] = useState<{ nse: boolean; mcx: boolean; sgx: boolean; cds: boolean; callput: boolean; others: boolean }>({ nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false })
   const [selectedUserParentPnlSharing, setSelectedUserParentPnlSharing] = useState<number>(100)
   const [selectedUserParentBrkSharing, setSelectedUserParentBrkSharing] = useState<number>(100)
+  const [selectedUserParentHighLowTradeLimit, setSelectedUserParentHighLowTradeLimit] = useState<string>('')
   const [isFetchingSelectedUserDetails, setIsFetchingSelectedUserDetails] = useState(false)
   const [exchangeGroups, setExchangeGroups] = useState<{ [key: string]: any[] }>({})
   const [groupsLoading, setGroupsLoading] = useState(false)
@@ -399,6 +400,7 @@ const CreateNewUser: React.FC = () => {
               addMaster: apiUserData.addMaster,
               changePasswordFirstLogin: apiUserData.changePasswordFirstLogin,
               allowedExchanges: apiUserData.allowedExchanges,
+              parentAllowedExchanges: apiUserData.parentAllowedExchanges,
               highLowTradeLimit: apiUserData.highLowTradeLimit,
               parentHighLowTradeLimit: apiUserData.parentHighLowTradeLimit,
               parentId: apiUserData.parentId,
@@ -514,6 +516,8 @@ const CreateNewUser: React.FC = () => {
       setSelectedUserAllowedExchangeCount(0)
       setSelectedUserParentPnlSharing(100)
       setSelectedUserParentBrkSharing(100)
+      setSelectedUserParentHighLowTradeLimit('')
+      setSelectedUserHighLowTradeLimit({ nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false })
 
       if (originalUserConfig) {
         setUserConfig(originalUserConfig)
@@ -567,6 +571,7 @@ const CreateNewUser: React.FC = () => {
         // Store parent's P&L and brokerage sharing for calculating remaining share
         setSelectedUserParentPnlSharing(userInfo?.parentPnlSharing || userInfo?.pnlSharing || 100)
         setSelectedUserParentBrkSharing(userInfo?.parentBrkSharing || userInfo?.brkSharing || 100)
+        setSelectedUserParentHighLowTradeLimit(userInfo?.parentHighLowTradeLimit || '')
 
         // Check addMaster flag from fetched user details and update available user types
         const userAddMaster = userInfo?.addMaster ?? false
@@ -598,11 +603,12 @@ const CreateNewUser: React.FC = () => {
           }
         })
 
-        // Reset and populate High/Low Trade Limit checkboxes using parentHighLowTradeLimit
+        // Reset and populate High/Low Trade Limit checkboxes using user's own highLowTradeLimit
         let highTradeLimitObj = { nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false };
         
-        // Use parentHighLowTradeLimit to respect parent's restrictions
-        const highLowTradeLimit = userInfo?.parentHighLowTradeLimit || '';
+        // Only use user's own highLowTradeLimit, not parent's
+        // Parent's parentHighLowTradeLimit is only used to filter which exchanges CAN be shown in UI
+        const highLowTradeLimit = userInfo?.highLowTradeLimit || '';
         if (highLowTradeLimit) {
           const highArr = Array.isArray(highLowTradeLimit)
             ? highLowTradeLimit
@@ -631,6 +637,7 @@ const CreateNewUser: React.FC = () => {
       setAvailableUserTypes(userTypeOptions)
       setSelectedUserAllowedExchanges([])
       setSelectedUserAllowedExchangeCount(0)
+      setSelectedUserParentHighLowTradeLimit('')
       setSelectedUserHighLowTradeLimit({ nse: false, mcx: false, sgx: false, cds: false, callput: false, others: false })
     }
   }
@@ -665,16 +672,26 @@ const CreateNewUser: React.FC = () => {
   }
 
   const isExchangeAllowed = (key: string) => {
-    if (!forUserAccount) return true
-    if (selectedUserAllowedExchanges.length === 0) return true
-    return selectedUserAllowedExchanges.includes(key)
+    // In edit mode, check parent's allowed exchanges
+    if (isEditMode && editingUser?.parentAllowedExchanges) {
+      const parentExchanges = editingUser.parentAllowedExchanges.map((ex: any) => (ex?.name || '').toLowerCase())
+      return parentExchanges.includes(key.toLowerCase())
+    }
+    
+    // In create mode with user selection, check selected user's allowed exchanges
+    if (forUserAccount && selectedUserAllowedExchanges.length > 0) {
+      return selectedUserAllowedExchanges.includes(key)
+    }
+    
+    // Default: allow all exchanges
+    return true
   }
 
   const handleSubmit = async (values: typeof initialValues, { resetForm }: any) => {
     try {
-      // Auto-fix: Ensure locked-turnover exchanges have proper brokerage flags
-      const lockedTurnoverExchanges = ['nse', 'sgx', 'others']
-      lockedTurnoverExchanges.forEach(ex => {
+      // Auto-fix: Ensure all enabled exchanges have proper brokerage flags
+      const allExchanges = ['nse', 'mcx', 'sgx', 'cds', 'callput', 'others']
+      allExchanges.forEach(ex => {
         if (values.exchanges[ex as keyof typeof values.exchanges]?.enabled) {
           const exchange = values.exchanges[ex as keyof typeof values.exchanges]
           if (!exchange.turnoverBrk && !exchange.symbolBrk) {
@@ -879,9 +896,23 @@ const CreateNewUser: React.FC = () => {
                 }
               }, [selectedUserHighLowTradeLimit, isEditMode, setFieldValue])
 
-              const visibleExchangeData = forUserAccount && selectedUserAllowedExchanges.length > 0
+              const visibleExchangeData = (forUserAccount && selectedUserAllowedExchanges.length > 0) || (isEditMode && editingUser?.parentAllowedExchanges && editingUser.parentAllowedExchanges.length > 0)
                 ? exchangeData.filter((ex) => isExchangeAllowed(ex.key))
                 : exchangeData
+
+              // Determine if user is in restricted mode (check logged-in user's roleId from localStorage)
+              // Only allow editing P&L and BRK Sharing fields if logged-in user is roleId 2 (Admin)
+              let loggedInUserRoleId = null
+              try {
+                const userDataStr = localStorage.getItem('userData')
+                if (userDataStr) {
+                  const userData = JSON.parse(userDataStr)
+                  loggedInUserRoleId = userData.roleId
+                }
+              } catch (e) {
+                console.error('Error getting logged-in user roleId:', e)
+              }
+              const isRestrictedEditMode = isEditMode && loggedInUserRoleId !== 2
 
               return (
                 <Form className="space-y-6">
@@ -1220,7 +1251,8 @@ const CreateNewUser: React.FC = () => {
                                   name={field.name}
                                   min="0"
                                   step="0.01"
-                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error) ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'}`}
+                                  disabled={isRestrictedEditMode}
+                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error) ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'} ${isRestrictedEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 />
                                 {isExceeding && <div className="mt-1 text-xs text-red-400">Cannot exceed available P&L sharing of {availablePnl}</div>}
                                 {meta.touched && meta.error && !isExceeding && <div className="mt-1 text-xs text-red-400">{meta.error}</div>}
@@ -1266,7 +1298,8 @@ const CreateNewUser: React.FC = () => {
                                   name={field.name}
                                   min="0"
                                   step="0.01"
-                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error) ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'}`}
+                                  disabled={isRestrictedEditMode}
+                                  className={`w-full h-14 px-4 py-3 bg-surface-secondary border-2 rounded-xl text-text-primary text-lg focus:ring-2 transition-all ${isExceeding || (meta.touched && meta.error) ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-border-primary focus:ring-purple-500 focus:border-purple-500'} ${isRestrictedEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 />
                                 {isExceeding && <div className="mt-1 text-xs text-red-400">Cannot exceed available brokerage of {availableBrokerage}</div>}
                                 {meta.touched && meta.error && !isExceeding && <div className="mt-1 text-xs text-red-400">{meta.error}</div>}
@@ -1554,41 +1587,56 @@ const CreateNewUser: React.FC = () => {
                   </motion.div>
 
                   {/* High Trade Limit */}
-                  {(selectedUserRole === 2 || values.userType === 'master' || values.userType === 'client' || (!isEditMode && selectedUserId && selectedUserRole) || (isEditMode && (editingUser?.roleId === 3 || editingUser?.roleId === 4) && editingUser?.highLowTradeLimit)) && (
+                  {(selectedUserRole === 2 || values.userType === 'master' || (values.userType === 'client' && (!forUserAccount || Object.values(selectedUserHighLowTradeLimit).some(v => v))) || (!isEditMode && selectedUserId && selectedUserRole && Object.values(selectedUserHighLowTradeLimit).some(v => v)) || (isEditMode && (editingUser?.roleId === 3 || editingUser?.roleId === 4) && editingUser?.parentHighLowTradeLimit)) && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="bg-surface-primary border border-border-primary rounded-2xl p-6">
-                      <div className="flex items-center justify-between gap-3 mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                      {(!isEditMode || (isEditMode && editingUser?.parentHighLowTradeLimit)) && (
+                        <div className="flex items-center justify-between gap-3 mb-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                              <TrendingUp className="w-4 h-4 text-emerald-500" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-text-primary">High Low Between Limit</h3>
                           </div>
-                          <h3 className="text-lg font-semibold text-text-primary">High Low Between Limit</h3>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-text-secondary">Select All</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-text-secondary">Select All</span>
                           <label className="relative inline-flex items-center cursor-pointer">
                             <input
                               type="checkbox"
                               checked={(() => {
                                 let exchangesToShow = exchangeData;
-                                if (isEditMode && editingUser?.parentHighLowTradeLimit) {
-                                  const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
-                                    ? editingUser.parentHighLowTradeLimit
-                                    : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
-                                  exchangesToShow = exchangeData.filter(ex => 
-                                    parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
-                                  );
+                                if (isEditMode) {
+                                  // In edit mode: only show exchanges if parentHighLowTradeLimit has values
+                                  if (editingUser?.parentHighLowTradeLimit) {
+                                    const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+                                      ? editingUser.parentHighLowTradeLimit
+                                      : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
+                                    exchangesToShow = exchangeData.filter(ex => 
+                                      parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
+                                    );
+                                  } else {
+                                    exchangesToShow = [];
+                                  }
+                                } else if (!isEditMode && forUserAccount) {
+                                  exchangesToShow = exchangeData.filter(ex => !!selectedUserHighLowTradeLimit?.[ex.key as keyof typeof selectedUserHighLowTradeLimit]);
                                 }
-                                return exchangesToShow.every(ex => !!values?.highTradeLimit?.[ex.key]);
+                                return exchangesToShow.length > 0 && exchangesToShow.every(ex => !!values?.highTradeLimit?.[ex.key]);
                               })()}
                               onChange={(e) => {
                                 let exchangesToShow = exchangeData;
-                                if (isEditMode && editingUser?.parentHighLowTradeLimit) {
-                                  const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
-                                    ? editingUser.parentHighLowTradeLimit
-                                    : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
-                                  exchangesToShow = exchangeData.filter(ex => 
-                                    parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
-                                  );
+                                if (isEditMode) {
+                                  // In edit mode: only show exchanges if parentHighLowTradeLimit has values
+                                  if (editingUser?.parentHighLowTradeLimit) {
+                                    const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+                                      ? editingUser.parentHighLowTradeLimit
+                                      : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
+                                    exchangesToShow = exchangeData.filter(ex => 
+                                      parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
+                                    );
+                                  } else {
+                                    exchangesToShow = [];
+                                  }
+                                } else if (!isEditMode && forUserAccount) {
+                                  exchangesToShow = exchangeData.filter(ex => !!selectedUserHighLowTradeLimit?.[ex.key as keyof typeof selectedUserHighLowTradeLimit]);
                                 }
                                 const newHighTradeLimit = { ...values.highTradeLimit }
                                 exchangesToShow.forEach(ex => {
@@ -1602,22 +1650,43 @@ const CreateNewUser: React.FC = () => {
                           </label>
                         </div>
                       </div>
+                      )}
 
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
                         {(() => {
                           // Determine which exchanges to show
                           let exchangesToShow = exchangeData;
                           
-                          if (isEditMode && editingUser?.parentHighLowTradeLimit) {
-                            // Parse parentHighLowTradeLimit to get allowed exchanges
-                            const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
-                              ? editingUser.parentHighLowTradeLimit
-                              : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
-                            
-                            // Filter to only show exchanges from parent's list
-                            exchangesToShow = exchangeData.filter(ex => 
-                              parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
-                            );
+                          if (isEditMode) {
+                            // In edit mode: only show exchanges if parentHighLowTradeLimit has values
+                            if (editingUser?.parentHighLowTradeLimit) {
+                              const parentHighArr = Array.isArray(editingUser.parentHighLowTradeLimit)
+                                ? editingUser.parentHighLowTradeLimit
+                                : String(editingUser.parentHighLowTradeLimit).split(',').map((ex: string) => ex.trim());
+                              exchangesToShow = exchangeData.filter(ex => 
+                                parentHighArr.some((pEx: string) => pEx.toUpperCase() === ex.name.toUpperCase())
+                              );
+                            } else {
+                              // If parentHighLowTradeLimit is blank, show no toggles
+                              exchangesToShow = [];
+                            }
+                          } else if (!isEditMode && forUserAccount) {
+                            // In create mode with user selected: use user's own highLowTradeLimit, not parent's
+                            exchangesToShow = exchangeData.filter(ex => !!selectedUserHighLowTradeLimit?.[ex.key as keyof typeof selectedUserHighLowTradeLimit]);
+                            return exchangesToShow.map((exchange) => (
+                              <div key={`high-trade-${exchange.key}`} className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-text-primary">{exchange.name}</span>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!values?.highTradeLimit?.[exchange.key]}
+                                    onChange={(e) => setFieldValue(`highTradeLimit.${exchange.key}`, e.target.checked)}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="relative w-11 h-6 bg-gray-200 dark:bg-surface-secondary peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-purple-600 peer-checked:via-pink-600 peer-checked:to-red-600"></div>
+                                </label>
+                              </div>
+                            ));
                           }
                           
                           return exchangesToShow.map((exchange) => (

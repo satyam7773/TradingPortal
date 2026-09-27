@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { BarChart3, Users } from 'lucide-react'
+import { BarChart3, Users, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import DownloadReport from '../../components/DownloadReport'
+import { useSorting } from '../../hooks/useSorting'
 
 interface M2MData {
   userId: number
@@ -29,6 +30,9 @@ const M2MProfitLoss: React.FC = () => {
 
   const [selectedUserId, setSelectedUserId] = useState<number>(0)
   const [reportData, setReportData] = useState<M2MData[]>([])
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedReportData, getSortIcon } = useSorting({ data: reportData })
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
@@ -210,15 +214,25 @@ const M2MProfitLoss: React.FC = () => {
                 <table className="w-full border-collapse">
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-700 z-10 border-b">
                     <tr className="text-slate-700 dark:text-blue-300 text-xs font-bold uppercase">
-                      <th className="px-6 py-4 text-left">User</th>
-                      <th className="px-6 py-4 text-left">User Type</th>
-                      <th className="px-6 py-4 text-right">Profit / Loss</th>
-                      <th className="px-6 py-4 text-right">PL Share(%)</th>
-                      <th className="px-6 py-4 text-right">PLShare Amount</th>
+                      <th className="px-6 py-4 text-left cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('username')}>
+                        <div className="flex items-center gap-2">User {getSortIcon('username')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-left cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('userType')}>
+                        <div className="flex items-center gap-2">User Type {getSortIcon('userType')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('pnl')}>
+                        <div className="flex items-center justify-end gap-2">Profit / Loss {getSortIcon('pnl')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('pnlSharing')}>
+                        <div className="flex items-center justify-end gap-2">PL Share(%) {getSortIcon('pnlSharing')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('plShareAmount')}>
+                        <div className="flex items-center justify-end gap-2">PLShare Amount {getSortIcon('plShareAmount')}</div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.map((item, idx) => (
+                    {sortedReportData.map((item, idx) => (
                       <tr key={idx} className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50/50 transition-colors">
                         <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{item.username}</td>
                         <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">{item.userType}</td>

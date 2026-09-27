@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
+import { useSorting } from '../../hooks/useSorting';
 
 interface SummaryData {
     date: string;
@@ -68,6 +69,9 @@ const AccountSummary: React.FC = () => {
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const pageSize = 100;
+
+    // Sorting hook
+    const { sortColumn, sortDirection, handleSort, sortedData: sortedSummaryData, getSortIcon } = useSorting({ data: summaryData });
 
     // Get logged in user ID
     const userDataStr = localStorage.getItem('userData');
@@ -236,8 +240,8 @@ const AccountSummary: React.FC = () => {
     // Get paginated data
     const paginatedData = useMemo(() => {
         const startIndex = currentPage * pageSize;
-        return summaryData.slice(startIndex, startIndex + pageSize);
-    }, [summaryData, currentPage]);
+        return sortedSummaryData.slice(startIndex, startIndex + pageSize);
+    }, [sortedSummaryData, currentPage]);
 
     return (
         <>
@@ -364,16 +368,36 @@ const AccountSummary: React.FC = () => {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
-                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Date</th>
-                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Username</th>
-                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Particular</th>
-                                            <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Qty</th>
-                                            <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Buy/Sell</th>
-                                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Price</th>
-                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Type</th>
-                                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Amount</th>
-                                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Closing</th>
-                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Open Qty</th>
+                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('date')}>
+                                              <div className="flex items-center gap-2">Date {getSortIcon('date')}</div>
+                                            </th>
+                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('username')}>
+                                              <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+                                            </th>
+                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('particular')}>
+                                              <div className="flex items-center gap-2">Particular {getSortIcon('particular')}</div>
+                                            </th>
+                                            <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('quantity')}>
+                                              <div className="flex items-center justify-center gap-2">Qty {getSortIcon('quantity')}</div>
+                                            </th>
+                                            <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('side')}>
+                                              <div className="flex items-center justify-center gap-2">Buy/Sell {getSortIcon('side')}</div>
+                                            </th>
+                                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('price')}>
+                                              <div className="flex items-center justify-end gap-2">Price {getSortIcon('price')}</div>
+                                            </th>
+                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('type')}>
+                                              <div className="flex items-center gap-2">Type {getSortIcon('type')}</div>
+                                            </th>
+                                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('amount')}>
+                                              <div className="flex items-center justify-end gap-2">Amount {getSortIcon('amount')}</div>
+                                            </th>
+                                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('closing')}>
+                                              <div className="flex items-center justify-end gap-2">Closing {getSortIcon('closing')}</div>
+                                            </th>
+                                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('openQty')}>
+                                              <div className="flex items-center gap-2">Open Qty {getSortIcon('openQty')}</div>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">

@@ -9,6 +9,8 @@ interface UserData {
   username: string;
   name?: string;
   type?: string;
+  marketTradeRight?: boolean;
+  mtrToggleEnabled?: boolean;
   [key: string]: any;
 }
 
@@ -28,15 +30,13 @@ const MarketTradeRightsModal: React.FC<MarketTradeRightsModalProps> = ({
   const [isMarketTradeEnabled, setIsMarketTradeEnabled] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize toggle state from user's isTradeLock value
+  // Initialize toggle state from user's marketTradeRight value
   useEffect(() => {
     if (user && isOpen) {
-      // isTradeLock: true means trading is locked (disabled), so isMarketTradeEnabled is false
-      // isTradeLock: false means trading is allowed (enabled), so isMarketTradeEnabled is true
-      const tradeEnabled = !(user.isTradeLock ?? false);
-      setIsMarketTradeEnabled(tradeEnabled);
+      // marketTradeRight: true means trading is enabled, false means disabled
+      setIsMarketTradeEnabled(user.marketTradeRight ?? false);
     }
-  }, [user?.id, user?.isTradeLock, isOpen]);
+  }, [user?.id, user?.marketTradeRight, isOpen]);
 
   const handleSave = async () => {
     try {
@@ -52,7 +52,7 @@ const MarketTradeRightsModal: React.FC<MarketTradeRightsModalProps> = ({
         requestTimestamp: Date.now(),
         data: {
           userId: Number(user.id),
-          isTradeLock: !isMarketTradeEnabled // When enabled=true, isTradeLock=false (not locked)
+          marketTradeRight: isMarketTradeEnabled // Actual toggle value to enable/disable market trading
         }
       };
       
@@ -61,8 +61,8 @@ const MarketTradeRightsModal: React.FC<MarketTradeRightsModalProps> = ({
       if (response?.responseCode === '0' || response?.responseCode === '1000') {
         toast.success('Market Trade Rights updated successfully!');
         console.log(`Market Trade Rights updated for ${user.username}:`, {
-          marketTradeEnabled: isMarketTradeEnabled,
-          isTradeLock: !isMarketTradeEnabled
+          marketTradeRight: isMarketTradeEnabled,
+          mtrToggleEnabled: user.mtrToggleEnabled
         });
         onSave?.();
         onClose();
@@ -122,8 +122,14 @@ const MarketTradeRightsModal: React.FC<MarketTradeRightsModalProps> = ({
           <div className="space-y-4">
             {/* Master Toggle Card */}
             <div 
-              onClick={() => setIsMarketTradeEnabled(!isMarketTradeEnabled)}
-              className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800/50 rounded-xl hover:shadow-md transition-all duration-200 cursor-pointer group"
+              onClick={() => {
+                if (user.mtrToggleEnabled !== false) {
+                  setIsMarketTradeEnabled(!isMarketTradeEnabled);
+                }
+              }}
+              className={`flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-800/50 rounded-xl hover:shadow-md transition-all duration-200 ${
+                user.mtrToggleEnabled === false ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer group'
+              }`}
             >
               <div className="flex items-center gap-3 flex-1">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm text-white transition-all ${
@@ -138,7 +144,10 @@ const MarketTradeRightsModal: React.FC<MarketTradeRightsModalProps> = ({
                     Enable Market Trading
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {isMarketTradeEnabled ? 'Market trading is enabled for this user' : 'Market trading is disabled for this user'}
+                    {user.mtrToggleEnabled === false 
+                      ? 'This toggle is disabled for this user' 
+                      : (isMarketTradeEnabled ? 'Market trading is enabled for this user' : 'Market trading is disabled for this user')
+                    }
                   </p>
                 </div>
               </div>
@@ -179,7 +188,7 @@ const MarketTradeRightsModal: React.FC<MarketTradeRightsModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || user.mtrToggleEnabled === false}
             className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg flex items-center justify-center gap-2"
           >
             {isSaving ? (

@@ -35,7 +35,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
 
-  
+
 
     const isManualOrderEnabled =
   user?.userSettings?.userInfo?.find(
@@ -247,6 +247,50 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     }
   }, [establishStompSubscription, userId, isManualOrderEnabled]);
 
+  // --- Fetch positions using old API for roleId 4 ---
+  const fetchOldPositionsAPI = async () => {
+    try {
+      const result = await userManagementService.getUserPositions(Number(userId));
+
+      if (result?.responseCode === "0" && result?.data?.positionsData) {
+        // Transform old API response to PositionData format
+        let positions = (result.data.positionsData || []).map((p: any) => ({
+          positionId: 0,
+          positionIds: [0],
+          positionDate: null,
+          positionDays: 0,
+          username: user?.username || "",
+          parentUsername: "",
+          exchange: p.exchange,
+          tradeSymbol: p.tradeSymbol,
+          position: p.positionSide === "BUY" ? "BUY" : "SELL",
+          quantity: p.netQuantity || 0,
+          averagePrice: p.averagePrice || 0,
+          ltp: null,
+          pnl: p.unrealisedPnl || 0,
+          pnlPercentage: 0,
+          totalPnl: p.realisedPnl || 0,
+          token: p.token,
+          userId: Number(userId),
+          netQuantity: p.netQuantity,
+          realisedPnl: p.realisedPnl || 0,
+          marginUsed: p.marginUsed || 0,
+        }));
+
+        if (selectedSymbol)
+          positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
+
+        setFilteredPositions(positions);
+        if (positions.length > 0) setupLivePositionFeed(positions);
+      } else {
+        setFilteredPositions([]);
+      }
+    } catch (error) {
+      console.error('Error fetching old positions API:', error);
+      setFilteredPositions([]);
+    }
+  };
+
   // --- View handler (copied from Positions.tsx, but always uses userId) ---
   const handleView = async (targetExchange?: string, targetUserIds?: number[], ignoreSelectedSymbol = false, targetToken?: number) => {
     if (!isManualOrderEnabled) {
@@ -260,19 +304,56 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     unsubscribeCurrentFeed();
     setSelectedPositions(new Set());
     try {
-      const tokenToFetch = targetToken !== undefined ? targetToken : (selectedToken || 0);
-      console.log("Fetching positions for User ID:", userId, "Exchange:", exchange, "Token:", tokenToFetch);
-      const response = await userManagementService.fetchUserPositionsForExchange(exchange, tokenToFetch, userId ? Number(userId) : 0);
-      if (response?.responseCode === '0' && response.data) {
-        setPositionData(response.data);
-        let positions = response.data.positions || [];
-        if (selectedSymbol && !ignoreSelectedSymbol) positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
-        setFilteredPositions(positions);
-        if (positions.length > 0) setupLivePositionFeed(positions);
+      // Check roleId - for roleId 4, use old API; otherwise use cumulative API
+      if (Number(roleId) === 4) {
+        await fetchOldPositionsAPI();
       } else {
-        setFilteredPositions([]);
+        const tokenToFetch = targetToken !== undefined ? targetToken : (selectedToken || 0);
+        console.log("Fetching positions for User ID:", userId, "Exchange:", exchange, "Token:", tokenToFetch);
+        const response = await userManagementService.fetchUserPositionsForExchange(exchange, tokenToFetch, userId ? Number(userId) : 0);
+        if (response?.responseCode === '0' && response.data) {
+          // Transform cumulative API response
+          let positions = (Array.isArray(response.data) ? response.data : response.data.positions || []).map((p: any) => {
+            // Get username from users array if available
+            const userInfo = Array.isArray(p.users) && p.users.length > 0 ? p.users[0] : {};
+            const positionIds = userInfo.positionId || [0];
+            
+            return {
+              positionId: positionIds[0] || 0,
+              positionIds: positionIds,
+              positionDate: null,
+              positionDays: 0,
+              username: userInfo.username || user?.username || "",
+              parentUsername: "",
+              exchange: p.exchange,
+              tradeSymbol: p.tradeSymbol,
+              position: p.position === "BUY" ? "BUY" : "SELL",
+              quantity: p.quantity || 0,
+              averagePrice: p.averagePrice || 0,
+              ltp: p.ltp || null,
+              pnl: p.pnl || 0,
+              pnlPercentage: 0,
+              totalPnl: p.totalPnl || 0,
+              token: p.token,
+              userId: Number(userId),
+              netQuantity: p.quantity,
+              realisedPnl: p.realisedPnl || 0,
+              marginUsed: p.marginUsed || 0,
+            };
+          });
+          
+          if (selectedSymbol && !ignoreSelectedSymbol) {
+            positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
+          }
+          
+          setFilteredPositions(positions);
+          if (positions.length > 0) setupLivePositionFeed(positions);
+        } else {
+          setFilteredPositions([]);
+        }
       }
     } catch (error) {
+      console.error('Error fetching positions:', error);
       setFilteredPositions([]);
     } finally {
       setLoading(false);

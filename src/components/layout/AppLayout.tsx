@@ -44,6 +44,7 @@ const SecondaryPanelContent: React.FC = () => {
       // Dashboard & Trading
       'market-watch': 'dashboard/MarketWatch',
       'trade-margin': 'dashboard/TradeMarginPage',
+      'analysis-ip-based': 'dashboard/AnalysisIPBased',
       'markets': 'trading/Markets',
       'orders': 'trading/Orders',
       'portfolio': 'trading/Portfolio',

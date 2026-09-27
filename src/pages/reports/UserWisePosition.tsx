@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, AlertCircle, IndianRupee } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, AlertCircle, IndianRupee, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import userManagementService from '../../services/userManagementService';
 import marketWatchService from '../../services/marketWatchService';
 import toast from 'react-hot-toast';
@@ -9,6 +9,7 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
+import { useSorting } from '../../hooks/useSorting';
 
 interface PositionData {
   positionId: number;
@@ -77,6 +78,9 @@ const UserWisePosition: React.FC = () => {
   const [posiDays, setPosiDays] = useState<string>('');
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedPositions, getSortIcon } = useSorting({ data: filteredPositions });
 
   const userDataStr = localStorage.getItem('userData');
   const userData = userDataStr ? JSON.parse(userDataStr) : null;
@@ -760,7 +764,7 @@ const UserWisePosition: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Posi Days :</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Position Days :</label>
               <input
                 type="number"
                 value={posiDays}
@@ -900,25 +904,55 @@ const UserWisePosition: React.FC = () => {
                     </colgroup>
                     <thead className="sticky top-0 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-600 z-10">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDate</th>
-                        <th className="px-1.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">PositionDays</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Username</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">ParentUserName</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Exchange</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Symbol</th>
-                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Position</th>
-                        <th className="px-1.5 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Quantity</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Average Rate</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">CMP</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Profit / Loss</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">% P&L</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Realized P&L</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Total P&L</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Margin Used</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('positionDate')}>
+                          <div className="flex items-center gap-1">PositionDate {getSortIcon('positionDate')}</div>
+                        </th>
+                        <th className="px-1.5 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('positionDays')}>
+                          <div className="flex items-center gap-1">PositionDays {getSortIcon('positionDays')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('username')}>
+                          <div className="flex items-center gap-1">Username {getSortIcon('username')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('parentUsername')}>
+                          <div className="flex items-center gap-1">ParentUserName {getSortIcon('parentUsername')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('exchange')}>
+                          <div className="flex items-center gap-1">Exchange {getSortIcon('exchange')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('tradeSymbol')}>
+                          <div className="flex items-center gap-1">Symbol {getSortIcon('tradeSymbol')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('position')}>
+                          <div className="flex items-center justify-center gap-1">Position {getSortIcon('position')}</div>
+                        </th>
+                        <th className="px-1.5 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('quantity')}>
+                          <div className="flex items-center justify-end gap-1">Quantity {getSortIcon('quantity')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('averagePrice')}>
+                          <div className="flex items-center justify-end gap-1">Average Rate {getSortIcon('averagePrice')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('ltp')}>
+                          <div className="flex items-center justify-end gap-1">CMP {getSortIcon('ltp')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('pnl')}>
+                          <div className="flex items-center justify-end gap-1">Profit / Loss {getSortIcon('pnl')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('pnlPercentage')}>
+                          <div className="flex items-center justify-end gap-1">% P&L {getSortIcon('pnlPercentage')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('realisedPnl')}>
+                          <div className="flex items-center justify-end gap-1">Realized P&L {getSortIcon('realisedPnl')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('totalPnl')}>
+                          <div className="flex items-center justify-end gap-1">Total P&L {getSortIcon('totalPnl')}</div>
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('marginUsed')}>
+                          <div className="flex items-center justify-end gap-1">Margin Used {getSortIcon('marginUsed')}</div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
-                      {filteredPositions.map((position) => {
+                      {sortedPositions.map((position) => {
                         const changes = priceChanges[position.token] || {};
 
                         const getHighlightClass = (key: keyof PriceChange) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { Search, BarChart3, ChevronLeft, ChevronRight, Trash2, CheckCircle } from 'lucide-react'
+import { Search, BarChart3, ChevronLeft, ChevronRight, Trash2, CheckCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
@@ -9,6 +9,9 @@ import UserDetailsModal from '../user-management/UserDetailsModal'
 import OrderModal from '../../components/modals/OrderModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
+import { useSorting } from '../../hooks/useSorting'
+import { useAppSelector } from '../../hooks/reduxHooks'
+import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
 
 // --- Interfaces ---
 interface OrderData {
@@ -112,6 +115,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
 
   const userDataStr = localStorage.getItem('userData');
   const loggedInUser = userDataStr ? JSON.parse(userDataStr) : null;
+
+  // Get hasMarketTradeRights from Redux
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
 
   // --- Adapt users array to match DropdownItem interface [{ id, name }] ---
   const selectableUsers = useMemo(() => {
@@ -343,7 +349,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
         setSelectedOrders(new Set());
         handleFetchOrders(currentPage);
       } else {
-        toast.error(result?.message || "Failed to process orders to success");
+        toast.error(result?.responseMessage || "Failed to process orders to success");
       }
     } catch (err) {
       console.error("❌ Proceed to Success API failure:", err);
@@ -358,6 +364,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
     totalQuantity: ordersData?.orders.reduce((sum, o) => sum + o.quantity, 0) || 0,
     totalValue: ordersData?.orders.reduce((sum, o) => sum + (o.price * o.quantity), 0) || 0,
   }
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedOrders, getSortIcon } = useSorting({ data: ordersData?.orders || [] })
 
   // Clear all filters
   const handleClearFilters = useCallback(() => {
@@ -653,7 +662,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
             </div>
 
             {/* Selection Bulk Actions Menu */}
-            {selectedOrders.size > 0 && (
+            {selectedOrders.size > 0 && hasMarketTradeRights && (
               <div className="flex-shrink-0 px-6 py-3 bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-900/50 flex items-center justify-between transition-all duration-200 animate-in fade-in slide-in-from-top-1">
                 <div className="text-sm font-semibold text-orange-800 dark:text-orange-300">
                   {selectedOrders.size} row{selectedOrders.size > 1 ? 's' : ''} selected
@@ -666,7 +675,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                   >
                     <Trash2 className="w-4 h-4" /> Cancel Selected
                   </button>
-                  {loggedInUser?.roleId === 4 && (
+                  {loggedInUser?.roleId === 4 && hasMarketTradeRights && (
                     <button 
                       onClick={() => {
                         const firstOrderId = Array.from(selectedOrders)[0];
@@ -711,33 +720,57 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                   <table className="w-full border-collapse min-w-[2150px]">
                     <thead>
                       <tr className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b-2 border-blue-200 dark:border-blue-500/30">
-                        <th className="px-3 py-3.5 w-12">
-                          {loggedInUser?.roleId !== 4 ? (
+                        {hasMarketTradeRights && (
+                          <th className="px-3 py-3.5 w-12">
                             <input 
                               type="checkbox" 
                               checked={ordersData.orders.length > 0 && selectedOrders.size === ordersData.orders.length} 
                               onChange={() => setSelectedOrders(selectedOrders.size === ordersData.orders.length ? new Set() : new Set(ordersData.orders.map(o => o.orderId)))} 
                               className="w-4 h-4 cursor-pointer" 
                             />
-                          ) : null}
+                          </th>
+                        )}
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('userName')}>
+                          <div className="flex items-center gap-2">Username {getSortIcon('userName')}</div>
                         </th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Username</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Placed By</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[110px]">Symbol</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Type</th>
-                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[10px]">Quantity</th>
-                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Price</th>
-                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Brk</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Order Time</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">IPAddress</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">DeviceId</th>
-                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Reference Price</th>
-                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider">Order Method</th>
+                        {/* <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('placedByUsername')}>
+                          <div className="flex items-center gap-2">Placed By {getSortIcon('placedByUsername')}</div>
+                        </th> */}
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[110px] cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('tradeSymbol')}>
+                          <div className="flex items-center gap-2">Symbol {getSortIcon('tradeSymbol')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('side')}>
+                          <div className="flex items-center gap-2">Type {getSortIcon('side')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[10px] cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('quantity')}>
+                          <div className="flex items-center justify-end gap-2">Quantity {getSortIcon('quantity')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('price')}>
+                          <div className="flex items-center justify-end gap-2">Price {getSortIcon('price')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('brk')}>
+                          <div className="flex items-center justify-end gap-2">Brk {getSortIcon('brk')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('orderTime')}>
+                          <div className="flex items-center gap-2">Order Time {getSortIcon('orderTime')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('ipAddress')}>
+                          <div className="flex items-center gap-2">IPAddress {getSortIcon('ipAddress')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('deviceId')}>
+                          <div className="flex items-center gap-2">DeviceId {getSortIcon('deviceId')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-right text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('referencePrice')}>
+                          <div className="flex items-center justify-end gap-2">Reference Price {getSortIcon('referencePrice')}</div>
+                        </th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('orderMethod')}>
+                          <div className="flex items-center gap-2">Order Method {getSortIcon('orderMethod')}</div>
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      {ordersData.orders.map((order) => {
+                      {sortedOrders.map((order) => {
                         const isBuy = order.side === 'BUY';
                         const sideColorClass = isBuy
                           ? 'text-blue-600 dark:text-blue-400'
@@ -751,30 +784,32 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                                 : 'hover:bg-blue-50/80 dark:hover:bg-slate-700/50'
                               }`}
                           >
-                            <td className="px-3 py-3.5 text-center">
-                              {loggedInUser?.roleId === 4 ? (
-                                <input
-                                  type="radio"
-                                  name="selectedOrder"
-                                  checked={selectedOrders.has(order.orderId)}
-                                  onChange={() => {
-                                    setSelectedOrders(new Set([order.orderId]));
-                                  }}
-                                  className="w-4 h-4 cursor-pointer"
-                                />
-                              ) : (
-                                <input
-                                  type="checkbox"
-                                  checked={selectedOrders.has(order.orderId)}
-                                  onChange={() => {
-                                    const next = new Set(selectedOrders);
-                                    next.has(order.orderId) ? next.delete(order.orderId) : next.add(order.orderId);
-                                    setSelectedOrders(next);
-                                  }}
-                                  className="w-4 h-4 cursor-pointer"
-                                />
-                              )}
-                            </td>
+                            {hasMarketTradeRights && (
+                              <td className="px-3 py-3.5 text-center">
+                                {loggedInUser?.roleId === 4 ? (
+                                  <input
+                                    type="radio"
+                                    name="selectedOrder"
+                                    checked={selectedOrders.has(order.orderId)}
+                                    onChange={() => {
+                                      setSelectedOrders(new Set([order.orderId]));
+                                    }}
+                                    className="w-4 h-4 cursor-pointer"
+                                  />
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedOrders.has(order.orderId)}
+                                    onChange={() => {
+                                      const next = new Set(selectedOrders);
+                                      next.has(order.orderId) ? next.delete(order.orderId) : next.add(order.orderId);
+                                      setSelectedOrders(next);
+                                    }}
+                                    className="w-4 h-4 cursor-pointer"
+                                  />
+                                )}
+                              </td>
+                            )}
                             <td className="px-4 py-3.5 text-left text-sm font-semibold">
                               <span
                                 className={`${loggedInUser?.roleId === 4
@@ -787,9 +822,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                               </span>
                             </td>
 
-                            <td className="px-4 py-3.5 text-left text-sm text-slate-800 dark:text-slate-200 font-medium">
+                            {/* <td className="px-4 py-3.5 text-left text-sm text-slate-800 dark:text-slate-200 font-medium">
                               {order.placedByUsername || '-'}
-                            </td>
+                            </td> */}
 
                             <td className={`px-4 py-3.5 text-left text-sm font-bold uppercase ${sideColorClass} max-w-[110px] truncate`}>
                               {order.exchange} {order.tradeSymbol}

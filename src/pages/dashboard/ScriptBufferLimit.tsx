@@ -124,11 +124,22 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
           }
         };
 
-        await fetch('https://api-staging.rivoplus.live/user/portal/updateScripBufferSettings', {
+        const response = await fetch('https://api-staging.rivoplus.live/user/portal/updateScripBufferSettings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+
+        if (!response.ok) {
+          toast.error('Update failed');
+          return;
+        }
+
+        const res = await response.json();
+        if (res?.responseCode !== '0') {
+          toast.error(res?.responseMessage || 'Update failed');
+          return;
+        }
       }
 
       toast.success('Updated successfully');

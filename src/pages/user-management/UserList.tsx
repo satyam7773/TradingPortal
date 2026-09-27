@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Plus, User, MoreHorizontal, Settings, Edit, X } from 'lucide-react';
+import { Search, Plus, User, MoreHorizontal, Settings, Edit, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useAppSelector } from '../../hooks/reduxHooks';
@@ -10,6 +10,7 @@ import FilterLayout from '../../components/FilterLayout';
 import UserDetailsModal from './UserDetailsModal';
 import IntradaySquareOffModal from './IntradaySquareOffModal';
 import MarketTradeRightsModal from './MarketTradeRightsModal';
+import AdminRightsModal from './AdminRightsModal';
 import ChangePassword from './user-details-tabs/ChangePassword';
 import SharingDetails from './user-details-tabs/SharingDetails';
 import AddCredits from './user-details-tabs/AddCredits';
@@ -19,6 +20,7 @@ import MarginSquareOffModal from './MarginSquareOffModal';
 import TradeDurationRankModal from './TradeDurationRankModal';
 import ExchangewiseLotLimitModal from './ExchangewiseLotLimitModal';
 import AccountLimit from './user-details-tabs/AccountLimit';
+import { useSorting } from '../../hooks/useSorting';
 
 interface UserData {
   id: string;
@@ -48,7 +50,8 @@ interface UserData {
   deviceId: string;
   lastLogin: string;
   isActive: boolean;
-  isTradeLock: boolean;
+  mtrToggleEnabled?: boolean;
+  marketTradeRight?: boolean;
   parentId:any;
   freshStopLoss: boolean;
   freshStopLossEnabled: boolean;
@@ -86,7 +89,6 @@ interface ApiUser {
   parentName: string;
   parentUsername: string;
   isActive: boolean;
-  isTradeLock: boolean;
 }
 
 const UserList: React.FC = () => {
@@ -123,6 +125,8 @@ const UserList: React.FC = () => {
   const [selectedUserForCarryForwardMargin, setSelectedUserForCarryForwardMargin] = useState(null);
   const [selectedUserForMarketTradeRights, setSelectedUserForMarketTradeRights] = useState<any>(null);
   const [showMarketTradeRightsModal, setShowMarketTradeRightsModal] = useState(false);
+  const [selectedUserForAdminRights, setSelectedUserForAdminRights] = useState<any>(null);
+  const [showAdminRightsModal, setShowAdminRightsModal] = useState(false);
   const { user: loggedInUser } = useAppSelector(state => state.auth);
   const [showMarginModal, setShowMarginModal] = useState(false);
   const [selectedUserForMargin, setSelectedUserForMargin] = useState<any>(null);
@@ -221,11 +225,12 @@ const UserList: React.FC = () => {
       deviceId: apiUser.deviceId || 'N/A',
       lastLogin: formatDate(apiUser.lastLoginDate),
       isActive: apiUser.isActive ?? true,
-      isTradeLock: apiUser.isTradeLock ?? false,
       manualOrder: getToggleValue('manualOrder'),
       manualOrderEnabled: getToggleEnabled('manualOrder'),
       deleteTrade: getToggleValue('deleteTrade'),
       deleteTradeEnabled: getToggleEnabled('deleteTrade'),
+      marketTradeRight: (getToggleValue('marketTradeRight') || (apiUser as any).marketTradeRight) ?? false,
+      mtrToggleEnabled: (getToggleEnabled('marketTradeRight') || (apiUser as any).mtrToggleEnabled) ?? false,
     };
   };
 
@@ -270,7 +275,6 @@ const UserList: React.FC = () => {
           cachedUsers[0].hasOwnProperty('sharing') &&
           cachedUsers[0].hasOwnProperty('parentCredits') &&
           cachedUsers[0].hasOwnProperty('isActive') &&
-          cachedUsers[0].hasOwnProperty('isTradeLock') &&
           cachedUsers[0].hasOwnProperty('deleteTrade')
         );
 
@@ -362,6 +366,10 @@ const UserList: React.FC = () => {
           setShowMarketTradeRightsModal(false);
           setSelectedUserForMarketTradeRights(null);
         }
+        else if (showAdminRightsModal) {
+          setShowAdminRightsModal(false);
+          setSelectedUserForAdminRights(null);
+        }
         else if (showAccountLimitModal) {
           setShowAccountLimitModal(false);
           setSelectedUserForAccountLimit(null);
@@ -371,7 +379,7 @@ const UserList: React.FC = () => {
 
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
-  }, [showSharingModal, showPasswordModal, showAddCreditsModal, showIntradaySquareOffModal, showMarketTradeRightsModal, showAccountLimitModal]);
+  }, [showSharingModal, showPasswordModal, showAddCreditsModal, showIntradaySquareOffModal, showMarketTradeRightsModal, showAdminRightsModal, showAccountLimitModal]);
 
   const filteredUsers = users.filter(user => {
     // Apply search term filter - Search only in username
@@ -397,6 +405,9 @@ const UserList: React.FC = () => {
 
   const displayUsers = filteredUsers;
 
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedUsers, getSortIcon } = useSorting({ data: filteredUsers });
+
   const handleToggle = useCallback(async (userId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'deleteTrade') => {
     try {
       // Map field names to API type values
@@ -407,9 +418,7 @@ const UserList: React.FC = () => {
         'margin': 'marginSquareOff',
         'status': 'status',
         'creditLimit': 'creditLimit',
-        'creditBasedMargin': 'creditBasedMargin',
-        'manualOrder': 'manualOrder',
-        'deleteTrade': 'deleteTrade'
+        'creditBasedMargin': 'creditBasedMargin'
       };
 
       // Map field names to display names
@@ -420,9 +429,7 @@ const UserList: React.FC = () => {
         'status': 'Status',
         'freshStopLoss': 'Fresh Stop Loss',
         'creditLimit': 'Credit Limit',
-        'creditBasedMargin': 'CBM',
-        'manualOrder': 'Manual Order',
-        'deleteTrade': 'Delete Trade'
+        'creditBasedMargin': 'CBM'
       };
 
       const apiType = fieldToApiType[field];
@@ -614,7 +621,7 @@ const UserList: React.FC = () => {
         ) : (
           <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
             {/* Single Table with Sticky Header */}
-            <table className="min-w-[1500px] w-full table-fixed border-collapse bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-none">
+            <table className="w-full table-fixed border-collapse bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-none">
               <colgroup>
                 <col style={{ width: '100px' }} />
                 <col style={{ width: '140px' }} />
@@ -625,9 +632,6 @@ const UserList: React.FC = () => {
                 <col style={{ width: '100px' }} />
                 <col style={{ width: '90px' }} />
                 <col style={{ width: '60px' }} />
-                <col style={{ width: '60px' }} />
-                <col style={{ width: '60px' }} />
-                <col style={{ width: '70px' }} />
                 <col style={{ width: '70px' }} />
                 <col style={{ width: '70px' }} />
                 <col style={{ width: '70px' }} />
@@ -643,29 +647,48 @@ const UserList: React.FC = () => {
                   <th className="pl-12 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-slate-50 dark:bg-slate-900 z-10">
                     Actions
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-9">Username</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Name</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Type</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Parent</th>
-                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Credits</th>
-                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Balance</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Sharing%</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 sticky left-[100px] bg-slate-50 dark:bg-slate-900 z-9 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition" onClick={() => handleSort('username')}>
+                    <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('name')}>
+                    <div className="flex items-center gap-2">Name {getSortIcon('name')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('type')}>
+                    <div className="flex items-center justify-center gap-2">Type {getSortIcon('type')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('parent')}>
+                    <div className="flex items-center justify-center gap-2">Parent {getSortIcon('parent')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('credits')}>
+                    <div className="flex items-center justify-end gap-2">Credits {getSortIcon('credits')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('balance')}>
+                    <div className="flex items-center justify-end gap-2">Balance {getSortIcon('balance')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('sharingPercentage')}>
+                    <div className="flex items-center justify-center gap-2">Sharing% {getSortIcon('sharingPercentage')}</div>
+                  </th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Bet</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">FSL</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Manual</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Close</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Margin</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Status</th>
                   <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">CBM</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Del Trade</th>
-                  <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200">Created</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">IP Address</th>
-                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">Device ID</th>
-                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200">Last Login</th>
+                  <th className="px-2 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('createdDate')}>
+                    <div className="flex items-center gap-2">Created {getSortIcon('createdDate')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('ipAddress')}>
+                    <div className="flex items-center justify-center gap-2">IP Address {getSortIcon('ipAddress')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-center text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('deviceId')}>
+                    <div className="flex items-center justify-center gap-2">Device ID {getSortIcon('deviceId')}</div>
+                  </th>
+                  <th className="px-2 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('lastLogin')}>
+                    <div className="flex items-center justify-end gap-2">Last Login {getSortIcon('lastLogin')}</div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="">
-                {displayUsers.map((user, idx) => (
+                {sortedUsers.map((user, idx) => (
                   <tr
                     key={user.id}
                     className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 h-12"
@@ -802,24 +825,6 @@ const UserList: React.FC = () => {
                       <ToggleSwitch enabled={user.bet} onClick={() => handleToggle(user.id, 'bet')} size="xs" disabled={!user.betEnabled} />
                     </td>
                     <td className="px-2 py-2 text-center">
-                      <ToggleSwitch
-                        enabled={user.freshStopLoss}
-                        onClick={() => handleToggle(user.id, 'freshStopLoss' as any)}
-                        size="xs"
-                        disabled={!user.freshStopLossEnabled}
-                      />
-                    </td>
-
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch
-                        enabled={user.manualOrder}
-                        onClick={() => handleToggle(user.id, 'manualOrder' as any)}
-                        size="xs"
-                        disabled={!user.manualOrderEnabled}
-                      />
-                    </td>
-
-                    <td className="px-2 py-2 text-center">
                       <ToggleSwitch enabled={user.closeOut} onClick={() => handleToggle(user.id, 'closeOut')} size="xs" disabled={!user.closeOutEnabled} />
                     </td>
                     <td className="px-2 py-2 text-center">
@@ -830,9 +835,6 @@ const UserList: React.FC = () => {
                     </td>
                     <td className="px-2 py-2 text-center">
                       <ToggleSwitch enabled={user.creditBasedMargin} onClick={() => handleToggle(user.id, 'creditBasedMargin')} size="xs" disabled={!user.creditBasedMarginEnabled} />
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <ToggleSwitch enabled={user.deleteTrade} onClick={() => handleToggle(user.id, 'deleteTrade')} size="xs" disabled={!user.deleteTradeEnabled} />
                     </td>
                     <td className="px-2 py-2">
                       <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">{user.createdDate}</span>
@@ -1236,6 +1238,21 @@ const UserList: React.FC = () => {
         />
       )}
 
+      {/* Admin Rights Modal */}
+      {showAdminRightsModal && selectedUserForAdminRights && (
+        <AdminRightsModal
+          isOpen={showAdminRightsModal}
+          user={selectedUserForAdminRights}
+          onClose={() => {
+            setShowAdminRightsModal(false);
+            setSelectedUserForAdminRights(null);
+          }}
+          onSave={async () => {
+            await refetchUserList();
+          }}
+        />
+      )}
+
       {/* Margin square off Modal */}
       {showMarginModal && selectedUserForMargin && (
         <MarginSquareOffModal
@@ -1440,7 +1457,19 @@ const UserList: React.FC = () => {
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📊</span> Exchangewise Interest %
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForAdminRights(user);
+                          setShowAdminRightsModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>👤</span> Admin Rights
                     </button>
                     <button

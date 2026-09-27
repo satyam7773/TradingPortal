@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
+import { useAppSelector } from '../../hooks/reduxHooks';
+import { selectMarketTradeRight } from '../../store/selectors/authSelectors';
 
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DealBrkDetailsModal from './DealBrkDetailsModal';
@@ -93,6 +95,9 @@ const ManageTraders: React.FC = () => {
   // Check if user is admin
   const roleId = userData?.roleId;
   const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3;
+  
+  // Get hasMarketTradeRights from Redux
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
 
   // Initialize download hook
   const downloadReport = useDownloadReport({
@@ -428,9 +433,14 @@ const ManageTraders: React.FC = () => {
         let aVal: any = a[sortColumn as keyof TradeData];
         let bVal: any = b[sortColumn as keyof TradeData];
 
-        if (typeof aVal === 'string') {
+        // Handle null/undefined values
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
+        if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
+
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
           aVal = aVal.toLowerCase();
-          bVal = (bVal as string).toLowerCase();
+          bVal = bVal.toLowerCase();
         }
 
         if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
@@ -466,7 +476,7 @@ const ManageTraders: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
-            {selectedTradeIds.size > 0 && isAdminUser && (
+            {selectedTradeIds.size > 0 && isAdminUser && hasMarketTradeRights && (
               <button
                 onClick={handleDeleteTrades}
                 disabled={isDeleting}
@@ -751,7 +761,7 @@ const ManageTraders: React.FC = () => {
             <table className="w-full border-collapse min-w-max">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
-                    {isAdminUser && (
+                    {isAdminUser && hasMarketTradeRights && (
                       <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -782,7 +792,9 @@ const ManageTraders: React.FC = () => {
                     <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('pnl')}>
                       <div className="flex items-center justify-end gap-2">Deal {getSortIcon('pnl')}</div>
                     </th>
-                    <th className="text-center px-16 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[200px]">Duration</th>
+                    <th className="text-center px-16 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[200px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('duration')}>
+                      <div className="flex items-center justify-center gap-2">Duration {getSortIcon('duration')}</div>
+                    </th>
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('status')}>
                       <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
                     </th>
@@ -804,7 +816,7 @@ const ManageTraders: React.FC = () => {
                     <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderMethod')}>
                       <div className="flex items-center justify-center gap-2">Order Method {getSortIcon('orderMethod')}</div>
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Placed By</th>
+                    {/* <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Placed By</th> */}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
@@ -833,7 +845,7 @@ const ManageTraders: React.FC = () => {
                         className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
                       >
                         {/* Checkbox */}
-                        {isAdminUser && (
+                        {isAdminUser && hasMarketTradeRights && (
                           <td className="px-4 py-3 text-center">
                             <input
                               type="checkbox"
@@ -976,9 +988,9 @@ const ManageTraders: React.FC = () => {
                         </td>
 
                         {/* Placed By */}
-                        <td className="px-4 py-3 text-xs text-left text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {/* <td className="px-4 py-3 text-xs text-left text-slate-600 dark:text-slate-300 whitespace-nowrap">
                           {trade.placedBy || '-'}
-                        </td>
+                        </td> */}
                       </tr>
                     );
                   })}

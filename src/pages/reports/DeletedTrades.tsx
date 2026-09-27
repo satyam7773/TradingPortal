@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
 import SearchableSelect from '../../components/ui/SearchableSelect';
+import { useSorting } from '../../hooks/useSorting';
 
 interface DeletedTradeData {
   tradeId: number;
@@ -63,6 +64,9 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   const [isRestoring, setIsRestoring] = useState(false);
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set());
   const pageSize = 10;
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedTrades, getSortIcon } = useSorting({ data: trades });
 
   // Dynamic dropdown options
   const [users, setUsers] = useState<any[]>([]);
@@ -513,19 +517,45 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                         />
                       </th>
                     )}
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Username</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Symbol</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[120px]">Type</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Quantity</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Price</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Brk</th>
-                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Deal</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[150px]">Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Time</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Execution Time</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Deleted On</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">IP Address</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Order Method</th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('tradeBy')}>
+                      <div className="flex items-center gap-2">Username {getSortIcon('tradeBy')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('tradeSymbol')}>
+                      <div className="flex items-center gap-2">Symbol {getSortIcon('tradeSymbol')}</div>
+                    </th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[120px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderType')}>
+                      <div className="flex items-center justify-center gap-2">Type {getSortIcon('orderType')}</div>
+                    </th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('quantity')}>
+                      <div className="flex items-center justify-center gap-2">Quantity {getSortIcon('quantity')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderPrice')}>
+                      <div className="flex items-center justify-end gap-2">Order Price {getSortIcon('orderPrice')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('brokerage')}>
+                      <div className="flex items-center justify-end gap-2">Brk {getSortIcon('brokerage')}</div>
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('deal')}>
+                      <div className="flex items-center justify-end gap-2">Deal {getSortIcon('deal')}</div>
+                    </th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap min-w-[150px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderStatus')}>
+                      <div className="flex items-center justify-center gap-2">Status {getSortIcon('orderStatus')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('orderTime')}>
+                      <div className="flex items-center gap-2">Order Time {getSortIcon('orderTime')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('executionTime')}>
+                      <div className="flex items-center gap-2">Execution Time {getSortIcon('executionTime')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('deletedOn')}>
+                      <div className="flex items-center gap-2">Deleted On {getSortIcon('deletedOn')}</div>
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('ipAddress')}>
+                      <div className="flex items-center gap-2">IP Address {getSortIcon('ipAddress')}</div>
+                    </th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('tradeOrderMethod')}>
+                      <div className="flex items-center justify-center gap-2">Order Method {getSortIcon('tradeOrderMethod')}</div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
@@ -537,7 +567,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                         <p className="text-slate-500 dark:text-slate-400">Adjust your filters and click "View" to load deleted trades</p>
                       </td>
                     </tr>
-                  ) : trades.map((trade, index) => {
+                  ) : sortedTrades.map((trade, index) => {
                     const typeColorClass = trade.orderType?.toUpperCase().startsWith('BUY')
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-red-600 dark:text-red-400';

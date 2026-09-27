@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight } from 'lucide-react'
+import { BarChart3, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import userManagementService from '../../services/userManagementService'
 import UserDetailsModal from '../user-management/UserDetailsModal'
+import { useSorting } from '../../hooks/useSorting'
 
 interface WeeklyAdminData {
   userId: number
@@ -62,6 +63,9 @@ const WeeklyAdmin: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<any>(null)
   const [totalPages, setTotalPages] = useState(0)
   const pageSize = 10
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedReportData, getSortIcon } = useSorting({ data: reportData })
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -524,23 +528,49 @@ const WeeklyAdmin: React.FC = () => {
                     </colgroup>
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
-                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Username</th>
-                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Name</th>
-                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Parent</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Realised PnL</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">M2M PnL</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Total PnL</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Brokerage</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Net PnL</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin PnL %</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Brk %</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin PnL</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Brk</th>
-                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Admin Net</th>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('username')}>
+                          <div className="flex items-center gap-2">Username {getSortIcon('username')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('name')}>
+                          <div className="flex items-center gap-2">Name {getSortIcon('name')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('parentUsername')}>
+                          <div className="flex items-center gap-2">Parent {getSortIcon('parentUsername')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('realisedPnl')}>
+                          <div className="flex items-center justify-end gap-2">Realised PnL {getSortIcon('realisedPnl')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('m2mPnl')}>
+                          <div className="flex items-center justify-end gap-2">M2M PnL {getSortIcon('m2mPnl')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('totalPnl')}>
+                          <div className="flex items-center justify-end gap-2">Total PnL {getSortIcon('totalPnl')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('brokerage')}>
+                          <div className="flex items-center justify-end gap-2">Brokerage {getSortIcon('brokerage')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('netPnl')}>
+                          <div className="flex items-center justify-end gap-2">Net PnL {getSortIcon('netPnl')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('adminPnlPercent')}>
+                          <div className="flex items-center justify-end gap-2">Admin PnL % {getSortIcon('adminPnlPercent')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('adminBrkPercent')}>
+                          <div className="flex items-center justify-end gap-2">Admin Brk % {getSortIcon('adminBrkPercent')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('adminPnl')}>
+                          <div className="flex items-center justify-end gap-2">Admin PnL {getSortIcon('adminPnl')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('adminBrk')}>
+                          <div className="flex items-center justify-end gap-2">Admin Brk {getSortIcon('adminBrk')}</div>
+                        </th>
+                        <th className="px-2 py-1.5 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('adminNetPnl')}>
+                          <div className="flex items-center justify-end gap-2">Admin Net {getSortIcon('adminNetPnl')}</div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-slate-800">
-                      {reportData.map((item, index) => (
+                      {sortedReportData.map((item, index) => (
                         <tr
                           key={index}
                           className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200 border-b border-slate-200/50 dark:border-slate-700/30">

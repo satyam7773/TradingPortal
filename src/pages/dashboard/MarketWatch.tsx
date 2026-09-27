@@ -12,6 +12,8 @@ import orderService from '../../services/orderService'
 import orderUpdateService from '../../services/orderUpdateService'
 import ConfigManager from '../../utils/configManager'
 import toast from 'react-hot-toast'
+import { useAppSelector } from '../../hooks/reduxHooks'
+import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
 
 interface FeedInstrument {
   insToken: number
@@ -101,6 +103,29 @@ const formatExpiry = (expiry: string | undefined): string => {
   return formatted
 }
 
+const formatLastTradedTime = (timestamp: number | undefined): string => {
+  if (!timestamp) return '-'
+  
+  // Socket sends seconds, convert to milliseconds
+  const ms = timestamp * 1000
+  
+  if (dateFormatterCache.has(timestamp)) {
+    return dateFormatterCache.get(timestamp)!
+  }
+
+  const formatted = new Date(ms).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).replace(/\//g, '-')
+
+  dateFormatterCache.set(timestamp, formatted)
+  return formatted
+}
+
 // Memoized Table Row Component
 // Memoized Table Row Component
 const TableRow = memo(({
@@ -111,7 +136,8 @@ const TableRow = memo(({
   onActionMenuOpen,
   onBuyClick,
   onSellClick,
-  deletingToken
+  deletingToken,
+  hasMarketTradeRights
 }: {
   instrument: FeedInstrument
   index: number
@@ -121,6 +147,7 @@ const TableRow = memo(({
   onBuyClick: (token: number, config: InstrumentConfig | undefined) => void
   onSellClick: (token: number, config: InstrumentConfig | undefined) => void
   deletingToken: number | null
+  hasMarketTradeRights: boolean
 }) => {
   const change = instrument.ltp - instrument.close
   const isPositive = change >= 0
@@ -144,7 +171,7 @@ const TableRow = memo(({
 
   const exchangeName = config?.exchange || 'N/A'
   const expiry = formatExpiry(config?.expiry)
-  const lastTradedTime = formatTimestamp(instrument.lastTradedTime)
+  const lastTradedTime = formatLastTradedTime(instrument.lastTradedTime)
   const isEvenRow = instrument.insToken % 2 === 0
 
   return (
@@ -168,33 +195,37 @@ const TableRow = memo(({
           </td>
 
       {/* Buy Button Column */}
-      <td className="px-2 py-2 text-center">
-        <button
-          onClick={() => onBuyClick(instrument.insToken, config)}
-          className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
-        >
-          B
-        </button>
-      </td>
+      {hasMarketTradeRights && (
+        <td className="px-2 py-2 text-center">
+          <button
+            onClick={() => onBuyClick(instrument.insToken, config)}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
+          >
+            B
+          </button>
+        </td>
+      )}
 
       {/* Sell Button Column (Grayed out if CALLPUT) */}
-      <td className="px-2 py-2 text-center">
-        {/* {config?.exchange !== 'CALLPUT' ? ( */}
-        <button
-          onClick={() => onSellClick(instrument.insToken, config)}
-          className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
-        >
-          S
-        </button>
-        {/* ) : (
+      {hasMarketTradeRights && (
+        <td className="px-2 py-2 text-center">
+          {/* {config?.exchange !== 'CALLPUT' ? ( */}
           <button
-            disabled
-            className="bg-slate-600 text-slate-400 font-bold text-xs px-2.5 py-1 rounded cursor-not-allowed opacity-50"
+            onClick={() => onSellClick(instrument.insToken, config)}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105"
           >
             S
           </button>
-        )} */}
-      </td>
+          {/* ) : (
+            <button
+              disabled
+              className="bg-slate-600 text-slate-400 font-bold text-xs px-2.5 py-1 rounded cursor-not-allowed opacity-50"
+            >
+              S
+            </button>
+          )} */}
+        </td>
+      )}
 
       {/* Exchange */}
       <td className="px-4 py-2 text-left">
@@ -334,6 +365,9 @@ const MarketWatch: React.FC = () => {
   const feedUnsubscribeRef = useRef<(() => void) | null>(null)
   const instrumentConfigRef = useRef<Record<number, any>>({})
   const previousPricesRef = useRef<Record<number, FeedInstrument>>({})
+
+  // Get hasMarketTradeRights from Redux
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight)
 
   // Column resize handlers
   const handleResizeStart = (e: React.MouseEvent, column: string) => {
@@ -1677,7 +1711,7 @@ const MarketWatch: React.FC = () => {
                 <DragDropContext onDragEnd={handleReorderSave}>
                   <table className="w-full table-fixed border-collapse">
                     <colgroup>
-                      {['actions', 'buyBtn', 'sellBtn', 'exchange', 'symbol', 'expiry', 'buyQty', 'buyPrice', 'sellPrice', 'sellQty', 'ltp', 'netChange', 'open', 'high', 'low', 'close', 'ltt'].map(col => (
+                      {['actions', ...(hasMarketTradeRights ? ['buyBtn', 'sellBtn'] : []), 'exchange', 'symbol', 'expiry', 'buyQty', 'buyPrice', 'sellPrice', 'sellQty', 'ltp', 'netChange', 'open', 'high', 'low', 'close', 'ltt'].map(col => (
                         <col key={col} style={{ width: `${columnWidths[col as keyof typeof columnWidths]}px` }} />
                       ))}
                     </colgroup>
@@ -1685,8 +1719,10 @@ const MarketWatch: React.FC = () => {
                       <tr className="bg-gradient-to-r from-slate-800 to-slate-700 border-b-2 border-slate-600 sticky top-0 z-10">
                         {[
                           { name: 'Actions', key: 'actions', align: 'center', sticky: true },
-                          { name: 'Buy', key: 'buyBtn', align: 'center' },
-                          { name: 'Sell', key: 'sellBtn', align: 'center' },
+                          ...(hasMarketTradeRights ? [
+                            { name: 'Buy', key: 'buyBtn', align: 'center' },
+                            { name: 'Sell', key: 'sellBtn', align: 'center' }
+                          ] : []),
                           { name: 'Exchange', key: 'exchange', align: 'left' },
                           { name: 'Symbol', key: 'symbol', align: 'left' },
                           { name: 'Expiry', key: 'expiry', align: 'center' },
@@ -1736,6 +1772,7 @@ const MarketWatch: React.FC = () => {
                               onBuyClick={onDirectBuyClick}
                               onSellClick={onDirectSellClick}
                               deletingToken={deletingToken}
+                              hasMarketTradeRights={hasMarketTradeRights}
                             />
                           ))}
                           {provided.placeholder}
@@ -1840,33 +1877,38 @@ const MarketWatch: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={() => {
-                const config = instrumentConfigRef.current[actionMenuToken]
-                setSelectedOrderInstrument({ token: actionMenuToken, config })
-                setShowBuyOrderModal(true)
-                setActionMenuPosition(null)
-                setActionMenuToken(null)
-              }}
-              className="w-full px-4 py-3 text-left text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all flex items-center gap-3"
-            >
-              <TrendingUp className="w-4 h-4" />
-              Buy
-            </button>
-            {/* Sell Button - HIDE FOR CALLPUT */}
-            {instrumentConfigRef.current[actionMenuToken]?.exchange !== 'CALLPUT' && (
-              <button
-                onClick={() => {
-                  const config = instrumentConfigRef.current[actionMenuToken]
-                  setSelectedOrderInstrument({ token: actionMenuToken, config })
-                  setShowSellOrderModal(true)
-                  setActionMenuPosition(null)
-                  setActionMenuToken(null)
-                }}
-                className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center gap-3 border-t border-gray-200 dark:border-slate-700"
-              >
-                <TrendingDown className="w-4 h-4" /> Sell
-              </button>
+            {hasMarketTradeRights && (
+              <>
+                <button
+                  onClick={() => {
+                    const config = instrumentConfigRef.current[actionMenuToken]
+                    setSelectedOrderInstrument({ token: actionMenuToken, config })
+                    setShowBuyOrderModal(true)
+                    setActionMenuPosition(null)
+                    setActionMenuToken(null)
+                  }}
+                  className="w-full px-4 py-3 text-left text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all flex items-center gap-3"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Buy
+                </button>
+                {/* Sell Button - HIDE FOR CALLPUT */}
+                {instrumentConfigRef.current[actionMenuToken]?.exchange !== 'CALLPUT' && (
+                  <button
+                    onClick={() => {
+                      const config = instrumentConfigRef.current[actionMenuToken]
+                      setSelectedOrderInstrument({ token: actionMenuToken, config })
+                      setShowSellOrderModal(true)
+                      setActionMenuPosition(null)
+                      setActionMenuToken(null)
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center gap-3 border-t border-gray-200 dark:border-slate-700"
+                  >
+                    <TrendingDown className="w-4 h-4" /> Sell
+                  </button>
+                )}
+                <div className="border-t border-gray-200 dark:border-slate-700" />
+              </>
             )}
             <button
               onClick={() => {
@@ -2794,7 +2836,7 @@ const MarketWatch: React.FC = () => {
                           <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-700 pb-2">
                             <span className="font-bold text-gray-700 dark:text-gray-300">LTT :</span>
                             <span className="font-semibold text-gray-900 dark:text-gray-100">
-                              {formatTimestamp(liveData.lastTradedTime)}
+                              {formatLastTradedTime(liveData.lastTradedTime)}
                             </span>
                           </div>
                           <div className="flex justify-between items-center border-b border-gray-200 dark:border-slate-700 pb-2">

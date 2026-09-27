@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import intradayHistoryService from '../../services/intradayHistoryService'
 import userManagementService from '../../services/userManagementService'
+import { useSorting } from '../../hooks/useSorting'
 
 interface Candle {
   timestamp: string
@@ -30,6 +31,9 @@ const IntradayHistory: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedCandles, getSortIcon } = useSorting({ data: candles })
+
   // Adapt symbols for SearchableSelect
   const selectableSymbols = useMemo(() => {
     return symbols.map(s => ({
@@ -43,7 +47,7 @@ const IntradayHistory: React.FC = () => {
   // Fetch symbols for selected exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
     try {
-      const symbolsResponse = await userManagementService.fetchAllSymbols(exchangeName)
+      const symbolsResponse = await userManagementService.fetchSymbols(exchangeName)
       if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
         setSymbols(symbolsResponse.data)
         if (symbolsResponse.data.length > 0) {
@@ -101,7 +105,7 @@ const IntradayHistory: React.FC = () => {
           setSelectedExchange(defaultExchange)
           
           // Fetch symbols for default exchange
-          const symbolsResponse = await userManagementService.fetchAllSymbols(defaultExchange)
+          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
           if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
             setSymbols(symbolsResponse.data)
             if (symbolsResponse.data.length > 0) {
@@ -289,16 +293,28 @@ const IntradayHistory: React.FC = () => {
                 <table className="w-full border-collapse min-w-max">
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Timestamp</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Open</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">High</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Low</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Close</th>
-                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Volume</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('timestamp')}>
+                        <div className="flex items-center gap-2">Timestamp {getSortIcon('timestamp')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('open')}>
+                        <div className="flex items-center justify-end gap-2">Open {getSortIcon('open')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('high')}>
+                        <div className="flex items-center justify-end gap-2">High {getSortIcon('high')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('low')}>
+                        <div className="flex items-center justify-end gap-2">Low {getSortIcon('low')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('close')}>
+                        <div className="flex items-center justify-end gap-2">Close {getSortIcon('close')}</div>
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('volume')}>
+                        <div className="flex items-center justify-end gap-2">Volume {getSortIcon('volume')}</div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {candles.map((candle, index) => (
+                    {sortedCandles.map((candle, index) => (
                       <tr key={index} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
                         <td className="px-6 py-4 text-left text-sm text-slate-900 dark:text-slate-100 whitespace-nowrap">
                           {formatDateTime(candle.timestamp)}

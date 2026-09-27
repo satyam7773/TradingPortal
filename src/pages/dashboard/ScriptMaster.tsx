@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { Eye } from 'lucide-react';
+import { Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
+import { useSorting } from '../../hooks/useSorting';
 
 interface ScriptMaster {
   instrumentId: number;
@@ -92,6 +93,18 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
     return roleId || null; // roleId: 1,2=Admin, 3=Master, 4=Client
   }, [userDetails, loggedInUser]);
 
+  // Filter scripts by search term
+  const filteredScripts = React.useMemo(() => {
+    return scripts.filter(script => 
+      searchTerm === '' || 
+      script.scripName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (script.exchange && script.exchange.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [scripts, searchTerm]);
+
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedScripts, getSortIcon } = useSorting({ data: filteredScripts });
+
   const handleApply = () => {
     if (selectedIds.size === 0) {
       toast.error('Select at least one script');
@@ -157,11 +170,22 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
           }
         };
 
-        await fetch('https://api-staging.rivoplus.live/user/portal/updateScripMasterSettings', {
+        const response = await fetch('https://api-staging.rivoplus.live/user/portal/updateScripMasterSettings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+
+        if (!response.ok) {
+          toast.error('Update failed');
+          return;
+        }
+
+        const res = await response.json();
+        if (res?.responseCode !== '0') {
+          toast.error(res?.responseMessage || 'Update failed');
+          return;
+        }
       }
 
       toast.success('Updated successfully');
@@ -562,36 +586,38 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
                       className="rounded"
                     />
                   </th>
-                  <th className="px-4 py-3">Exchange</th>
-                  <th className="px-4 py-3">Script</th>
-                  <th className="px-4 py-3">Expiry Date</th>
-                  <th className="px-4 py-3 text-right">LotSize</th>
-                  <th className="px-4 py-3">Trade Attribute</th>
-                  <th className="px-4 py-3">Allow Trade</th>
-                  <th className="px-4 py-3 text-right">Reverse Delay (Min)</th>
+                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('exchange')}>
+                    <div className="flex items-center gap-2">Exchange {getSortIcon('exchange')}</div>
+                  </th>
+                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('scripName')}>
+                    <div className="flex items-center gap-2">Script {getSortIcon('scripName')}</div>
+                  </th>
+                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('expiry')}>
+                    <div className="flex items-center gap-2">Expiry Date {getSortIcon('expiry')}</div>
+                  </th>
+                  <th className="px-4 py-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('lotSize')}>
+                    <div className="flex items-center justify-end gap-2">LotSize {getSortIcon('lotSize')}</div>
+                  </th>
+                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('tradeAttributeDisplay')}>
+                    <div className="flex items-center gap-2">Trade Attribute {getSortIcon('tradeAttributeDisplay')}</div>
+                  </th>
+                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('allowTradeDisplay')}>
+                    <div className="flex items-center gap-2">Allow Trade {getSortIcon('allowTradeDisplay')}</div>
+                  </th>
+                  <th className="px-4 py-3 text-right cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('reverseDelay')}>
+                    <div className="flex items-center justify-end gap-2">Reverse Delay (Min) {getSortIcon('reverseDelay')}</div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
-                {scripts
-                  .filter(script => 
-                    searchTerm === '' || 
-                    script.scripName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (script.exchange && script.exchange.toLowerCase().includes(searchTerm.toLowerCase()))
-                  )
-                  .length === 0 ? (
+                {sortedScripts.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                       No scripts found
                     </td>
                   </tr>
                 ) : (
-                  scripts
-                    .filter(script => 
-                      searchTerm === '' || 
-                      script.scripName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (script.exchange && script.exchange.toLowerCase().includes(searchTerm.toLowerCase()))
-                    )
-                    .map(s => (
+                  sortedScripts.map(s => (
                       <tr key={s.instrumentId} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
                         <td className="px-4 py-3">
                           <input 

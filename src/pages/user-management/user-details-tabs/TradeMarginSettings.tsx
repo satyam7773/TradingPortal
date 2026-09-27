@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import FilterLayout from '../../../components/FilterLayout';
 import userManagementService from '../../../services/userManagementService';
+import { useSorting } from '../../../hooks/useSorting';
 
 interface TradeMarginItem {
   exchange: string;
@@ -289,6 +291,9 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     return filtered;
   }, [marginData, marginTypeFilter, scriptNameSearch]);
 
+  // Sorting hook
+  const { sortColumn, sortDirection, handleSort, sortedData: sortedMarginData, getSortIcon } = useSorting({ data: filteredMarginData });
+
   return (
     <FilterLayout
       storageKey="tradeMarginSettings:showFilters"
@@ -458,33 +463,51 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                     <th className="px-3 py-3 min-w-[80px]">
                       <input
                         type="checkbox"
-                        checked={filteredMarginData.length > 0 && selectedItems.size === filteredMarginData.length}
+                        checked={sortedMarginData.length > 0 && selectedItems.size === sortedMarginData.length}
                         onChange={toggleSelectAll}
                         className="cursor-pointer"
                       />
                     </th>
-                    <th className="px-3 py-3 min-w-[150px]">Script Name</th>
-                    <th className="px-3 py-3 min-w-[120px]">Lot Size</th>
-                    <th className="px-3 py-3 min-w-[130px]">Margin</th>
-                    <th className="px-3 py-3 min-w-[120px]">CF Margin</th>
-                    <th className="px-3 py-3 min-w-[130px]">Min Volume</th>
-                    <th className="px-3 py-3 min-w-[130px]">Volume Step</th>
+                    <th className="px-3 py-3 min-w-[150px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('scripName')}>
+                      <div className="flex items-center gap-2">Script Name {getSortIcon('scripName')}</div>
+                    </th>
+                    <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('lotSize')}>
+                      <div className="flex items-center gap-2">Lot Size {getSortIcon('lotSize')}</div>
+                    </th>
+                    <th className="px-3 py-3 min-w-[130px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('margin')}>
+                      <div className="flex items-center gap-2">Margin {getSortIcon('margin')}</div>
+                    </th>
+                    <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('cfMargin')}>
+                      <div className="flex items-center gap-2">CF Margin {getSortIcon('cfMargin')}</div>
+                    </th>
+                    <th className="px-3 py-3 min-w-[130px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('minVolume')}>
+                      <div className="flex items-center gap-2">Min Volume {getSortIcon('minVolume')}</div>
+                    </th>
+                    <th className="px-3 py-3 min-w-[130px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('volumeStep')}>
+                      <div className="flex items-center gap-2">Volume Step {getSortIcon('volumeStep')}</div>
+                    </th>
                     {selectedExchange === 'CALLPUT' && (
-                      <th className="px-3 py-3 min-w-[150px]">Callput Margin</th>
+                      <th className="px-3 py-3 min-w-[150px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('callputMargin')}>
+                        <div className="flex items-center gap-2">Callput Margin {getSortIcon('callputMargin')}</div>
+                      </th>
                     )}
-                    <th className="px-3 py-3 min-w-[150px]">Expiry Date</th>
-                    <th className="px-3 py-3 min-w-[150px]">Updated Date</th>
+                    <th className="px-3 py-3 min-w-[150px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('expiry')}>
+                      <div className="flex items-center gap-2">Expiry Date {getSortIcon('expiry')}</div>
+                    </th>
+                    <th className="px-3 py-3 min-w-[150px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('updatedDate')}>
+                      <div className="flex items-center gap-2">Updated Date {getSortIcon('updatedDate')}</div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
-                  {filteredMarginData.length === 0 ? (
+                  {sortedMarginData.length === 0 ? (
                     <tr>
                       <td colSpan={selectedExchange === 'CALLPUT' ? 10 : 9} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                         No margin settings found for {selectedExchange}
                       </td>
                     </tr>
                   ) : (
-                    filteredMarginData.map((item) => (
+                    sortedMarginData.map((item) => (
                       <tr
                         key={item.instrumentId}
                         className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors"

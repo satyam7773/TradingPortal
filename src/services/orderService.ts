@@ -1,61 +1,68 @@
-import axios, { AxiosInstance } from 'axios'
-import toast from 'react-hot-toast'
-import { getDeviceId } from '../utils/device'
+import axios, { AxiosInstance } from "axios";
+import toast from "react-hot-toast";
+import { getDeviceId } from "../utils/device";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://api-staging.rivoplus.live";
 
 export interface PlaceOrderRequest {
-  requestTimestamp: string
-  userId: number
-  deviceId: string
-  tradeOrderMethod: string
+  requestTimestamp: string;
+  userId: number;
+  deviceId: string;
+  tradeOrderMethod: string;
   data: {
-    userId: number
-    exchange: string
-    tradeSymbol: string
-    side: 'BUY' | 'SELL'
-    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS'
-    lotSize: number
-    price: number
-    token: number
-    lotValue: number
-  }
+    userId: number;
+    exchange: string;
+    tradeSymbol: string;
+    side: "BUY" | "SELL";
+    orderType: "MARKET" | "LIMIT" | "STOP_LOSS";
+    lotSize: number;
+    price: number;
+    token: number;
+    lotValue: number;
+  };
 }
 
 export interface ModifyOrderRequest {
-  requestTimestamp: string
-  userId: number
-  deviceId: string
-  tradeOrderMethod: string
+  requestTimestamp: string;
+  userId: number;
+  deviceId: string;
+  tradeOrderMethod: string;
   data: {
-    userId: number
-    exchange: string
-    tradeSymbol: string
-    side: 'BUY' | 'SELL'
-    orderType: 'MARKET' | 'LIMIT' | 'STOP_LOSS'
-    lotSize: number
-    price: number
-    token: number
-    lotValue: number
-    orderId: number
-  }
+    userId: number;
+    exchange: string;
+    tradeSymbol: string;
+    side: "BUY" | "SELL";
+    orderType: "MARKET" | "LIMIT" | "STOP_LOSS";
+    lotSize: number;
+    price: number;
+    token: number;
+    lotValue: number;
+    orderId: number;
+  };
 }
 
 export interface PlaceOrderResponse {
-  responseCode: string
-  responseMessage: string
+  responseCode: string;
+  responseMessage: string;
   data?: {
-    orderId: number | string
-    [key: string]: any
-  }
+    orderId: number | string;
+    [key: string]: any;
+  };
 }
 
 class OrderService {
-  private baseURL = BASE_URL
-  private endpoint = '/oms/placeOrder'
+  private baseURL = BASE_URL;
+  private endpoint = "/oms/placeOrder";
 
+  /**
+   * Get current user from localStorage (reads dynamically at call time)
+   */
+  private getCurrentUser() {
+    const userData = localStorage.getItem("userData");
+    return userData ? JSON.parse(userData) : null;
+  }
 
-  
   /**
    * Place a new order (Buy or Sell)
    */
@@ -66,26 +73,29 @@ class OrderService {
         orderData,
         {
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           timeout: 30000,
-        }
-      )
+        },
+      );
 
-      if (response.data?.responseCode === '0' || response.status === 200) {
-        console.log('✅ Order placed successfully:', response.data)
-        return response.data
+      if (response.data?.responseCode === "0" || response.status === 200) {
+        console.log("✅ Order placed successfully:", response.data);
+        return response.data;
       } else {
-        throw new Error(response.data?.responseMessage || 'Failed to place order')
+        throw new Error(
+          response.data?.responseMessage || "Failed to place order",
+        );
       }
     } catch (error: any) {
-      console.error('❌ Error placing order:', error)
-      const errorMessage = error.response?.data?.responseMessage || error.message || 'Failed to place order'
-      throw new Error(errorMessage)
+      console.error("❌ Error placing order:", error);
+      const errorMessage =
+        error.response?.data?.responseMessage ||
+        error.message ||
+        "Failed to place order";
+      throw new Error(errorMessage);
     }
   }
-
-  
 
   /**
    * Place a buy order
@@ -102,30 +112,33 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
-    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
-    tradeOrderMethod: string = 'WEB',
-    // deviceId: string = '1234567890'
-    deviceId: string = getDeviceId()
+    orderType: "MARKET" | "LIMIT" | "SL" = "MARKET",
+    tradeOrderMethod?: string,
+    deviceId: string = getDeviceId(),
   ): Promise<PlaceOrderResponse> {
+    // Determine tradeOrderMethod dynamically based on current user
+    const currentUser = this.getCurrentUser();
+    const finalTradeOrderMethod = tradeOrderMethod || (currentUser?.roleId == 4 ? "WEB" : "MANUAL_ORDER");
+
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),
       userId: loggedInUserId,
       deviceId,
-      tradeOrderMethod,
+      tradeOrderMethod: finalTradeOrderMethod,
       data: {
         userId: clientUserId,
         exchange,
         tradeSymbol,
-        side: 'BUY',
+        side: "BUY",
         orderType,
         lotSize: quantity,
         price,
         token,
         lotValue,
       },
-    }
+    };
 
-    return this.placeOrder(orderData)
+    return this.placeOrder(orderData);
   }
 
   /**
@@ -143,58 +156,68 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
-    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
-    tradeOrderMethod: string = 'WEB',
-    // deviceId: string = '1234567890'
-    deviceId: string = getDeviceId()
+    orderType: "MARKET" | "LIMIT" | "SL" = "MARKET",
+    tradeOrderMethod?: string,
+    deviceId: string = getDeviceId(),
   ): Promise<PlaceOrderResponse> {
+    // Determine tradeOrderMethod dynamically based on current user
+    const currentUser = this.getCurrentUser();
+    const finalTradeOrderMethod = tradeOrderMethod || (currentUser?.roleId == 4 ? "WEB" : "MANUAL_ORDER");
+
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),
       userId: loggedInUserId,
       deviceId,
-      tradeOrderMethod,
+      tradeOrderMethod: finalTradeOrderMethod,
       data: {
         userId: clientUserId,
         exchange,
         tradeSymbol,
-        side: 'SELL',
+        side: "SELL",
         orderType,
         lotSize: quantity,
         price,
         token,
         lotValue,
       },
-    }
+    };
 
-    return this.placeOrder(orderData)
+    return this.placeOrder(orderData);
   }
 
   /**
    * Modify an existing order
    */
-  async modifyOrder(orderData: ModifyOrderRequest): Promise<PlaceOrderResponse> {
+  async modifyOrder(
+    orderData: ModifyOrderRequest,
+  ): Promise<PlaceOrderResponse> {
     try {
       const response = await axios.post<PlaceOrderResponse>(
         `${this.baseURL}/oms/modifyOrder`,
         orderData,
         {
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           timeout: 30000,
-        }
-      )
+        },
+      );
 
-      if (response.data?.responseCode === '0' || response.status === 200) {
-        console.log('✅ Order modified successfully:', response.data)
-        return response.data
+      if (response.data?.responseCode === "0" || response.status === 200) {
+        console.log("✅ Order modified successfully:", response.data);
+        return response.data;
       } else {
-        throw new Error(response.data?.responseMessage || 'Failed to modify order')
+        throw new Error(
+          response.data?.responseMessage || "Failed to modify order",
+        );
       }
     } catch (error: any) {
-      console.error('❌ Error modifying order:', error)
-      const errorMessage = error.response?.data?.responseMessage || error.message || 'Failed to modify order'
-      throw new Error(errorMessage)
+      console.error("❌ Error modifying order:", error);
+      const errorMessage =
+        error.response?.data?.responseMessage ||
+        error.message ||
+        "Failed to modify order";
+      throw new Error(errorMessage);
     }
   }
 
@@ -211,9 +234,9 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
-    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
-    tradeOrderMethod: string = 'WEB',
-    deviceId: string = getDeviceId()
+    orderType: "MARKET" | "LIMIT" | "SL" = "MARKET",
+    tradeOrderMethod: string = "WEB",
+    deviceId: string = getDeviceId(),
   ): Promise<PlaceOrderResponse> {
     const orderData: ModifyOrderRequest = {
       requestTimestamp: Date.now().toString(),
@@ -224,7 +247,7 @@ class OrderService {
         userId: clientUserId,
         exchange,
         tradeSymbol,
-        side: 'BUY',
+        side: "BUY",
         orderType,
         lotSize: quantity,
         price,
@@ -232,9 +255,9 @@ class OrderService {
         lotValue,
         orderId,
       },
-    }
+    };
 
-    return this.modifyOrder(orderData)
+    return this.modifyOrder(orderData);
   }
 
   /**
@@ -250,9 +273,9 @@ class OrderService {
     quantity: number,
     price: number,
     lotValue: number,
-    orderType: 'MARKET' | 'LIMIT' | 'SL' = 'MARKET',
-    tradeOrderMethod: string = 'WEB',
-    deviceId: string = getDeviceId()
+    orderType: "MARKET" | "LIMIT" | "SL" = "MARKET",
+    tradeOrderMethod: string = "WEB",
+    deviceId: string = getDeviceId(),
   ): Promise<PlaceOrderResponse> {
     const orderData: ModifyOrderRequest = {
       requestTimestamp: Date.now().toString(),
@@ -263,7 +286,7 @@ class OrderService {
         userId: clientUserId,
         exchange,
         tradeSymbol,
-        side: 'SELL',
+        side: "SELL",
         orderType,
         lotSize: quantity,
         price,
@@ -271,12 +294,12 @@ class OrderService {
         lotValue,
         orderId,
       },
-    }
+    };
 
-    return this.modifyOrder(orderData)
+    return this.modifyOrder(orderData);
   }
 }
 
 // Export singleton instance
-export const orderService = new OrderService()
-export default orderService
+export const orderService = new OrderService();
+export default orderService;

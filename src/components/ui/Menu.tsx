@@ -130,6 +130,9 @@ const dashboardTabConfigs = {
   '/dashboard/script-master': { title: 'Script Master', icon: FileText },
   '/dashboard/script-pl-summary': { title: 'Script P&L Summary', icon: BarChart3 },
   '/dashboard/analytics': { title: 'Analytics', icon: BarChart3 },
+  '/dashboard/trade-analysis': { title: 'Trade Analysis', icon: BarChart3 },
+  '/dashboard/analysis-ip-based': { title: 'Analysis IP Based', icon: BarChart3 },
+  '/dashboard/trade-report': { title: 'Trade Report', icon: BarChart3 },
   '/dashboard/user-logs-new': { title: 'User Logs New', icon: FileText },
   '/dashboard/userwise-pl-summary': { title: 'Userwise P&L Summary', icon: BarChart3 },
   '/dashboard/user-script-position-track': { title: 'User Script Position Track', icon: BarChart3 },
@@ -290,7 +293,7 @@ export const Menu: React.FC<MenuProps> = ({ items, currentPath }) => {
               </button>
 
               {item.subItems && (isItemActive || (activeMenu && isItemHovered)) && (
-                <div className="absolute top-full left-0 z-[200] mt-1 bg-surface-primary border border-border-primary shadow-2xl min-w-56 rounded-lg overflow-hidden">
+                <div className="absolute top-0 left-full z-[200] ml-2 bg-surface-primary border border-border-primary shadow-2xl min-w-64 rounded-lg overflow-hidden max-h-[calc(100vh-100px)] overflow-y-auto scrollbar-thin">
                   {item.subItems.map((subItem, index) => {
                     if (subItem.separator) {
                       return (
@@ -402,7 +405,12 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
           { label: 'Trade Margin', path: '/dashboard/trade-margin', action: () => { sessionStorage.setItem('tradeMarginFromReports', 'true'); navigate('/dashboard/trade-margin'); } },
           { label: 'Script Master', path: '/dashboard/script-master', action: () => navigate('/dashboard/script-master') },
           { label: 'Script P&L Summary', path: '/dashboard/script-pl-summary', action: () => navigate('/dashboard/script-pl-summary') },
+          { separator: true },
           { label: 'Analytics', path: '/dashboard/analytics', action: () => navigate('/dashboard/analytics') },
+          { label: 'Trade Analysis', path: '/dashboard/trade-analysis', action: () => navigate('/dashboard/trade-analysis') },
+          { label: 'Analysis IP Based', path: '/dashboard/analysis-ip-based', action: () => navigate('/dashboard/analysis-ip-based') },
+          { label: 'Trade Report', path: '/dashboard/trade-report', action: () => navigate('/dashboard/trade-report') },
+          { separator: true },
           { label: 'User Logs New', path: '/dashboard/user-logs-new', action: () => navigate('/dashboard/user-logs-new') },
           { label: 'Userwise P&L Summary', path: '/dashboard/userwise-pl-summary', action: () => navigate('/dashboard/userwise-pl-summary') },
           { label: 'Script Buffer Limit', path: '/dashboard/script-buffer-limit', action: () => navigate('/dashboard/script-buffer-limit') }
