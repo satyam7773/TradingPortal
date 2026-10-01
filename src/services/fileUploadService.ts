@@ -1,4 +1,5 @@
 import { apiClient, TokenManager } from './apiClient'
+import { API_ENDPOINTS } from '../config/apiConfig'
 
 export type FileReaderType = 'OPTION' | 'FUTURE'
 export type ExchangeType = 'DEFAULT' | 'MCX'
@@ -43,7 +44,7 @@ class FileUploadService {
       if (exchangeType === 'MCX') {
         url = 'https://kite.rivoplus.live/api/v1/bhaav-copy/mcx'
       } else {
-        url = `https://api-staging.rivoplus.live/quotes/api/v1/bhaav-copy?fileReaderType=${fileReaderType}`
+        url = `${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/quotes/api/v1/bhaav-copy?fileReaderType=${fileReaderType}`
       }
 
       const response = await fetch(url, {
@@ -196,7 +197,7 @@ class FileUploadService {
         closing_price: closingPrice
       }
 
-      const response = await fetch('https://api-staging.rivoplus.live/quotes/kite/updateCircuits', {
+        const response = await fetch(API_ENDPOINTS.QUOTES.UPDATE_CIRCUITS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -247,7 +248,7 @@ class FileUploadService {
         closing_price: closingPrice
       }
 
-      const response = await fetch('https://api-staging.rivoplus.live/quotes/kite/updateClosingPrice', {
+        const response = await fetch(API_ENDPOINTS.QUOTES.UPDATE_CLOSING_PRICE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

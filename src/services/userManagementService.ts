@@ -1,5 +1,6 @@
 import { apiClient, TokenManager } from "./apiClient";
 import { UserConfigResponse, ExchangeData } from "./api.types";
+import { API_ENDPOINTS } from "../config/apiConfig";
 
 /**
  * User Management Service
@@ -89,7 +90,7 @@ class UserManagementService {
     };
 
     console.log("🔧 Creating User:", {
-      endpoint: `https://api-staging.rivoplus.live/user/createUser`,
+      endpoint: API_ENDPOINTS.USER.CREATE_USER,
       payload: request,
     });
 
@@ -99,7 +100,7 @@ class UserManagementService {
     // )
 
     const response = await apiClient.post<any>(
-      `https://api-staging.rivoplus.live/user/createUser`,
+      API_ENDPOINTS.USER.CREATE_USER,
       request,
     );
 
@@ -141,12 +142,12 @@ class UserManagementService {
     };
 
     console.log("🔧 Editing User Details:", {
-      endpoint: `https://api-staging.rivoplus.live/user/portal/editUserDetails`,
+      endpoint: API_ENDPOINTS.USER.EDIT_USER,
       payload: request,
     });
 
     const response = await apiClient.post<any>(
-      `https://api-staging.rivoplus.live/user/portal/editUserDetails`,
+      API_ENDPOINTS.USER.EDIT_USER,
       request,
     );
 
@@ -179,7 +180,7 @@ class UserManagementService {
     };
 
     const response = await apiClient.post<any>(
-      `https://api-staging.rivoplus.live/user/portal/fetchUserList?userFilterType=${userFilterType}`,
+      `${API_ENDPOINTS.USER.FETCH_USER_LIST}?userFilterType=${userFilterType}`,
       request,
     );
 
@@ -656,7 +657,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/positions",
+        API_ENDPOINTS.OMS.POSITIONS,
         request,
       );
       console.log("🔍 Service Response from API:", response);
@@ -685,7 +686,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/user/portal/fetchUserClientsTrade",
+        API_ENDPOINTS.USER.FETCH_CLIENT_TRADE,
         request,
       );
       return response;
@@ -717,7 +718,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/fetchSymbols",
+        API_ENDPOINTS.OMS.FETCH_SYMBOLS,
         request,
       );
       return response;
@@ -749,7 +750,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/fetchAllSymbols",
+        API_ENDPOINTS.OMS.FETCH_ALL_SYMBOLS,
         request,
       );
       return response;
@@ -776,7 +777,7 @@ class UserManagementService {
         params.append("exchange", exchange);
       }
 
-      const endpoint = `https://api-staging.rivoplus.live/oms/tradeSymbols?${params.toString()}`;
+      const endpoint = `${API_ENDPOINTS.OMS.TRADE_SYMBOLS}?${params.toString()}`;
 
       console.log("🔄 Fetching Report Symbols:", endpoint);
 
@@ -804,12 +805,12 @@ class UserManagementService {
       userId,
     };
 
-    // Only add exchange if not empty (not "All Exchanges")
+    // Only add exchange if not empty (not "All Exchanges)
     if (exchange) {
       data.exchange = exchange;
     }
 
-    // Only add token if not 0 (not "All Symbols")
+    // Only add token if not 0 (not "All Symbols)
     if (token !== 0) {
       data.token = token;
     }
@@ -822,7 +823,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/positions/portal/cumulative",
+        API_ENDPOINTS.OMS.POSITIONS_PORTAL_CUMULATIVE,
         request,
       );
       return response;
@@ -845,12 +846,12 @@ class UserManagementService {
       userId,
     };
 
-    // Only add exchange if not empty (not "All Exchanges")
+    // Only add exchange if not empty (not "All Exchanges)
     if (exchange) {
       data.exchange = exchange;
     }
 
-    // Only add token if not 0 (not "All Symbols")
+    // Only add token if not 0 (not "All Symbols)
     if (token !== 0) {
       data.token = token;
     }
@@ -863,7 +864,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/userWisePositions",
+        API_ENDPOINTS.REPORTS.USER_WISE_POSITIONS,
         request,
       );
       return response;
@@ -905,7 +906,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/portal/trades",
+        API_ENDPOINTS.OMS.TRADES,
         request,
       );
       return response;
@@ -925,7 +926,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/user/portal/fetchOwnUsers",
+        API_ENDPOINTS.USER.FETCH_OWN_USERS,
         request,
       );
       return response;
@@ -942,7 +943,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/positions/fetchUsers",
+        API_ENDPOINTS.REPORTS.POSITIONS_FETCH_USERS,
         request,
       );
       return response;
@@ -960,7 +961,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/trades/fetchUsers",
+        API_ENDPOINTS.REPORTS.TRADES_FETCH_USERS,
         request,
       );
       return response;
@@ -979,7 +980,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/user/portal/fetchOwnUsers?userFilterType=REJECTED_LOGS",
+        API_ENDPOINTS.USER.FETCH_OWN_USERS_REJECTED_LOGS,
         request,
       );
       return response;
@@ -999,7 +1000,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/user/portal/fetchOwnUsers?userFilterType=BILLING",
+        API_ENDPOINTS.USER.FETCH_OWN_USERS_BILLING,
         request,
       );
       return response;
@@ -1039,7 +1040,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/orders",
+        API_ENDPOINTS.OMS.ORDERS,
         request,
       );
       return response;
@@ -1062,7 +1063,7 @@ class UserManagementService {
   }): Promise<any> {
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/user/market/trade/right",
+        API_ENDPOINTS.MARKET.TRADE_RIGHT,
         payload,
       );
       return response;
@@ -1089,7 +1090,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/cancelMultipleOrders",
+        API_ENDPOINTS.OMS.CANCEL_MULTIPLE_ORDERS,
         request,
       );
       return response;
@@ -1113,7 +1114,7 @@ class UserManagementService {
     try {
       console.log("📊 Fetching P&L data (POST):", request);
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/pnl",
+        API_ENDPOINTS.OMS.PNL,
         request,
       );
       console.log("✅ P&L data received:", response);
@@ -1135,7 +1136,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       // FIX: Changed 'userFIlterType' to 'userFilterType'
-      const endpoint = `https://api-staging.rivoplus.live/oms/api/v1/m2m/user/${userId}?userFilterType=${userFilterType}`;
+      const endpoint = `${API_ENDPOINTS.OMS.USER_M2M(userId, userFilterType)}`;
 
       console.log("📡 Requesting M2M:", endpoint);
 
@@ -1158,7 +1159,7 @@ class UserManagementService {
   async fetchRejectionLogs(payload: any): Promise<any> {
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/rejected/orders/log",
+        API_ENDPOINTS.OMS.REJECTED_ORDERS_LOG,
         { ...payload },
       );
       return response;
@@ -1181,7 +1182,7 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/settings/updateCfMargin",
+        API_ENDPOINTS.USER.UPDATE_CF_MARGIN,
         payload,
       );
       return response;
@@ -1195,7 +1196,7 @@ class UserManagementService {
 
   async fetchAutoSquareOff(userId: number): Promise<any> {
     return await apiClient.post(
-      "https://api-staging.rivoplus.live/user/portal/fetchAutoSquareOff",
+      API_ENDPOINTS.USER.FETCH_AUTO_SQUARE_OFF,
       {
         userId,
         requestTimestamp: "",
@@ -1206,7 +1207,7 @@ class UserManagementService {
 
   async updateAutoSquareOff(userId: number, percentage: number): Promise<any> {
     return await apiClient.post(
-      "https://api-staging.rivoplus.live/user/portal/updateAutoSquareOff",
+      API_ENDPOINTS.USER.UPDATE_AUTO_SQUARE_OFF,
       {
         userId,
         requestTimestamp: "",
@@ -1220,7 +1221,7 @@ class UserManagementService {
   async fetchTradeDurationRank(userId: number): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/oms/tradeDurationRank",
+        API_ENDPOINTS.OMS.TRADE_DURATION_RANK,
         {
           userId: userId,
           requestTimestamp: "",
@@ -1236,7 +1237,7 @@ class UserManagementService {
 
   /**
    * Fetch/Generate Billing Report (Excel or PDF)
-   * POST: https://api-staging.rivoplus.live/reports/billing
+   * POST: API_ENDPOINTS.REPORTS.BILLING
    */
   async generateBillingReport(payload: {
     fromDate: string;
@@ -1247,7 +1248,7 @@ class UserManagementService {
   }): Promise<any> {
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/billing",
+        API_ENDPOINTS.REPORTS.BILLING,
         { data: payload },
       );
       return response;
@@ -1268,7 +1269,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/settlement",
+        API_ENDPOINTS.REPORTS.SETTLEMENT,
         {
           userId: userId, // Use the dynamic ID here
           requestTimestamp: "",
@@ -1278,56 +1279,6 @@ class UserManagementService {
       return response;
     } catch (error) {
       console.error("❌ Failed to fetch settlement report:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Fetch IP/Device summary report
-   * POST: https://api-staging.rivoplus.live/reports/ipdevicesummary
-   */
-  async fetchIPDeviceSummary(payload: {
-    fromDate: string;
-    toDate: string;
-    username: string | null;
-    type: "IP" | "Device";
-  }): Promise<any> {
-    try {
-      const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/ipDeviceSummary",
-        {
-          data: payload,
-        },
-      );
-      return response;
-    } catch (error) {
-      console.error("❌ Failed to fetch IP/Device summary:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Fetch IP/Device details report
-   * POST: https://api-staging.rivoplus.live/reports/ipdevicedetails
-   */
-  async fetchIPDeviceDetails(payload: {
-    fromDate: string;
-    toDate: string;
-    ipAddress?: string;
-    deviceId?: string;
-    type: "IP" | "Device";
-    username: string | null;
-  }): Promise<any> {
-    try {
-      const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/ipDeviceDetails",
-        {
-          data: payload,
-        },
-      );
-      return response;
-    } catch (error) {
-      console.error("❌ Failed to fetch IP/Device details:", error);
       throw error;
     }
   }
@@ -1345,7 +1296,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        `https://api-staging.rivoplus.live/user/api/quantity/group/exchange/userid`,
+        API_ENDPOINTS.PORTAL.QUANTITY_GROUP_EXCHANGE_USERID,
         {
           userId: loggedInUserId,
           requestTimestamp: Date.now(),
@@ -1364,7 +1315,7 @@ class UserManagementService {
 
   /**
    * Fetch groups for a master user by exchange (includes count and default flag)
-   * POST: https://api-staging.rivoplus.live/user/api/v1/portal/exchange/userId
+   * POST: API_ENDPOINTS.PORTAL.EXCHANGE_USER_ID
    */
   async fetchGroupListByExchange(
     loggedInUserId: number,
@@ -1373,7 +1324,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/api/v1/portal/exchange/userId",
+        API_ENDPOINTS.PORTAL.EXCHANGE_USER_ID,
         {
           userId: loggedInUserId,
           requestTimestamp: Date.now(),
@@ -1402,7 +1353,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/api/v1/user/wise/quantity/group",
+        API_ENDPOINTS.PORTAL.USER_WISE_QUANTITY_GROUP,
         {
           userId: loggedInUserId,
           requestTimestamp: Date.now(),
@@ -1428,7 +1379,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/api/v1/user/wise/quantity/group/exchange",
+        API_ENDPOINTS.PORTAL.USER_WISE_QUANTITY_GROUP_EXCHANGE,
         {
           userId: 31, // Admin User ID
           requestTimestamp: Date.now(),
@@ -1453,7 +1404,7 @@ class UserManagementService {
     const dynamicUserId = authData.userId;
 
     return await apiClient.put(
-      "https://api-staging.rivoplus.live/user/api/v1/user/wise/quantity/group/exchange",
+      API_ENDPOINTS.PORTAL.USER_WISE_QUANTITY_GROUP_EXCHANGE,
       {
         userId: dynamicUserId, // Use the real ID
         requestTimestamp: Date.now(),
@@ -1469,7 +1420,7 @@ class UserManagementService {
   async fetchExchangewiseLotLimit(userId: number): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/portal/exchangeLotLimit",
+        API_ENDPOINTS.SETTINGS.EXCHANGE_LOT_LIMIT,
         {
           userId,
           requestTimestamp: "",
@@ -1493,7 +1444,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/portal/updateExchangeLotLimit",
+        API_ENDPOINTS.SETTINGS.UPDATE_EXCHANGE_LOT_LIMIT,
         {
           userId,
           requestTimestamp: "",
@@ -1509,12 +1460,12 @@ class UserManagementService {
 
   /**
    * Fetch users assigned to a group
-   * GET: https://api-staging.rivoplus.live/user/api/v1/portal/quantity-groups/users?groupId=20&parentId=829
+   * GET: ${API_ENDPOINTS.PORTAL.QUANTITY_GROUPS_USERS(groupId, parentId)}
    */
   async fetchGroupUsers(groupId: number, parentId: number): Promise<any> {
     try {
       const response = await apiClient.get(
-        `https://api-staging.rivoplus.live/user/api/v1/portal/quantity-groups/users?groupId=${groupId}&parentId=${parentId}`,
+        `${API_ENDPOINTS.PORTAL.QUANTITY_GROUPS_USERS(groupId, parentId)}`,
       );
       return response;
     } catch (error) {
@@ -1525,7 +1476,7 @@ class UserManagementService {
 
   /**
    * Fetch available groups dropdown for user reassignment
-   * POST: https://api-staging.rivoplus.live/user/api/v1/portal/users/groups/dropdown
+   * POST: API_ENDPOINTS.PORTAL.USERS_GROUPS_DROPDOWN
    */
   async fetchGroupsDropdown(
     loggedInUserId: number,
@@ -1534,7 +1485,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/api/v1/portal/users/groups/dropdown",
+        API_ENDPOINTS.PORTAL.USERS_GROUPS_DROPDOWN,
         {
           userId: loggedInUserId,
           requestTimestamp: Date.now(),
@@ -1553,7 +1504,7 @@ class UserManagementService {
 
   /**
    * Replace users from one group to another
-   * POST: https://api-staging.rivoplus.live/user/api/v1/portal/assign/users/group
+   * POST: API_ENDPOINTS.PORTAL.ASSIGN_USERS_GROUP
    */
   async replaceUsersGroup(
     loggedInUserId: number,
@@ -1565,7 +1516,7 @@ class UserManagementService {
   ): Promise<any> {
     try {
       const response = await apiClient.post(
-        "https://api-staging.rivoplus.live/user/api/v1/portal/assign/users/group",
+        API_ENDPOINTS.PORTAL.ASSIGN_USERS_GROUP,
         {
           userId: loggedInUserId,
           requestTimestamp: Date.now(),
@@ -1639,13 +1590,42 @@ class UserManagementService {
 
     try {
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/oms/positions/portal/ClientPositions",
+        API_ENDPOINTS.OMS.POSITIONS_PORTAL_CLIENT,
         request,
       );
       console.log("📊 Client Positions API Response:", response);
       return response;
     } catch (error) {
       console.error("❌ Failed to fetch client positions:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch own user positions for a specific token
+   * POST /oms/positions/own
+   * @param userId - User ID making the request
+   * @param token - Instrument token
+   */
+  async fetchOwnUserPositions(userId: number, token: number): Promise<any> {
+    const request = {
+      requestTimestamp: Date.now().toString(),
+      userId: userId,
+      data: {
+        token: token,
+        userId: userId,
+      },
+    };
+
+    try {
+      const response = await apiClient.post<any>(
+        API_ENDPOINTS.OMS.POSITIONS + "/own",
+        request,
+      );
+      console.log("📊 Own User Positions API Response:", response);
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch own user positions:", error);
       throw error;
     }
   }
@@ -1681,7 +1661,7 @@ class UserManagementService {
     try {
       const userData = JSON.parse(localStorage.getItem('userData') || '{}');
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/ipDeviceSummary",
+        API_ENDPOINTS.REPORTS.IP_DEVICE_SUMMARY,
         {
           userId: userData?.userId,
           requestTimestamp: "",
@@ -1715,7 +1695,7 @@ class UserManagementService {
     try {
       const userData = JSON.parse(localStorage.getItem('userData') || '{}');
       const response = await apiClient.post<any>(
-        "https://api-staging.rivoplus.live/reports/ipDeviceDetails",
+        API_ENDPOINTS.REPORTS.IP_DEVICE_DETAILS,
         {
           userId: userData?.userId,
           requestTimestamp: "",

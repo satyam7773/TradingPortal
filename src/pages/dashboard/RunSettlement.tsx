@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { AlertCircle, CheckCircle, Loader } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 
 interface SettlementResponse {
   status: string
@@ -30,7 +31,7 @@ const RunSettlement: React.FC = () => {
     setStep('processing')
 
     try {
-      const response = await fetch('https://api-staging.rivoplus.live/oms2/settlement/position', {
+      const response = await fetch(API_ENDPOINTS.OMS_V2.SETTLEMENT_POSITION, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -170,8 +170,6 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
         return false
       }
 
-      const submitToast = toast.loading('Placing buy order...')
-
       const userData = localStorage.getItem('userData')
       const user = userData ? JSON.parse(userData) : null
       const loggedInUserId = user?.userId
@@ -200,11 +198,11 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
       )
 
       if (response?.responseCode === '0') {
-        toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+        toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`)
         resetBuyForm(isAdminUser)
         return true
       } else {
-        toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+        toast.error(response?.responseMessage || 'Failed to place order')
         return false
       }
     } catch (error: any) {
@@ -234,8 +232,6 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
         return false
       }
 
-      const submitToast = toast.loading('Placing sell order...')
-
       const userData = localStorage.getItem('userData')
       const user = userData ? JSON.parse(userData) : null
       const loggedInUserId = user?.userId
@@ -264,11 +260,11 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
       )
 
       if (response?.responseCode === '0') {
-        toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
+        toast.success(`Sell order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`)
         resetSellForm(isAdminUser)
         return true
       } else {
-        toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+        toast.error(response?.responseMessage || 'Failed to place order')
         return false
       }
     } catch (error: any) {

@@ -6,6 +6,7 @@ import SearchableSelect from '../../components/ui/SearchableSelect'
 import userManagementService from '../../services/userManagementService'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import { useSorting } from '../../hooks/useSorting'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 
 interface WeeklyAdminData {
   userId: number
@@ -90,7 +91,7 @@ const WeeklyAdmin: React.FC = () => {
         }
       }
 
-      const response = await fetch('https://api-staging.rivoplus.live/reports/weeklyAdmin', {
+      const response = await fetch(API_ENDPOINTS.REPORTS.WEEKLY_ADMIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

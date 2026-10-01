@@ -186,7 +186,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         requestTimestamp: Date.now().toString(),
         data: {
           userId: Number(userDetails?.id || user?.id),
-          ...(updateAllUsersCheckbox && { updateAllUsers: true }),
+          updateAllUsers: updateAllUsersCheckbox,
           tradeMargins: selectedTradeMargins
         }
       };

@@ -14,6 +14,7 @@ import ConfigManager from '../../utils/configManager'
 import toast from 'react-hot-toast'
 import { useAppSelector } from '../../hooks/reduxHooks'
 import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 
 interface FeedInstrument {
   insToken: number
@@ -479,9 +480,9 @@ const MarketWatch: React.FC = () => {
   const filteredFeedData = useMemo(() => {
     const filtered: FeedInstrument[] = []
     
-    // 1. Extract and clean matching instruments
+    // 1. Extract and clean matching instruments (with null safety)
     for (const instrument of feedData) {
-      if (selectedTabTokens.has(instrument.insToken) && instrument.insToken !== deletingToken) {
+      if (instrument && instrument.insToken && selectedTabTokens.has(instrument.insToken) && instrument.insToken !== deletingToken) {
         filtered.push(instrument)
       }
     }
@@ -543,7 +544,7 @@ const MarketWatch: React.FC = () => {
 
         if (reorderedIds.length === 0) return
 
-        const response = await fetch('https://api-staging.rivoplus.live/user/watchlist/reorder', {
+        const response = await fetch(API_ENDPOINTS.WATCHLIST.REORDER, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -632,7 +633,7 @@ const MarketWatch: React.FC = () => {
           if (!isScripModalActiveRef.current) return;
 
           if (Array.isArray(data)) {
-            const targetInstrument = data.find(item => item.insToken === selectedScripInfo.token)
+            const targetInstrument = data.find(item => item != null && item.insToken === selectedScripInfo.token)
             if (targetInstrument) setScripInfoLiveData(targetInstrument)
           } else if (data && data.insToken === selectedScripInfo.token) {
             setScripInfoLiveData(data)
@@ -2206,8 +2207,6 @@ const MarketWatch: React.FC = () => {
                                       return
                                     }
 
-                                    const submitToast = toast.loading('Placing buy order...')
-
                                     const loggedInUserId = userData ? JSON.parse(userData).userId : null
                                     const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
 
@@ -2253,8 +2252,6 @@ const MarketWatch: React.FC = () => {
                                       buyOrderType as 'MARKET' | 'LIMIT' | 'SL'
                                     );
                                     if (response?.responseCode === '0') {
-                                      // toast.success(`Buy order placed successfully! Order ID: ${response.data?.orderId || 'N/A'}`, { id: submitToast })
-
                                       // Reset form
                                       setBuyOrderQuantity('1')
                                       setBuyOrderPrice('0')
@@ -2267,7 +2264,7 @@ const MarketWatch: React.FC = () => {
 
                                       setShowBuyOrderModal(false)
                                     } else {
-                                      toast.error(response?.responseMessage || 'Failed to place order', { id: submitToast })
+                                      toast.error(response?.responseMessage || 'Failed to place order')
                                     }
                                   } catch (error: any) {
                                     toast.error(error.message || 'Error placing buy order')
@@ -2547,7 +2544,6 @@ const MarketWatch: React.FC = () => {
                                       return
                                     }
 
-                                    const submitToast = toast.loading('Placing sell order...')
 
                                     const loggedInUserId = userData ? JSON.parse(userData).userId : null
                                     const recipientUserId = isAdminUser ? (selectedClient?.userId || loggedInUserId) : loggedInUserId
@@ -3009,7 +3005,7 @@ const ChartComponent: React.FC<ChartComponentProps> = ({ token, config, containe
   const loadHistoricalCandles = async () => {
     try {
       const today = new Date().toISOString().split('T')[0]
-      const url = `https://api-staging.rivoplus.live/quotes/kite/history?instrumentToken=${token}&interval=minute&from=${today}&to=${today}`
+      const url = `${API_ENDPOINTS.QUOTES.KITE_HISTORY}?instrumentToken=${token}&interval=minute&from=${today}&to=${today}`
       
       console.log('📊 Fetching chart data from:', url)
       const response = await fetch(url)

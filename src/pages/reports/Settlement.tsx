@@ -6,6 +6,7 @@ import userManagementService from '../../services/userManagementService';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { useSorting } from '../../hooks/useSorting';
+import { API_ENDPOINTS } from '../../config/apiConfig';
 
 const Settlement: React.FC = () => {
   const getMondayOfCurrentWeek = () => {
@@ -43,7 +44,7 @@ const Settlement: React.FC = () => {
 
   // Initialize download hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/reports/settlement/download',
+    apiEndpoint: API_ENDPOINTS.REPORTS.SETTLEMENT_DOWNLOAD,
     filename: 'settlement',
     onBeforeDownload: () => setIsDownloading(true),
     onAfterDownload: () => setIsDownloading(false)

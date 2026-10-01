@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Calendar, Edit2, X, Save, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createPortal } from 'react-dom'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 
 interface ScheduleData {
   date: string
@@ -45,9 +46,9 @@ const ExchangeSchedulePage: React.FC = () => {
   const fetchSchedule = async (month: number, exchange: number) => {
     setLoading(true)
     try {
-      const response = await fetch(
-        `https://api-staging.rivoplus.live/user/settings/exchangeHolidays?month=${month}&exchange=${exchange}`
-      )
+        const response = await fetch(`${API_ENDPOINTS.SETTINGS.EXCHANGE_HOLIDAYS}?month=${month}&exchange=${exchange}`, {
+          method: 'GET'
+        })
       const result = await response.json()
       
       if (result?.responseCode === '0' && Array.isArray(result.data)) {

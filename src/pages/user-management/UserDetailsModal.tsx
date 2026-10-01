@@ -19,6 +19,9 @@ import ScriptMaster from '../dashboard/ScriptMaster';
 import { ScriptBufferLimit } from '../dashboard';
 import { Trades } from '../trading';
 import { DeletedTrades } from '../reports';
+import RejectionLog from '../dashboard/RejectionLog';
+import IntradayHistory from '../dashboard/IntradayHistory';
+import AccountSummary from '../reports/AccountSummary';
 
 interface UserData {
   id: string;
@@ -731,6 +734,33 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               Deleted Trades
             </button>
             <button
+              onClick={() => setActiveTab('rejectionLogs')}
+              className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'rejectionLogs'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
+            >
+              Rejection Logs
+            </button>
+            <button
+              onClick={() => setActiveTab('intradayHistory')}
+              className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'intradayHistory'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
+            >
+              Intraday History
+            </button>
+            <button
+              onClick={() => setActiveTab('accountSummary')}
+              className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'accountSummary'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
+            >
+              Account Summary
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'settings'
                 ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
@@ -1109,8 +1139,21 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 {activeTab === 'deletedTrades' && (
                   <DeletedTrades username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
                 )}
-                {activeTab === 'deletedTrades' && (
-                  <p>Deleted Trade Coming Soon</p>
+                
+
+                {/* Rejection Logs Tab */}
+                {activeTab === 'rejectionLogs' && (
+                  <RejectionLog username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )}
+
+                {/* Intraday History Tab */}
+                {activeTab === 'intradayHistory' && (
+                  <IntradayHistory username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )}
+
+                {/* Account Summary Tab */}
+                {activeTab === 'accountSummary' && (
+                  <AccountSummary username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
                 )}
               </>
             );

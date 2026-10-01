@@ -6,6 +6,7 @@ import userManagementService from '../../services/userManagementService';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { useSorting } from '../../hooks/useSorting';
+import { API_ENDPOINTS } from '../../config/apiConfig';
 
 interface ScriptMaster {
   instrumentId: number;
@@ -68,7 +69,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
   
   // Initialize download report hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/user/portal/fetchScripMasterSettings/download',
+    apiEndpoint: API_ENDPOINTS.SETTINGS.FETCH_SCRIP_MASTER_DOWNLOAD,
     filename: 'ScriptMasterSettings'
   });
   
@@ -170,7 +171,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
           }
         };
 
-        const response = await fetch('https://api-staging.rivoplus.live/user/portal/updateScripMasterSettings', {
+        const response = await fetch(API_ENDPOINTS.SETTINGS.UPDATE_SCRIP_MASTER_SETTINGS, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -217,8 +218,8 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
     setOptionsLoading(true);
     try {
       const [tradeAttrsRes, allowTradesRes] = await Promise.all([
-        fetch('https://api-staging.rivoplus.live/user/portal/tradeAttributes'),
-        fetch('https://api-staging.rivoplus.live/user/portal/allowTrade')
+        fetch(API_ENDPOINTS.SETTINGS.TRADE_ATTRIBUTES),
+        fetch(API_ENDPOINTS.SETTINGS.ALLOW_TRADE)
       ]);
 
       const tradeAttrsData = await tradeAttrsRes.json();
@@ -301,7 +302,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
           }
         };
 
-        const response = await fetch('https://api-staging.rivoplus.live/user/portal/fetchScripMasterSettings', {
+        const response = await fetch(API_ENDPOINTS.SETTINGS.FETCH_SCRIP_MASTER_SETTINGS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -418,7 +419,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
         }
       };
 
-      const response = await fetch('https://api-staging.rivoplus.live/user/portal/viewScripMasterUpdatedUser', {
+      const response = await fetch(API_ENDPOINTS.SETTINGS.VIEW_SCRIP_MASTER_UPDATED_USER, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

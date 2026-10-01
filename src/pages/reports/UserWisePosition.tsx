@@ -10,6 +10,7 @@ import UserDetailsModal from '../user-management/UserDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { useSorting } from '../../hooks/useSorting';
+import { API_ENDPOINTS } from '../../config/apiConfig';
 
 interface PositionData {
   positionId: number;
@@ -88,7 +89,7 @@ const UserWisePosition: React.FC = () => {
 
   // Initialize download hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/oms/positions/download',
+    apiEndpoint: API_ENDPOINTS.REPORTS.USER_WISE_POSITIONS,
     filename: 'userwise-positions',
     onBeforeDownload: () => setIsDownloading(true),
     onAfterDownload: () => setIsDownloading(false)
@@ -416,8 +417,12 @@ const UserWisePosition: React.FC = () => {
 
         // Update position data with real-time prices (ltp)
         if (Array.isArray(data)) {
-          // Create a map of token to new price data for fast lookup
-          const priceMap = new Map(data.map(item => [item.insToken, item]))
+          // Create a map of token to new price data for fast lookup (with null safety)
+          const priceMap = new Map(
+            data
+              .filter((item) => item != null && item.insToken != null)
+              .map(item => [item.insToken, item])
+          )
 
           // Track price changes for animations
           const changes: Record<number, PriceChange> = {}

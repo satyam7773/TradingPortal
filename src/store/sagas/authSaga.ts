@@ -57,7 +57,7 @@ function* handleLogin(action: any): any {
     // Fetch and store configuration after successful login
     try {
       const configResponse: any = yield call(
-        () => fetch('https://api-staging.rivoplus.live/configuration/configs').then(res => res.json())
+        () => fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/configuration/configs`).then(res => res.json())
       )
       
       if (configResponse) {

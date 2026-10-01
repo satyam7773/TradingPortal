@@ -16,7 +16,22 @@ interface Candle {
   volume: number
 }
 
-const IntradayHistory: React.FC = () => {
+interface IntradayHistoryProps {
+  username?: string
+  userId?: string | number
+  roleId?: string
+  user?: any
+}
+
+const IntradayHistory: React.FC<IntradayHistoryProps> = ({
+  username,
+  userId: propsUserId,
+  roleId,
+  user: userDetails
+}) => {
+  // Modal mode detection
+  const isModalMode = !!userDetails
+  
   // Filter State
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), [])
   const [selectedDate, setSelectedDate] = useState<string>(today)

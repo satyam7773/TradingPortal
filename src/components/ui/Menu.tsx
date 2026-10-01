@@ -422,13 +422,13 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
       subItems: [
         { label: 'Messages', path: '/dashboard/messages', action: () => navigate('/dashboard/messages') },
         { label: 'Configure 2FA', path: '/dashboard/configure-2fa', action: () => navigate('/dashboard/configure-2fa') },
+        { label: 'Exchange Time Schedule', path: '/dashboard/exchange-schedule', action: () => navigate('/dashboard/exchange-schedule') },
 
         ...(isAdminOnly ? [{ label: 'Run Settlement', path: '/dashboard/run-settlement', action: () => navigate('/dashboard/run-settlement') }] : []),
 
         ...(isAdminOrMaster ? [
           { label: 'Status Bar', path: '/dashboard/status-bar', action: () => navigate('/dashboard/status-bar') },
           { label: 'Tool Bar', path: '/dashboard/toolbar', action: () => navigate('/dashboard/toolbar') },
-          { label: 'Exchange Time Schedule', path: '/dashboard/exchange-schedule', action: () => navigate('/dashboard/exchange-schedule') },
           // FILE UPLOAD: Restricted to Admin Only
           ...(isAdminOnly ? [{ label: 'File Upload', path: '/dashboard/file-upload', action: () => navigate('/dashboard/file-upload') }] : [])
         ] : [])

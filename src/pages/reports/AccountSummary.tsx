@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
-import SearchableSelect from '../../components/ui/SearchableSelect';
+import { API_ENDPOINTS } from '../../config/apiConfig'
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
@@ -31,6 +31,13 @@ interface UserData {
     isActive: boolean;
 }
 
+interface AccountSummaryProps {
+    username?: string
+    userId?: string | number
+    roleId?: string
+    user?: any
+}
+
 let lastClickTime = 0;
 let lastProcessedId: number | null = null;
 
@@ -45,7 +52,15 @@ const getMondayOfCurrentWeek = () => {
     return `${year}-${month}-${dayOfMonth}`;
 };
 
-const AccountSummary: React.FC = () => {
+const AccountSummary: React.FC<AccountSummaryProps> = ({
+    username,
+    userId: propsUserId,
+    roleId,
+    user: userDetails
+}) => {
+    // Modal mode detection
+    const isModalMode = !!userDetails
+    
     // Initialize dates - from Monday of current week, to today
     const today = new Date().toLocaleDateString('en-CA');
     const monday = getMondayOfCurrentWeek();
@@ -53,7 +68,7 @@ const AccountSummary: React.FC = () => {
     const [filters, setFilters] = useState({
         fromDate: monday,
         toDate: today,
-        selectedUserId: 0,
+        selectedUserId: isModalMode ? Number(propsUserId) || 0 : 0,
         pnl: true,
         brk: true,
         other: false
@@ -80,7 +95,7 @@ const AccountSummary: React.FC = () => {
 
     // Initialize download report hook
     const downloadReport = useDownloadReport({
-        apiEndpoint: 'https://api-staging.rivoplus.live/reports/accountSummary/download',
+        apiEndpoint: API_ENDPOINTS.REPORTS.ACCOUNT_SUMMARY_DOWNLOAD,
         filename: 'AccountSummary'
     });
 
@@ -114,7 +129,7 @@ const AccountSummary: React.FC = () => {
                 }
             };
 
-            const response = await fetch('https://api-staging.rivoplus.live/reports/accountSummary', {
+            const response = await fetch(API_ENDPOINTS.REPORTS.ACCOUNT_SUMMARY, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -166,6 +181,21 @@ const AccountSummary: React.FC = () => {
 
         loadInitialData();
     }, []);
+
+    // Auto-load for modal mode
+    useEffect(() => {
+        if (isModalMode && !initialLoading && propsUserId) {
+            const modalFilters = {
+                fromDate: monday,
+                toDate: today,
+                selectedUserId: Number(propsUserId),
+                pnl: true,
+                brk: true,
+                other: false
+            };
+            handleFetchSummary(modalFilters);
+        }
+    }, [isModalMode, initialLoading, propsUserId]);
 
     const handleFilterChange = (field: string, value: any) => {
         setFilters(prev => ({ ...prev, [field]: value }));
@@ -289,13 +319,15 @@ const AccountSummary: React.FC = () => {
                             </div>
 
                             {/* Username */}
-                            <SearchableSelect
-                                label="Username :"
-                                items={userOptions}
-                                selectedId={filters.selectedUserId}
-                                onSelect={(userId) => handleFilterChange('selectedUserId', Number(userId))}
-                                placeholder="Search user..."
-                            />
+                            {!isModalMode && (
+                                <SearchableSelect
+                                    label="Username :"
+                                    items={userOptions}
+                                    selectedId={filters.selectedUserId}
+                                    onSelect={(userId) => handleFilterChange('selectedUserId', Number(userId))}
+                                    placeholder="Search user..."
+                                />
+                            )}
 
                             {/* Checkboxes */}
                             <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">

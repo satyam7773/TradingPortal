@@ -6,6 +6,8 @@ import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import DownloadReport from '../../components/DownloadReport'
 import { useSorting } from '../../hooks/useSorting'
+import { API_ENDPOINTS } from '../../config/apiConfig'
+import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 interface M2MData {
   userId: number
@@ -37,6 +39,14 @@ const M2MProfitLoss: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [isDownloading, setIsDownloading] = useState(false)
+
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: API_ENDPOINTS.OMS.PNL_DOWNLOAD,
+    filename: 'M2MReport',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  })
 
   const userOptions = useMemo(() => [
     ...users.map(u => ({ id: u.userId, name: u.userName }))
@@ -117,29 +127,17 @@ const M2MProfitLoss: React.FC = () => {
       return
     }
     try {
-      setIsDownloading(true)
       const userIdForRequest = selectedUserId || loggedInUserId
       const userFilterType = selectedUserId === 0 ? 'ALL' : 'SINGLE'
-      const endpoint = `https://api-staging.rivoplus.live/oms/user/download/${userIdForRequest}?pdf=${format === 'pdf'}&userFilterType=${userFilterType}`
-      
-      const response = await fetch(endpoint)
-      
-      if (!response.ok) throw new Error('Download failed')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `M2MReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      toast.success(`Downloaded ${format.toUpperCase()}`)
+
+      await downloadReport.download(format, {
+        userId: userIdForRequest,
+        userFilterType: userFilterType,
+        requestTimestamp: new Date().getTime().toString()
+      }, { pdf: format === 'pdf' })
     } catch (error) {
       console.error('Download error:', error)
       toast.error('Download failed')
-    } finally {
-      setIsDownloading(false)
     }
   }
 

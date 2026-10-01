@@ -14,6 +14,7 @@ import ConfigManager from '../../utils/configManager'
 import DownloadReport from '../../components/DownloadReport'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
 import { useSorting } from '../../hooks/useSorting'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 
 interface TradeData {
   tradeId: number
@@ -92,6 +93,10 @@ interface TradesPageProps {
   userId?: string;
   roleId?: string;
   user?: any; // userDetails from modal
+  symbol?: string; // Symbol to bind in modal mode
+  token?: number | null; // Token to bind in modal mode
+  exchange?: string; // Exchange to bind in modal mode
+  hideCheckboxes?: boolean; // Hide checkboxes in modal mode
 }
 
 const TradesPage: React.FC<TradesPageProps> = ({ 
@@ -102,10 +107,14 @@ const TradesPage: React.FC<TradesPageProps> = ({
   username,
   userId: propsUserId,
   roleId,
-  user: userDetails
+  user: userDetails,
+  symbol: propsSymbol,
+  token: propsToken,
+  exchange: propsExchange,
+  hideCheckboxes
 }) => {
   // Detect if in modal mode based on presence of userDetails
-  const isModalMode = !!userDetails;
+  const isModalMode = !!userDetails || !!propsSymbol || !!propsExchange || propsToken !== null;
   
   // Initialize state with cache if available, otherwise defaults
   const initializeFilterState = () => {
@@ -150,15 +159,15 @@ const TradesPage: React.FC<TradesPageProps> = ({
   
   // Initialize download report hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/oms/portal/trades/download',
+    apiEndpoint: API_ENDPOINTS.OMS.TRADES_DOWNLOAD,
     filename: 'Trades'
   });
   
   const [selectedUserId, setSelectedUserId] = useState<number>(
     isModalMode ? (propsUserId ? parseInt(propsUserId) : loggedInUserId) : initialFilters.selectedUserId
   )
-  const [selectedExchange, setSelectedExchange] = useState<string>(initialFilters.selectedExchange)
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(initialFilters.selectedSymbol)
+  const [selectedExchange, setSelectedExchange] = useState<string>(propsExchange || initialFilters.selectedExchange)
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(propsSymbol || initialFilters.selectedSymbol)
   const [selectedStatus, setSelectedStatus] = useState<string>(initialFilters.selectedStatus)
   const [selectedOrderType, setSelectedOrderType] = useState<string>(initialFilters.selectedOrderType)
   const [selectedSide, setSelectedSide] = useState<string>(initialFilters.selectedSide)
@@ -247,12 +256,10 @@ const TradesPage: React.FC<TradesPageProps> = ({
     const loadInitialData = async () => {
       try {
         setInitialLoading(true)
-        // Only fetch users in dashboard mode
-        if (!isModalMode) {
-          const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId)
-          if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
-            setUsers(usersResponse.data)
-          }
+        // Fetch users in both dashboard and modal modes
+        const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId)
+        if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
+          setUsers(usersResponse.data)
         }
         const exchangesResponse = await userManagementService.fetchExchanges()
         if (Array.isArray(exchangesResponse) && exchangesResponse.length > 0) {
@@ -344,8 +351,12 @@ const TradesPage: React.FC<TradesPageProps> = ({
         side: selectedSide !== 'Both' ? selectedSide : 'Both'
       }
 
-      // Pass tradeSymbol when symbol is selected (without token)
-      if (selectedSymbol) {
+      // Pass tradeSymbol - use token if in modal mode from Positions, otherwise use selected symbol
+      if (propsToken) {
+        // From modal mode with token - pass token as string
+        requestData.tradeSymbol = propsToken.toString()
+      } else if (selectedSymbol) {
+        // From dashboard mode - pass symbol name
         requestData.tradeSymbol = selectedSymbol
       }
 
@@ -587,23 +598,26 @@ const TradesPage: React.FC<TradesPageProps> = ({
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">To :</label>
                 <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500" />
               </div>
-              {!isModalMode && (
-                <SearchableSelect
-                  label="Username :"
-                  items={userOptions}
-                  selectedId={selectedUserId}
-                  onSelect={(userId) => setSelectedUserId(Number(userId))}
-                  placeholder="Search user..."
-                />
-              )}
+              <SearchableSelect
+                label="Username :"
+                items={userOptions}
+                selectedId={selectedUserId}
+                onSelect={(userId) => setSelectedUserId(Number(userId))}
+                placeholder="Search user..."
+              />
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Exchange :</label>
-                <select value={selectedExchange} onChange={(e) => setSelectedExchange(e.target.value)} className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500">
+                <select 
+                  value={selectedExchange} 
+                  onChange={(e) => propsExchange ? null : setSelectedExchange(e.target.value)} 
+                  disabled={!!propsExchange}
+                  className={`w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none focus:border-blue-500 ${propsExchange ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
                   {exchanges.map((ex) => (<option key={ex.name} value={ex.name}>{ex.name}</option>))}
                 </select>
               </div>
               <div className="space-y-2">
-                {selectedSymbol && (
+                {selectedSymbol && !propsSymbol && (
                   <button
                     onClick={() => {
                       console.log('Clearing symbol...');
@@ -617,13 +631,15 @@ const TradesPage: React.FC<TradesPageProps> = ({
                     Clear
                   </button>
                 )}
-                <SearchableSelect
-                  label="Symbol :"
-                  items={symbolOptions}
-                  selectedId={selectedSymbol}
-                  onSelect={(id) => setSelectedSymbol(String(id))}
-                  placeholder="Search symbol..."
-                />
+                <div className={propsSymbol ? 'opacity-60 pointer-events-none' : ''}>
+                  <SearchableSelect
+                    label="Symbol :"
+                    items={symbolOptions}
+                    selectedId={selectedSymbol}
+                    onSelect={(id) => propsSymbol ? null : setSelectedSymbol(String(id))}
+                    placeholder="Search symbol..."
+                  />
+                </div>
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => handleView(0)} disabled={loading} className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded font-semibold text-sm transition shadow-md">View</button>
@@ -673,7 +689,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
               <table className="w-full border-collapse min-w-max">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                   <tr>
-                    {isAdminUser && (
+                    {isAdminUser && !hideCheckboxes && (
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
                         <input
                           type="checkbox"
@@ -740,7 +756,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
 
                     return (
                       <tr key={trade.tradeId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                        {isAdminUser && (
+                        {isAdminUser && !hideCheckboxes && (
                           <td className="px-4 py-4 text-center">
                             <input
                               type="checkbox"

@@ -14,7 +14,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '/user/api/instruments/active': {
-        target: 'https://api-staging.rivoplus.live',
+        target: process.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live',
         changeOrigin: true,
         rewrite: (path) => path,
         secure: false

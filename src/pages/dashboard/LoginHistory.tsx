@@ -7,6 +7,8 @@ import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import DownloadReport from '../../components/DownloadReport'
 import { useSorting } from '../../hooks/useSorting'
+import { API_ENDPOINTS } from '../../config/apiConfig'
+import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 interface LoginHistoryRecord {
   loginHistoryId: number
@@ -46,6 +48,15 @@ const LoginHistory: React.FC = () => {
   const [users, setUsers] = useState<any[]>([])
   const [initialLoading, setInitialLoading] = useState(true)
   const [isDownloading, setIsDownloading] = useState(false)
+
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: API_ENDPOINTS.LOGIN.HISTORY,
+    filename: 'LoginHistory',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  })
+
   const pageSize = 10
 
   const userOptions = useMemo(() => [
@@ -139,43 +150,23 @@ const LoginHistory: React.FC = () => {
       return
     }
     try {
-      setIsDownloading(true)
       const userData = localStorage.getItem('userData')
       const user = userData ? JSON.parse(userData) : null
       const userId = user?.userId || 0
-      
-      const endpoint = `https://api-staging.rivoplus.live/user/login/history/uId/download?pdf=${format === 'pdf'}`
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: userId,
-          requestTimestamp: Date.now().toString(),
-          data: {
-            fromDate: fromDate ? new Date(fromDate).toLocaleString('en-IN') : '',
-            toDate: toDate ? new Date(toDate).toLocaleString('en-IN') : '',
-            page: currentPage,
-            size: 10
-          }
-        })
-      })
-      
-      if (!response.ok) throw new Error('Download failed')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `LoginHistoryReport.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      toast.success(`Downloaded ${format.toUpperCase()}`)
+
+      await downloadReport.download(format, {
+        userId: userId,
+        requestTimestamp: Date.now().toString(),
+        data: {
+          fromDate: fromDate ? new Date(fromDate).toLocaleString('en-IN') : '',
+          toDate: toDate ? new Date(toDate).toLocaleString('en-IN') : '',
+          page: currentPage,
+          size: 10
+        }
+      }, { pdf: format === 'pdf' })
     } catch (error) {
       console.error('Download error:', error)
       toast.error('Download failed')
-    } finally {
-      setIsDownloading(false)
     }
   }
 

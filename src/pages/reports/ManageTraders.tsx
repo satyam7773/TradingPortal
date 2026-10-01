@@ -12,6 +12,7 @@ import DealBrkDetailsModal from './DealBrkDetailsModal';
 import DurationDetailsModal from './DurationDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
+import { API_ENDPOINTS } from '../../config/apiConfig';
 
 interface TradeData {
   id?: number;
@@ -101,7 +102,7 @@ const ManageTraders: React.FC = () => {
 
   // Initialize download hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/reports/trades/download',
+    apiEndpoint: API_ENDPOINTS.REPORTS.TRADES_DOWNLOAD,
     filename: 'manage-trades',
     onBeforeDownload: () => setIsDownloading(true),
     onAfterDownload: () => setIsDownloading(false)
@@ -171,7 +172,7 @@ const ManageTraders: React.FC = () => {
       if (filtersToUse.duration) payload.data.duration = filtersToUse.duration;
       if (filtersToUse.pnl) payload.data.pnl = filtersToUse.pnl;
 
-      const response = await fetch('https://api-staging.rivoplus.live/reports/trades', {
+      const response = await fetch(API_ENDPOINTS.REPORTS.TRADES, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

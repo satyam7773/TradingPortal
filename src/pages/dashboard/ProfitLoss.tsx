@@ -9,6 +9,7 @@ import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import DownloadReport from '../../components/DownloadReport'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
 import { useSorting } from '../../hooks/useSorting'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 
 // --- Interfaces ---
 interface PnLData {
@@ -45,7 +46,7 @@ const ProfitLossPage: React.FC<PnLPageProps> = ({ cacheData, apiData, onCacheSav
 
   // Initialize download report hook
   const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/oms/pnl/download',
+    apiEndpoint: API_ENDPOINTS.OMS.PNL_DOWNLOAD,
     filename: 'PnLReport'
   })
 

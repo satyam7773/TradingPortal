@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { TokenManager } from './apiClient'
+import { getBaseURL } from '../config/apiConfig'
 
 interface Candle {
   timestamp: string
@@ -14,7 +15,7 @@ interface HistoryResponse {
   candles: Candle[]
 }
 
-const API_BASE_URL = 'https://api-staging.rivoplus.live'
+const API_BASE_URL = getBaseURL()
 
 class IntradayHistoryService {
   private axiosInstance = axios.create({

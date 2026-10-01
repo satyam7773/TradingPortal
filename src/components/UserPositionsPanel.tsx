@@ -12,6 +12,7 @@ import { useOrderModal } from '../hooks/useOrderModal';
 import OrderModal from '../components/modals/OrderModal';
 import SearchableSelect from '../components/ui/SearchableSelect';
 import ConfigManager from '../utils/configManager';
+import { API_ENDPOINTS } from '../config/apiConfig';
 
 interface UserPositionsPanelProps {
   username: string;
@@ -838,7 +839,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         tradeOrderMethod: "WEB",
         data: Array.from(selectedPositions)
       };
-      const response = await fetch('https://api-staging.rivoplus.live/oms/closeMultiplePositions', {
+      const response = await fetch(API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

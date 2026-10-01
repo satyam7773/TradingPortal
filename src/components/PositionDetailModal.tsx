@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -27,6 +27,51 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
   const [filterDaysMin, setFilterDaysMin] = useState('');
   const [filterDaysMax, setFilterDaysMax] = useState('');
 
+  // Compute filtered positions - must be before early return to maintain hook order
+  const filteredPositions = useMemo(() => {
+    return (data?.positions || []).filter((pos: any) => {
+      if (filterUsername && !pos.username?.toLowerCase().includes(filterUsername.toLowerCase())) return false;
+      if (filterSymbol && pos.tradeSymbol !== filterSymbol) return false;
+      if (filterPnlMin !== '' && pos.pnlPercentage < parseFloat(filterPnlMin)) return false;
+      if (filterPnlMax !== '' && pos.pnlPercentage > parseFloat(filterPnlMax)) return false;
+      if (filterDaysMin !== '' && pos.positionDays < parseInt(filterDaysMin)) return false;
+      if (filterDaysMax !== '' && pos.positionDays > parseInt(filterDaysMax)) return false;
+      return true;
+    });
+  }, [data?.positions, filterUsername, filterSymbol, filterPnlMin, filterPnlMax, filterDaysMin, filterDaysMax]);
+
+  const positionsWithLiveData = useMemo(() => {
+    return filteredPositions.map((pos: any) => {
+      // Get live price from liveTicks using bid/ask based on position type
+      const tickData = liveTicks?.[pos.token];
+      const livePrice = tickData 
+        ? (pos.position === "BUY" ? tickData.bid : tickData.ask) 
+        : pos.ltp;
+      
+      // Get the correct quantity - check multiple possible field names
+      const qty = pos.netQuantity || pos.quantity || 0;
+      
+      // Calculate live P&L using correct logic
+      const priceChange =
+        pos.position === "BUY"
+          ? livePrice - pos.averagePrice
+          : pos.averagePrice - livePrice;
+      const livePnl = priceChange * Math.abs(qty);
+      
+      // Calculate live P&L percentage
+      const amount = pos.averagePrice * Math.abs(qty);
+      const livePnlPercentage = amount !== 0 ? (livePnl * 100) / amount : 0;
+
+      return {
+        ...pos,
+        ltp: livePrice,
+        pnl: livePnl,
+        pnlPercentage: livePnlPercentage,
+        totalPnl: livePnl + (pos.realisedPnl || 0)
+      };
+    });
+  }, [filteredPositions, liveTicks]);
+
   if (!isOpen || !data) return null;
 
   const handleClose = () => {
@@ -39,31 +84,6 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
     setShowFilters(true);
     onClose();
   };
-
-  const filteredPositions = (data.positions || []).filter((pos: any) => {
-    if (filterUsername && !pos.username?.toLowerCase().includes(filterUsername.toLowerCase())) return false;
-    if (filterSymbol && pos.tradeSymbol !== filterSymbol) return false;
-    if (filterPnlMin !== '' && pos.pnlPercentage < parseFloat(filterPnlMin)) return false;
-    if (filterPnlMax !== '' && pos.pnlPercentage > parseFloat(filterPnlMax)) return false;
-    if (filterDaysMin !== '' && pos.positionDays < parseInt(filterDaysMin)) return false;
-    if (filterDaysMax !== '' && pos.positionDays > parseInt(filterDaysMax)) return false;
-    return true;
-  });
-
-  const positionsWithLiveData = filteredPositions.map((pos: any) => {
-    const tickData = liveTicks?.[pos.token];
-    const livePrice = tickData?.ltp || pos.ltp;
-    const livePnl = (livePrice - pos.averagePrice) * pos.quantity;
-    const livePnlPercentage = ((livePrice - pos.averagePrice) / pos.averagePrice) * 100;
-
-    return {
-      ...pos,
-      ltp: livePrice,
-      pnl: livePnl,
-      pnlPercentage: livePnlPercentage,
-      totalPnl: livePnl + (pos.realisedPnl || 0)
-    };
-  });
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Eye } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
+import { API_ENDPOINTS } from '../../config/apiConfig';
 
 interface ScriptBuffer {
   instrumentId: number;
@@ -124,7 +125,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
           }
         };
 
-        const response = await fetch('https://api-staging.rivoplus.live/user/portal/updateScripBufferSettings', {
+        const response = await fetch(API_ENDPOINTS.SETTINGS.UPDATE_SCRIP_BUFFER_SETTINGS, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -227,7 +228,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
           }
         };
 
-        const response = await fetch('https://api-staging.rivoplus.live/user/portal/fetchScripBufferSettings', {
+        const response = await fetch(API_ENDPOINTS.SETTINGS.FETCH_SCRIP_BUFFER_SETTINGS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -302,7 +303,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
         }
       };
       
-      const response = await fetch('https://api-staging.rivoplus.live/user/portal/viewScripBufferUpdatedUser', {
+      const response = await fetch(API_ENDPOINTS.SETTINGS.VIEW_SCRIP_BUFFER_UPDATED_USER, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

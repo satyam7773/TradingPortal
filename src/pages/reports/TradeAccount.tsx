@@ -6,10 +6,11 @@ import SearchableSelect from '../../components/ui/SearchableSelect'
 import userManagementService from '../../services/userManagementService'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import DownloadReport from '../../components/DownloadReport'
-import { useDownloadReport } from '../../hooks/useDownloadReport'
 import { useSorting } from '../../hooks/useSorting'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import { useTheme } from '../../contexts/ThemeContext'
+import { API_ENDPOINTS } from '../../config/apiConfig'
+import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 // --- Interfaces ---
 interface TradeAccountData {
@@ -53,12 +54,6 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
   // ROLE DEFINITIONS
   const isAdminOrMaster = roleId === 1 || roleId === 2 || roleId === 3
 
-  // Initialize download report hook
-  const downloadReport = useDownloadReport({
-    apiEndpoint: 'https://api-staging.rivoplus.live/reports/tradeAccountReport/download',
-    filename: 'TradeAccountReport'
-  })
-
   // Initialize state with cache if available
   const initializeFilterState = () => {
     if (cacheData) {
@@ -101,6 +96,14 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
   })
   
   const [users, setUsers] = useState<any[]>([])
+  
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: API_ENDPOINTS.REPORTS.TRADE_ACCOUNT_DOWNLOAD,
+    filename: 'TradeAccount',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  })
   
   // Memoized user options for the SearchableSelect
   const userOptions = useMemo(
@@ -190,7 +193,7 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
     try {
       const targetUserId = userFilterType === 'SINGLE' ? Number(selectedUserId) : loggedInUserId
       
-      const response = await fetch('https://api-staging.rivoplus.live/reports/tradeAccountReport', {
+      const response = await fetch(API_ENDPOINTS.REPORTS.TRADE_ACCOUNT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -312,60 +315,17 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
       return
     }
     try {
-      setIsDownloading(true)
       const targetUserId = userFilterType === 'SINGLE' ? Number(selectedUserId) : loggedInUserId
       
-      // Use specific endpoints for PDF and Excel with POST method
-      const queryParam = format === 'pdf' ? 'pdf=true' : 'excel=true'
-      const downloadUrl = `https://api-staging.rivoplus.live/reports/tradeAccount/download?${queryParam}`
-      
-      const response = await fetch(downloadUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': '*/*'
-        },
-        body: JSON.stringify({
-          userId: loggedInUserId,
-          requestTimestamp: new Date().getTime().toString(),
-          data: {
-            userId: targetUserId
-          }
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`Download failed with status ${response.status}`)
-      }
-
-      // Get filename from content-disposition header or create default
-      const contentDisposition = response.headers.get('content-disposition')
-      let filename = `TradeAccount-${new Date().getTime()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-      
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"']?)([^'";\n]*)\1/)
-        if (filenameMatch && filenameMatch[2]) {
-          filename = filenameMatch[2]
+      await downloadReport.download(format, {
+        userId: loggedInUserId,
+        requestTimestamp: new Date().getTime().toString(),
+        data: {
+          userId: targetUserId
         }
-      }
-
-      // Convert response to blob and download
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(link)
-
-      toast.success(`${format.toUpperCase()} downloaded successfully`)
+      }, { pdf: format === 'pdf' })
     } catch (error) {
       console.error('Download error:', error)
-      toast.error(`Failed to download ${format.toUpperCase()}`)
-    } finally {
-      setIsDownloading(false)
     }
   }
 

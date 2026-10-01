@@ -5,7 +5,10 @@ import { X, ArrowLeft, Eye } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
 import UserDetailsModal from '../user-management/UserDetailsModal';
+import DownloadReport from '../../components/DownloadReport';
 import { useSorting } from '../../hooks/useSorting';
+import { API_ENDPOINTS } from '../../config/apiConfig';
+import { useDownloadReport } from '../../hooks/useDownloadReport';
 
 interface UserData {
   id: string;
@@ -59,6 +62,15 @@ const AnalysisIPBased: React.FC = () => {
   const [modalData, setModalData] = useState<any>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // Initialize download hook
+  const downloadReport = useDownloadReport({
+    apiEndpoint: API_ENDPOINTS.REPORTS.IP_DEVICE_SUMMARY_DOWNLOAD,
+    filename: 'IPDeviceSummary',
+    onBeforeDownload: () => setIsDownloading(true),
+    onAfterDownload: () => setIsDownloading(false)
+  });
 
   const handleUserNameClick = (e: React.MouseEvent, username: string, userId: number | string | undefined | null) => {
     e.preventDefault();
@@ -187,6 +199,33 @@ const AnalysisIPBased: React.FC = () => {
     fetchModalData(ipOrDevice);
   };
 
+  const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+    if (mainData.length === 0) {
+      toast.error('No data to download');
+      return;
+    }
+    try {
+      const loggedInUserId = (() => {
+        const userDataStr = localStorage.getItem('userData');
+        const userData = userDataStr ? JSON.parse(userDataStr) : null;
+        return userData?.userId;
+      })();
+
+      await downloadReport.download(format, {
+        userId: loggedInUserId,
+        requestTimestamp: new Date().getTime().toString(),
+        data: {
+          fromDate: dates.from,
+          toDate: dates.to,
+          username: username || null,
+          type: reportType
+        }
+      }, { pdf: format === 'pdf' })
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
+
   useEffect(() => {
     handleView();
   }, []);
@@ -246,6 +285,15 @@ const AnalysisIPBased: React.FC = () => {
               >
                 {loading ? 'Loading...' : 'View'}
               </button>
+
+              {/* Download Section */}
+              <div className="border-t border-gray-200 dark:border-slate-600 pt-4 mt-4">
+                <DownloadReport
+                  onDownload={handleDownloadReport}
+                  isDisabled={isDownloading || mainData.length === 0}
+                  label="Download Report"
+                />
+              </div>
             </div>
           }
         >

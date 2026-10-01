@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useSorting } from '../../hooks/useSorting';
+import { API_ENDPOINTS } from '../../config/apiConfig';
 
 interface DeletedTradeData {
   tradeId: number;
@@ -126,7 +127,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         }
       };
 
-      const response = await fetch('https://api-staging.rivoplus.live/reports/trades/deleted', {
+      const response = await fetch(API_ENDPOINTS.REPORTS.DELETED_TRADES, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -214,7 +215,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         }
       };
 
-      const response = await fetch('https://api-staging.rivoplus.live/oms/undoTrade', {
+        const response = await fetch(API_ENDPOINTS.OMS.UNDO_TRADE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -286,7 +287,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         setInitialLoading(true);
 
         // Fetch order statuses
-        const statusResponse = await fetch(`https://api-staging.rivoplus.live/reports/deleted/orderStatus?userId=${loggedInUserId}`);
+        const statusResponse = await fetch(`${API_ENDPOINTS.REPORTS.DELETED_ORDER_STATUS}?userId=${loggedInUserId}`);
         const statusData = await statusResponse.json();
         if (statusData?.responseCode === '0' && statusData.data) {
           setStatuses(statusData.data);

@@ -39,6 +39,7 @@ import UserSettingsChangePassword from './pages/dashboard/UserSettingsChangePass
 import BillGenerate from './pages/reports/BillGenerate'
 import AnalysisIPBased from './pages/dashboard/AnalysisIPBased'
 import ExchangeSchedule from './pages/dashboard/ExchangeSchedule'
+import ComingSoon from './pages/dashboard/ComingSoon'
 
 const App: React.FC = () => {
   return (
@@ -82,13 +83,7 @@ const App: React.FC = () => {
           <Route path="script-buffer-limit" element={<ScriptBufferLimit />} />
           <Route path="script-master" element={<ScriptMaster />} />
           <Route path="trade-margin" element={<TradeMarginPage />} />
-          <Route path="*" element={<div className="p-8 text-center">
-            <h1 className="text-2xl font-bold mb-4">Page Not Found</h1>
-            <p className="text-gray-600 mb-4">The route you're looking for doesn't exist within /dashboard</p>
-            <button onClick={() => window.location.href = '/dashboard'} className="px-4 py-2 bg-blue-600 text-white rounded">
-              Go to Dashboard
-            </button>
-          </div>} />
+          <Route path="*" element={<ComingSoon />} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

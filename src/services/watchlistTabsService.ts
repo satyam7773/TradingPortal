@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from '../config/apiConfig'
+
 /**
  * Watchlist Tabs Service
  * Handles fetching and managing user's watchlist tabs
@@ -19,7 +21,7 @@ export interface WatchlistTabsResponse {
 }
 
 class WatchlistTabsService {
-  private readonly baseUrl = 'https://api-staging.rivoplus.live/user/watchlist'
+  private readonly baseUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/user/watchlist`
 
   /**
    * Fetch user's watchlist tabs
@@ -128,7 +130,7 @@ class WatchlistTabsService {
     try {
       console.log('✏️ Updating Watchlist Tab:', { tabId, tabName })
 
-      const response = await fetch(`https://api-staging.rivoplus.live/user/api/watchlist-tabs/tab/${tabId}`, {
+      const response = await fetch(API_ENDPOINTS.WATCHLIST.TAB(tabId), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

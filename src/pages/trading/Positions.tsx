@@ -13,6 +13,7 @@ import userManagementService from "../../services/userManagementService";
 import marketWatchService from "../../services/marketWatchService";
 import FilterLayout from "../../components/FilterLayout";
 import PositionDetailModal from "../../components/PositionDetailModal";
+import OwnUserPositionModal from "../../components/OwnUserPositionModal";
 import { useOrderModal } from "../../hooks/useOrderModal";
 import OrderModal from "../../components/modals/OrderModal";
 import PositionDetailsModal from "../../components/PositionDetailsModal";
@@ -23,6 +24,8 @@ import { useSorting } from "../../hooks/useSorting";
 import { BUY_SELL_DISABLED_MESSAGE } from "../../utils/permissionUtils";
 import { useAppSelector } from "../../hooks/reduxHooks";
 import { selectMarketTradeRight } from "../../store/selectors/authSelectors";
+import { API_ENDPOINTS } from "../../config/apiConfig";
+import { Trades as TradesPage } from "./Trades";
 
 interface PositionData {
   positionId: number;
@@ -82,6 +85,12 @@ const Positions: React.FC = () => {
   const [showRowClickModal, setShowRowClickModal] = useState(false);
   const [rowClickModalData, setRowClickModalData] = useState<any>(null);
   const [loadingRowClickModal, setLoadingRowClickModal] = useState(false);
+
+  // Trades modal state
+  const [showTradesModal, setShowTradesModal] = useState(false);
+  const [tradesModalSymbol, setTradesModalSymbol] = useState<string>("");
+  const [tradesModalToken, setTradesModalToken] = useState<number | null>(null);
+  const [tradesModalExchange, setTradesModalExchange] = useState<string>("");
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -267,7 +276,9 @@ const Positions: React.FC = () => {
         lastUpdateRef.current = now;
 
         const feedMap = new Map(
-          incomingFeedArray.map((item) => [Number(item.insToken), item]),
+          incomingFeedArray
+            .filter((item) => item != null && item.insToken != null)
+            .map((item) => [Number(item.insToken), item]),
         );
         setFilteredPositions((prevPositions) => {
           return prevPositions.map((pos) => {
@@ -280,9 +291,9 @@ const Positions: React.FC = () => {
                 ? price - pos.averagePrice
                 : pos.averagePrice - price;
             const unrealisedPnl =
-              priceChange * Math.abs(pos.netQuantity || pos.quantity);
+              priceChange * Math.abs(pos.netQuantity);
             const amount =
-              pos.averagePrice * Math.abs(pos.netQuantity || pos.quantity);
+              pos.averagePrice * Math.abs(pos.netQuantity );
             const unrealisedPnlPercentage =
               amount !== 0 ? (unrealisedPnl * 100) / amount : 0;
             return {
@@ -543,7 +554,7 @@ const Positions: React.FC = () => {
       };
 
       const response = await fetch(
-        "https://api-staging.rivoplus.live/oms/closeMultiplePositions",
+        API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -644,44 +655,41 @@ const Positions: React.FC = () => {
       setSelectedOwnPosition(p);
       setLoadingOwnPosition(true);
 
-      // Fetch client positions from API
-      const response = await userManagementService.fetchClientPositions(
+      // Fetch own user positions from new API
+      const response = await userManagementService.fetchOwnUserPositions(
         loggedInUserId,
-        p.userId || 0,
         p.token || 0,
       );
 
-      if (response?.responseCode === "0" && response.data?.portalPositionsData) {
-        // Get all positions for this user
-        const userPositions: PositionData[] = response.data.portalPositionsData.map((pos: any) => ({
-          positionId: pos.positionId,
-          positionDate: pos.positionDate,
-          positionDays: pos.positionDays,
+      if (response?.responseCode === "0" && response.data) {
+        // Transform API response data to match modal structure
+        const userPositions: any[] = response.data.map((pos: any) => ({
           username: pos.username,
+          userId: pos.userId,
+          name: pos.name,
           parentUsername: pos.parentUsername,
-          exchange: pos.exchange,
+          parentUserId: pos.parentUserId,
           tradeSymbol: pos.tradeSymbol,
-          position: pos.position,
-          quantity: pos.quantity,
-          averagePrice: pos.averagePrice,
-          ltp: pos.ltp,
+          price: pos.price, // Current market price (CMP)
+          token: pos.token || p.token, // Include token for live price lookup
+          netPosition: pos.netPosition, // BUY/SELL
+          netQuantity: pos.netQuantity,
+          netAvgPrice: pos.netAvgPrice,
           pnl: pos.pnl,
           pnlPercentage: pos.pnlPercentage,
-          totalPnl: pos.totalPnl,
-          realisedPnl: pos.realisedPnl,
-          marginUsed: pos.marginUsed,
-          token: pos.token,
-          userId: pos.userId,
-          netQuantity: pos.netQuantity,
+          netBuyQuantity: pos.netBuyQuantity,
+          netBuyAveragePrice: pos.netBuyAveragePrice,
+          netSellQuantity: pos.netSellQuantity,
+          netSellAveragePrice: pos.netSellAveragePrice,
         }));
         
-        // Open detail modal with all user positions
+        // Set data for modal display
         setOwnDetailModalData(userPositions);
         setShowOwnPositionDetailModal(true);
         setOwnDetailModalExchange(p.exchange);
         setOwnDetailModalSymbol(p.tradeSymbol);
       } else {
-        toast.error("Failed to fetch positions");
+        toast.error(response?.responseMessage || "Failed to fetch positions");
       }
     } catch (error) {
       console.error("❌ Error fetching own position:", error);
@@ -707,7 +715,7 @@ const Positions: React.FC = () => {
       };
 
       const response = await fetch(
-        "https://api-staging.rivoplus.live/oms/positions/portal",
+        API_ENDPOINTS.OMS.POSITIONS_PORTAL,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1076,7 +1084,13 @@ const Positions: React.FC = () => {
                           </span>
                         </td>
                         <td
-                          className={`px-6 py-4 text-left font-bold ${p.position === "BUY" ? "text-blue-600" : "text-red-600"}`}
+                          className={`px-6 py-4 text-left font-bold cursor-pointer hover:underline ${p.position === "BUY" ? "text-blue-600" : "text-red-600"}`}
+                          onClick={() => {
+                            setTradesModalSymbol(p.tradeSymbol);
+                            setTradesModalToken(p.token || null);
+                            setTradesModalExchange(p.exchange);
+                            setShowTradesModal(true);
+                          }}
                         >
                           {p.tradeSymbol}
                         </td>
@@ -1133,21 +1147,16 @@ const Positions: React.FC = () => {
       {/* Own User Position Details Modal */}
       {showOwnPositionDetailModal && ownDetailModalData.length > 0 && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-          <PositionDetailsModal
+          <OwnUserPositionModal
             positions={ownDetailModalData}
-            exchanges={exchanges}
-            symbols={symbols}
-            selectedExchange={ownDetailModalExchange}
             selectedSymbol={ownDetailModalSymbol}
-            onExchangeChange={setOwnDetailModalExchange}
-            onSymbolChange={setOwnDetailModalSymbol}
             onClose={() => {
               setShowOwnPositionDetailModal(false);
               setOwnDetailModalData([]);
               setSelectedOwnPosition(null);
               setLoadingOwnPosition(false);
             }}
-            title="Own User Positions"
+            title="Own User Open Positions"
             liveTicks={liveTicks}
           />
         </div>,
@@ -1229,6 +1238,36 @@ const Positions: React.FC = () => {
         onDragStart={(e) => handleDragSetup(e, "SELL")}
         isDragging={orderModal.isDraggingSell}
       />
+
+      {/* Trades Modal */}
+      {showTradesModal && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Trades - {tradesModalSymbol}</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  View all trades for this symbol
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTradesModal(false)}
+                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
+                title="Close modal"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              <TradesPage symbol={tradesModalSymbol} token={tradesModalToken} exchange={tradesModalExchange} hideCheckboxes={true} />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

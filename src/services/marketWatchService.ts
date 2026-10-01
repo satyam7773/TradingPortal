@@ -5,6 +5,7 @@
  */
 
 import orderUpdateService from './orderUpdateService'
+import { getWebSocketURL } from '@/config/apiConfig'
 
 class MarketWatchService {
   private socket: WebSocket | null = null
@@ -55,9 +56,7 @@ class MarketWatchService {
       this.onConnectedCallback = onConnected || null
       this.connectPromiseResolve = resolve
 
-      
-
-      const wsUrl = 'wss://quotes.rivoplus.live/ws/market'
+      const wsUrl = getWebSocketURL()
       
       // Add a timeout - if connection doesn't complete in 10 seconds, reject
       const connectionTimeout = setTimeout(() => {

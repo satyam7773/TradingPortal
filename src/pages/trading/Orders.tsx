@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
 import orderService from '../../services/orderService'
 import FilterLayout from '../../components/FilterLayout'
-import UserDetailsModal from '../user-management/UserDetailsModal'
+import { API_ENDPOINTS } from '../../config/apiConfig'
 import OrderModal from '../../components/modals/OrderModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
@@ -336,7 +336,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
         data: Array.from(selectedOrders)
       };
 
-      const response = await fetch('https://api-staging.rivoplus.live/oms/proceedToSuccess', {
+      const response = await fetch(API_ENDPOINTS.OMS.PROCEED_TO_SUCCESS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
