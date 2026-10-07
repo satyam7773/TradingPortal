@@ -8,6 +8,7 @@ import { Toaster } from 'react-hot-toast'
 import App from './App'
 import store from './store'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ModalProvider } from './contexts/ModalContext'
 import './styles/main.css'
 
 const queryClient = new QueryClient()
@@ -15,40 +16,42 @@ const queryClient = new QueryClient()
 createRoot(document.getElementById('root')!).render(
   // Temporarily disable StrictMode to prevent double API calls in development
   // <React.StrictMode>
-    <ThemeProvider>
-      <Provider store={store}>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <App />
-            <Toaster
-              position="top-right"
-              containerStyle={{
-                zIndex: 9999999,
-              }}
-              toastOptions={{
-                duration: 5000,
-                style: {
-                  background: 'var(--color-surface-primary)',
-                  color: 'var(--color-text-primary)',
-                  border: '1px solid var(--color-border-primary)',
-                },
-                success: {
-                  iconTheme: {
-                    primary: 'var(--color-status-success)',
-                    secondary: 'var(--color-text-inverse)',
+    <ModalProvider>
+      <ThemeProvider>
+        <Provider store={store}>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <App />
+              <Toaster
+                position="top-right"
+                containerStyle={{
+                  zIndex: 9999999,
+                }}
+                toastOptions={{
+                  duration: 5000,
+                  style: {
+                    background: 'var(--color-surface-primary)',
+                    color: 'var(--color-text-primary)',
+                    border: '1px solid var(--color-border-primary)',
                   },
-                },
-                error: {
-                  iconTheme: {
-                    primary: 'var(--color-status-error)',
-                    secondary: 'var(--color-text-inverse)',
+                  success: {
+                    iconTheme: {
+                      primary: 'var(--color-status-success)',
+                      secondary: 'var(--color-text-inverse)',
+                    },
                   },
-                },
-              }}
-            />
-          </BrowserRouter>
-        </QueryClientProvider>
-      </Provider>
-    </ThemeProvider>
+                  error: {
+                    iconTheme: {
+                      primary: 'var(--color-status-error)',
+                      secondary: 'var(--color-text-inverse)',
+                    },
+                  },
+                }}
+              />
+            </BrowserRouter>
+          </QueryClientProvider>
+        </Provider>
+      </ThemeProvider>
+    </ModalProvider>
   // </React.StrictMode>
 )

@@ -649,11 +649,33 @@ class UserManagementService {
   /**
    * Fetch user positions
    */
-  async getUserPositions(userId: number): Promise<any> {
+  async getUserPositions(userId: number, exchange?: string, token?: number): Promise<any> {
+    const data: any = {
+      userId,
+    };
+
+    // Only add exchange if provided and not "All Exchanges"
+    if (exchange && exchange !== "All Exchanges") {
+      data.exchange = exchange;
+    }
+
+    // Only add token if provided and not 0 (not "All Symbols")
+    if (token !== undefined && token !== 0) {
+      data.token = token;
+    }
+
     const request = {
       requestTimestamp: Date.now().toString(),
       userId,
+      data,
     };
+
+    console.log("📍 getUserPositions Request:", { 
+      userId, 
+      exchange, 
+      token,
+      requestPayload: request 
+    });
 
     try {
       const response = await apiClient.post<any>(
@@ -839,26 +861,24 @@ class UserManagementService {
     userId: number,
   ): Promise<any> {
     const userDataStr = localStorage.getItem("userData");
-    // const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
-    // const userId = storedUserData?.userId || 2
+    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null;
+    const loggedInUserId = storedUserData?.userId || 31;
 
-    const data: any = {
-      userId,
-    };
+    const data: any = {};
 
     // Only add exchange if not empty (not "All Exchanges)
-    if (exchange) {
+    if (exchange && exchange !== "All Exchanges") {
       data.exchange = exchange;
     }
 
     // Only add token if not 0 (not "All Symbols)
-    if (token !== 0) {
+    if (token !== 0 && token !== null) {
       data.token = token;
     }
 
     const request = {
       requestTimestamp: Date.now().toString(),
-      userId,
+      userId: loggedInUserId,
       data,
     };
 

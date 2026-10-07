@@ -22,6 +22,7 @@ import { DeletedTrades } from '../reports';
 import RejectionLog from '../dashboard/RejectionLog';
 import IntradayHistory from '../dashboard/IntradayHistory';
 import AccountSummary from '../reports/AccountSummary';
+import { useModalDepth } from '../../contexts/ModalContext';
 
 interface UserData {
   id: string;
@@ -163,6 +164,19 @@ const ToggleSwitch = ({ enabled, onClick, size = 'sm', disabled = false }: { ena
 };
 
 const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onToggle, depth = 0 }) => {
+  const { getNextZIndex, pushModal, popModal } = useModalDepth();
+  // Use depth prop if provided, otherwise use ModalContext
+  const modalZIndex = depth > 0 ? 10000 + (depth * 5000) : getNextZIndex();
+  
+  console.log("🎯 UserDetailsModal Rendering:", {
+    userExists: !!user,
+    username: user?.username,
+    userId: user?.id,
+    modalZIndex,
+    depth,
+    hasUser: user !== null,
+  });
+  
   const [userDetails, setUserDetails] = useState<UserDetailsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +187,35 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   useEffect(() => {
     setActiveTab('positions');
   }, [user?.id]);
+
+  // ✅ Sync user prop to userDetails state or fetch if incomplete
+  useEffect(() => {
+    if (user) {
+      console.log('🔄 Syncing user prop to userDetails state:', user);
+      
+      // If user already has userProfile, use it directly
+      if ((user as any).userProfile) {
+        setUserDetails(user as unknown as UserDetailsResponse);
+      } else {
+        // If userProfile is missing, fetch the full user details
+        console.log('📥 User missing userProfile, fetching full details for userId:', user.id);
+        const fetchFullDetails = async () => {
+          try {
+            const userId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
+            const response = await userManagementService.fetchUserDetails(userId);
+            if (response?.data) {
+              console.log('✅ Fetched full user details:', response.data);
+              setUserDetails(response.data as UserDetailsResponse);
+            }
+          } catch (error) {
+            console.error('❌ Error fetching user details:', error);
+          }
+        };
+        fetchFullDetails();
+      }
+    }
+  }, [user?.id]);
+
   const [actionMenuPosition, setActionMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
   const [selectedUserForIntradaySquareOff, setSelectedUserForIntradaySquareOff] = useState<any>(null);
@@ -248,7 +291,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
   // Handle toggle settings API call
   const handleToggleSetting = useCallback(async (toggleName: string, currentValue: boolean) => {
-    if (!userDetails) return;
+    if (!userDetails || !userDetails.userProfile) return;
 
     try {
       const settingType = mapSettingKeyToType(toggleName);
@@ -608,8 +651,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       isActive: apiUser.isActive ?? true,
       deleteTrade: getToggleValue('deleteTrade'),
       deleteTradeEnabled: getToggleEnabled('deleteTrade'),
-      marketTradeRight: (getToggleValue('marketTradeRight') || (apiUser as any).marketTradeRight) ?? false,
-      mtrToggleEnabled: (getToggleEnabled('marketTradeRight') || (apiUser as any).mtrToggleEnabled) ?? false,
     };
   };
 
@@ -632,7 +673,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const mainModal = createPortal(
     <div
       className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md animate-fadeIn"
-      style={{ zIndex: 10000 + depth * 1000 }}
+      style={{ zIndex: modalZIndex }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -682,8 +723,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         </div>
 
         {/* Tabs */}
-        {userDetails && (
-          <div className="tabs-scrollbar flex gap-2 px-6 pt-3 bg-white/80 dark:bg-slate-800/90 border-b border-gray-200/50 dark:border-slate-700/50 overflow-x-auto flex-nowrap">
+        {userDetails && userDetails.userProfile && (
+          <div className="tabs-scrollbar flex-shrink-0 flex gap-2 px-6 pt-3 bg-white/80 dark:bg-slate-800/90 border-b border-gray-200/50 dark:border-slate-700/50 overflow-x-auto flex-nowrap">
             <button
               onClick={() => setActiveTab('details')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'details'
@@ -694,7 +735,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               User Details
             </button>
             {/* Only show User List tab if user is NOT a Client (roleId !== 4) */}
-            {userDetails.userProfile.roleId !== 4 && (
+            {userDetails?.userProfile?.roleId !== 4 && (
               <button
                 onClick={() => setActiveTab('userList')}
                 className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${activeTab === 'userList'
@@ -770,7 +811,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               Settings
             </button>
             {/* Dynamic menu tabs (promote quick actions to top-level tabs) */}
-            {userDetails.userSettings?.menus?.map((menu) => (
+            {userDetails?.userSettings?.menus?.map((menu) => (
               <button
                 key={menu.name}
                 onClick={() => setActiveTab(menu.name)}
@@ -784,9 +825,16 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             ))}
           </div>
         )}
+        
+        {/* Loading state - show when waiting for userProfile */}
+        {userDetails && !userDetails.userProfile && (
+          <div className="flex-shrink-0 flex items-center justify-center h-12 px-6 pt-3 bg-white/80 dark:bg-slate-800/90">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Loading user profile data...</p>
+          </div>
+        )}
 
         {/* Modal Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
           {(() => {
             if (loading) {
               return (
@@ -820,18 +868,36 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               );
             }
 
-            if (!userDetails) return null;
-
+            // FIXED: Don't return null if userDetails is missing - let component render anyway
+            console.log('🎨 Modal Content Rendering:', { 
+              activeTab, 
+              hasUserDetails: !!userDetails, 
+              loading, 
+              error 
+            });
+            
             return (
               <>
+                {/* Show loading for non-positions tabs when userDetails missing */}
+                {!userDetails && activeTab !== 'positions' && (
+                  <div className="flex flex-col items-center justify-center h-full gap-4">
+                    <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">Loading user details...</p>
+                  </div>
+                )}
+                
+                {/* Positions Tab - Can render even if userDetails is loading */}
+                {activeTab === 'positions' && (
+                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} user={userDetails} depth={depth} />
+                )}
+                
                 {/* User Details Tab */}
-                {activeTab === 'details' && (
+                {activeTab === 'details' && userDetails && (
                   <UserDetailsTab user={user} userDetails={userDetails} getTypeColor={getTypeColor} onUserUpdated={handleUserUpdated} />
                 )}
 
                 {/* Settings Tab */}
                 {/* Settings & Permissions Tab */}
-                {activeTab === 'settings' && (
+                {activeTab === 'settings' && userDetails && (
                   <div className="animate-fadeIn">
                     <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl p-4 border border-gray-200/50 dark:border-slate-700/50 shadow-lg">
                       <div className="flex items-center gap-2 mb-4">
@@ -872,7 +938,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 )}
 
                 {/* Dynamic Menu Tab (each menu from userSettings.menus becomes a top-level tab) */}
-                {userDetails.userSettings?.menus?.some((m) => m.name === activeTab) && (
+                {userDetails?.userSettings?.menus?.some((m) => m.name === activeTab) && (
                   <Suspense fallback={<div className="py-8 text-center">Loading...</div>}>
                     {/* @ts-ignore - dynamic lazy component */}
                     {LazyMenuComponent && <LazyMenuComponent user={user} userDetails={userDetails} onClose={onClose} onToggle={onToggle} onRefresh={fetchUserDetails} />}
@@ -880,14 +946,14 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 )}
 
                 {/* User List Tab - Hide for Client users (roleId 4) */}
-                {activeTab === 'userList' && userDetails.userList && userDetails.userList.length > 0 && userDetails.userProfile.roleId !== 4 && (
+                {activeTab === 'userList' && userDetails?.userList && userDetails?.userList.length > 0 && userDetails?.userProfile.roleId !== 4 && (
                   <div className="animate-fadeIn">
                     <div className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 overflow-hidden h-full flex flex-col">
                       <div className="overflow-x-auto overflow-y-auto flex-1">
 
                         {activeTab === 'userList' && (
                           <div className="animate-fadeIn">
-                            {userDetails.userList.length === 0 ? (
+                            {userDetails?.userList.length === 0 ? (
                               <div className="p-10 text-center text-gray-500">No sub-users found for this account.</div>
                             ) : (
                               <div className="table-container">
@@ -935,7 +1001,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
-                                    {userDetails.userList.map((childUser) => {
+                                    {userDetails?.userList.map((childUser) => {
                                       const transformedUser = transformChildUser(childUser);
                                       return (
                                         <tr
@@ -1114,10 +1180,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   </div>
                 )}
 
-                {/* Positions Tab */}
-                {activeTab === 'positions' && (
-                  <UserPositionsPanel username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
-                )}
 
                 {/* scripMaster Tab */}
                 {activeTab === 'scripMaster' && (

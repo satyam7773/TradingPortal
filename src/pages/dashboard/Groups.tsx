@@ -58,9 +58,24 @@ const Groups: React.FC = () => {
   const fetchExchanges = async () => {
     try {
       setExchangesLoading(true)
-      // Get userId from localStorage or auth context
-      const userId = parseInt(localStorage.getItem('userId') || '31', 10)
-      const exchangeData = await userManagementService.getExchanges(userId)
+      
+      // Get userId from localStorage
+      const loggedInUserId = (() => {
+        const userDataStr = localStorage.getItem('userData')
+        const userData = userDataStr ? JSON.parse(userDataStr) : null
+        return userData?.userId
+      })()
+
+      console.log('🔄 fetchExchanges - loggedInUserId:', loggedInUserId)
+
+      if (!loggedInUserId) {
+        console.warn('❌ userId not found in localStorage')
+        throw new Error('User ID not found')
+      }
+
+      console.log('📡 Calling API with userId:', loggedInUserId)
+      const exchangeData = await userManagementService.getExchanges(loggedInUserId)
+      console.log('✅ API Response:', exchangeData)
       
       if (exchangeData && Array.isArray(exchangeData)) {
         // Map exchange names to IDs (you might want to adjust this mapping based on your backend)

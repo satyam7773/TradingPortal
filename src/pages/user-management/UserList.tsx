@@ -137,6 +137,8 @@ const UserList: React.FC = () => {
   const [selectedUserForExchangewiseLotLimit, setSelectedUserForExchangewiseLotLimit] = useState<any>(null);
   const [showAccountLimitModal, setShowAccountLimitModal] = useState(false);
   const [selectedUserForAccountLimit, setSelectedUserForAccountLimit] = useState<any>(null);
+  const [showFreshStopLossModal, setShowFreshStopLossModal] = useState(false);
+  const [selectedUserForFreshStopLoss, setSelectedUserForFreshStopLoss] = useState<any>(null);
 
   const clearUserListCache = useCallback(() => {
     sessionStorage.removeItem(USER_LIST_CACHE_KEY);
@@ -335,10 +337,29 @@ const UserList: React.FC = () => {
   useEffect(() => {
     const handleClickOutside = () => {
       setOpenActionMenu(null);
+      setActionMenuPosition(null);
+      setActionMenuUserId(null);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // Close action menu when table scrolls
+  useEffect(() => {
+    const handleTableScroll = (e: Event) => {
+      if (openActionMenu) {
+        setOpenActionMenu(null);
+        setActionMenuPosition(null);
+        setActionMenuUserId(null);
+      }
+    };
+    
+    const tableContainer = document.querySelector('.overflow-y-auto');
+    if (tableContainer) {
+      tableContainer.addEventListener('scroll', handleTableScroll);
+      return () => tableContainer.removeEventListener('scroll', handleTableScroll);
+    }
+  }, [openActionMenu]);
 
   // Handle Escape key to close modals
   useEffect(() => {
@@ -408,7 +429,7 @@ const UserList: React.FC = () => {
   // Sorting hook
   const { sortColumn, sortDirection, handleSort, sortedData: sortedUsers, getSortIcon } = useSorting({ data: filteredUsers });
 
-  const handleToggle = useCallback(async (userId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'deleteTrade') => {
+  const handleToggle = useCallback(async (userId: string, field: 'bet' | 'closeOut' | 'margin' | 'status' | 'creditLimit' | 'creditBasedMargin' | 'deleteTrade' | 'freshStopLoss') => {
     try {
       // Map field names to API type values
       const fieldToApiType: Record<string, string> = {
@@ -769,7 +790,11 @@ const UserList: React.FC = () => {
                                 setActionMenuUserId(null);
                               } else {
                                 setActionMenuUserId(user.id);
-                                setActionMenuPosition({ x: rect.right, y: rect.bottom });
+                                // Use getBoundingClientRect for fixed positioning
+                                setActionMenuPosition({ 
+                                  x: rect.right, 
+                                  y: rect.bottom 
+                                });
                                 setOpenActionMenu(user.id);
                               }
                             }}
@@ -1346,31 +1371,49 @@ const UserList: React.FC = () => {
       {/* Action Menu Portal */}
       {openActionMenu && actionMenuPosition && actionMenuUserId && createPortal(
         <div
-          className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl z-[99999] overflow-auto max-h-96"
+          className="fixed bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl z-[99999] overflow-auto max-h-96"
           style={{
-            left: `${Math.min(actionMenuPosition.x, window.innerWidth - 240)}px`,
+            width: '224px',
+            left: (() => {
+              const menuWidth = 224;
+              const gap = 8;
+              const padding = 10;
+              const buttonRight = actionMenuPosition.x;
+              const rightPosition = buttonRight + gap;
+              const leftPosition = buttonRight - menuWidth - gap;
+              
+              // Try to position to the right first
+              if (rightPosition + menuWidth + padding <= window.innerWidth) {
+                return `${rightPosition}px`;
+              }
+              // Try to position to the left
+              else if (leftPosition >= padding) {
+                return `${leftPosition}px`;
+              }
+              // Fallback: position to the right and let it overflow if needed
+              else {
+                return `${rightPosition}px`;
+              }
+            })(),
             top: (() => {
-              // Menu height estimation: ~36px per button + padding
-              // Master: 5 buttons, Client: 12 buttons
-              const currentUser = users.find(u => u.id === actionMenuUserId);
-              const isMaster = currentUser?.type === 'Master';
-              const estimatedMenuHeight = isMaster ? 220 : 480;
-              const spaceBelow = window.innerHeight - actionMenuPosition.y - 40;
-              const spaceAbove = actionMenuPosition.y;
+              const buttonY = actionMenuPosition.y;
+              const menuHeight = 500; // max height for client users
+              const padding = 10;
+              const gap = 4; // small gap between button and menu
+              const spaceBelow = window.innerHeight - buttonY;
+              const spaceAbove = buttonY;
 
-              // If there's enough space below, position downward
-              if (spaceBelow >= estimatedMenuHeight) {
-                return `${actionMenuPosition.y + 8}px`;
+              // Prefer positioning below the button
+              if (spaceBelow >= menuHeight + padding) {
+                return `${buttonY + gap}px`;
               }
-              // If there's not enough space below but enough above, position upward
-              else if (spaceAbove >= estimatedMenuHeight) {
-                return `${actionMenuPosition.y - estimatedMenuHeight - 8}px`;
+              // If not enough space below, position above
+              else if (spaceAbove >= menuHeight + padding) {
+                return `${Math.max(padding, buttonY - menuHeight - gap)}px`;
               }
-              // If not enough space either way, prioritize the direction with more space
-              else if (spaceBelow >= spaceAbove) {
-                return `${actionMenuPosition.y + 8}px`;
-              } else {
-                return `${actionMenuPosition.y - Math.min(estimatedMenuHeight, spaceAbove) - 8}px`;
+              // If constrained from both sides, position below and let overflow happen
+              else {
+                return `${buttonY + gap}px`;
               }
             })(),
           }}
@@ -1573,11 +1616,97 @@ const UserList: React.FC = () => {
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>💹</span> Exchangewise Interest %
                     </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForFreshStopLoss(user);
+                          setShowFreshStopLossModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                      <span>🛑</span> Fresh StopLoss
+                    </button>
                   </>
                 )}
               </>
             );
           })()}
+        </div>,
+        document.body
+      )}
+
+      {/* Fresh StopLoss Modal */}
+      {showFreshStopLossModal && selectedUserForFreshStopLoss && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
+          style={{ zIndex: 99999 }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowFreshStopLossModal(false);
+            }
+          }}
+        >
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
+            style={{ width: '90vw', maxWidth: '520px', maxHeight: '400px' }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="relative bg-gradient-to-r from-orange-600 via-red-600 to-rose-600 px-4 py-2 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-xl border border-white/30 shadow-lg">
+                  <span className="text-sm">🛑</span>
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white">Fresh StopLoss</h2>
+                  <p className="text-orange-100 text-xs leading-none">
+                    {selectedUserForFreshStopLoss?.username}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFreshStopLossModal(false)}
+                className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition-all duration-200 backdrop-blur-xl border border-white/30 hover:rotate-90 transform group"
+              >
+                <X className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-orange-50/30 to-rose-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-3">
+              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-xl p-3 border border-gray-200/50 dark:border-slate-700/50 shadow-lg">
+                <p className="text-center text-gray-600 dark:text-gray-400 text-xs font-medium mb-2">
+                  Fresh StopLoss for <span className="font-bold text-orange-600 dark:text-orange-400">{selectedUserForFreshStopLoss?.username}</span>
+                </p>
+
+                <div className="space-y-2">
+                  {/* FSL Toggle */}
+                  <div className="bg-gradient-to-r from-orange-50 to-rose-50 dark:from-slate-700/50 dark:to-slate-700/30 rounded-lg p-3 border border-orange-200 dark:border-orange-600/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h3 className="text-xs font-bold text-gray-800 dark:text-white mb-0.5">Enable Fresh StopLoss</h3>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">Toggle feature for this user</p>
+                      </div>
+                      <ToggleSwitch
+                        enabled={selectedUserForFreshStopLoss.freshStopLoss}
+                        size="sm"
+                        disabled={!selectedUserForFreshStopLoss.freshStopLossEnabled}
+                        onClick={async () => {
+                          await handleToggle(selectedUserForFreshStopLoss.id, 'freshStopLoss');
+                          setShowFreshStopLossModal(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>,
         document.body
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Calendar, Edit2, X, Save, AlertCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar, Edit2, X, Save, AlertCircle, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createPortal } from 'react-dom'
 import { API_ENDPOINTS } from '../../config/apiConfig'
@@ -8,6 +8,7 @@ interface ScheduleData {
   date: string
   day: string
   operational: boolean
+  particulars?: string
   timings: Array<{
     startTime: string
     endTime: string
@@ -35,12 +36,41 @@ const ExchangeSchedulePage: React.FC = () => {
   const [selectedExchange, setSelectedExchange] = useState<number>(1)
   const [scheduleData, setScheduleData] = useState<ScheduleData[]>([])
   const [loading, setLoading] = useState(false)
+  const [savingChanges, setSavingChanges] = useState(false)
+  const [userId, setUserId] = useState<number | null>(null)
 
   // Edit state
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const [editedData, setEditedData] = useState<Record<string, ScheduleData>>({})
   const [showEditModal, setShowEditModal] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+
+  // Default timings state
+  const [showDefaultTimingsModal, setShowDefaultTimingsModal] = useState(false)
+  const [defaultTimings, setDefaultTimings] = useState<Array<{ startTime: string; endTime: string }>>([])
+  const [editingDefaultTimings, setEditingDefaultTimings] = useState<Array<{ startTime: string; endTime: string }>>([])
+  const [savingDefaultTimings, setSavingDefaultTimings] = useState(false)
+  const [loadingDefaultTimings, setLoadingDefaultTimings] = useState(false)
+  const [roleId, setRoleId] = useState<number | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // Get userId and roleId from localStorage on mount
+  useEffect(() => {
+    const userData = localStorage.getItem('userData')
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData)
+        setUserId(parsed.userId || parsed.id || null)
+        const userRoleId = parsed.roleId || null
+        setRoleId(userRoleId)
+        // Only roleId 1 or 2 can edit
+        setIsAdmin(userRoleId === 1 || userRoleId === 2)
+      } catch (e) {
+        console.error('Error parsing userData:', e)
+        setIsAdmin(false)
+      }
+    }
+  }, [])
 
   // Fetch exchange schedule
   const fetchSchedule = async (month: number, exchange: number) => {
@@ -66,9 +96,125 @@ const ExchangeSchedulePage: React.FC = () => {
     }
   }
 
+  // Fetch default timings for selected exchange
+  const fetchDefaultTimings = async (exchangeId: number) => {
+    setLoadingDefaultTimings(true)
+    try {
+      const response = await fetch(`https://api-staging.rivoplus.live/user/settings/getDefaultTiming?exchangeId=${exchangeId}`, {
+        method: 'GET'
+      })
+      const result = await response.json()
+      
+      if (result?.responseCode === '0' && Array.isArray(result.data)) {
+        setDefaultTimings(result.data)
+        setEditingDefaultTimings(result.data.map((t: any) => ({ ...t })))
+      } else {
+        setDefaultTimings([])
+        setEditingDefaultTimings([])
+      }
+    } catch (error) {
+      console.error('Error fetching default timings:', error)
+      setDefaultTimings([])
+      setEditingDefaultTimings([])
+    } finally {
+      setLoadingDefaultTimings(false)
+    }
+  }
+
+  // Save default timings
+  const handleSaveDefaultTimings = async () => {
+    if (!userId) {
+      toast.error('User ID not found. Please refresh and try again.')
+      return
+    }
+
+    // Validate timings
+    if (editingDefaultTimings.length === 0) {
+      toast.error('Please add at least one timing')
+      return
+    }
+
+    // For SGX, ensure exactly 2 timings
+    if (selectedExchange === 3 && editingDefaultTimings.length !== 2) {
+      toast.error('SGX requires exactly 2 trading sessions')
+      return
+    }
+
+    setSavingDefaultTimings(true)
+    try {
+      const requestTimestamp = Date.now().toString()
+      const requestBody = {
+        userId: userId,
+        requestTimestamp: requestTimestamp,
+        data: {
+          exchangeId: selectedExchange,
+          timings: editingDefaultTimings.map(t => ({
+            startTime: t.startTime,
+            endTime: t.endTime
+          }))
+        }
+      }
+
+      const response = await fetch('https://api-staging.rivoplus.live/user/settings/editDefaultTiming', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+
+      const result = await response.json()
+      if (result?.responseCode === '0') {
+        setDefaultTimings(editingDefaultTimings.map(t => ({ ...t })))
+        toast.success('Default timings updated successfully!')
+        setShowDefaultTimingsModal(false)
+        // Refresh the calendar after updating default timings
+        fetchSchedule(currentMonth, selectedExchange)
+      } else {
+        toast.error(result?.responseMessage || 'Failed to save default timings')
+      }
+    } catch (error) {
+      console.error('Error saving default timings:', error)
+      toast.error('Error saving default timings')
+    } finally {
+      setSavingDefaultTimings(false)
+    }
+  }
+
+  // Handle opening default timings modal
+  const handleOpenDefaultTimingsModal = () => {
+    setEditingDefaultTimings(defaultTimings.map(t => ({ ...t })))
+    setShowDefaultTimingsModal(true)
+  }
+
+  // Add timing slot to default timings
+  const handleAddDefaultTiming = () => {
+    setEditingDefaultTimings([
+      ...editingDefaultTimings,
+      { startTime: '09:15:00', endTime: '15:30:00' }
+    ])
+  }
+
+  // Remove timing slot from default timings
+  const handleRemoveDefaultTiming = (index: number) => {
+    if (editingDefaultTimings.length <= 1) {
+      toast.error('Please keep at least one timing')
+      return
+    }
+    setEditingDefaultTimings(editingDefaultTimings.filter((_, i) => i !== index))
+  }
+
+  // Update default timing
+  const handleUpdateDefaultTiming = (index: number, field: 'startTime' | 'endTime', value: string) => {
+    setEditingDefaultTimings(
+      editingDefaultTimings.map((t, i) =>
+        i === index ? { ...t, [field]: value + ':00' } : t
+      )
+    )
+  }
+
   // Fetch schedule on mount and when month/exchange changes
   useEffect(() => {
     fetchSchedule(currentMonth, selectedExchange)
+    fetchDefaultTimings(selectedExchange)
   }, [currentMonth, selectedExchange])
 
   const handlePreviousMonth = () => {
@@ -120,6 +266,45 @@ const ExchangeSchedulePage: React.FC = () => {
     setEditedData(prev => ({ ...prev, [dateStr]: updated }))
   }
 
+  // Add new timing slot
+  const handleAddTiming = (dateStr: string) => {
+    const current = editedData[dateStr] || scheduleData.find(d => d.date === dateStr)
+    if (!current) return
+
+    const updated: ScheduleData = {
+      ...current,
+      timings: [
+        ...current.timings,
+        { startTime: '09:15:00', endTime: '15:30:00' }
+      ]
+    }
+    setEditedData(prev => ({ ...prev, [dateStr]: updated }))
+  }
+
+  // Remove timing slot
+  const handleRemoveTiming = (dateStr: string, index: number) => {
+    const current = editedData[dateStr] || scheduleData.find(d => d.date === dateStr)
+    if (!current || current.timings.length <= 1) return
+
+    const updated: ScheduleData = {
+      ...current,
+      timings: current.timings.filter((_, i) => i !== index)
+    }
+    setEditedData(prev => ({ ...prev, [dateStr]: updated }))
+  }
+
+  // Update particulars (reason for holiday)
+  const handleUpdateParticulars = (dateStr: string, value: string) => {
+    const current = editedData[dateStr] || scheduleData.find(d => d.date === dateStr)
+    if (!current) return
+
+    const updated: ScheduleData = {
+      ...current,
+      particulars: value
+    }
+    setEditedData(prev => ({ ...prev, [dateStr]: updated }))
+  }
+
   // Toggle operational status
   const handleToggleOperational = (dateStr: string) => {
     const current = editedData[dateStr] || scheduleData.find(d => d.date === dateStr)
@@ -136,36 +321,81 @@ const ExchangeSchedulePage: React.FC = () => {
   // Save all edits to API
   const handleSaveAll = async () => {
     if (Object.keys(editedData).length === 0) {
-      toast.info('No changes to save')
+      toast('No changes to save')
       setShowConfirmModal(false)
       return
     }
 
+    if (!userId) {
+      toast.error('User ID not found. Please refresh and try again.')
+      return
+    }
+
+    setSavingChanges(true)
     try {
       const changedData = Object.values(editedData)
-      console.log('Saving changes:', changedData)
-      
-      // TODO: Send to API when backend is ready
-      // const response = await fetch('https://api-staging.rivoplus.live/user/settings/exchangeHolidays/update', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ 
-      //     exchange: selectedExchange,
-      //     data: changedData 
-      //   })
-      // })
+      const requestTimestamp = Date.now().toString()
+      let successCount = 0
+      let errorCount = 0
 
-      // For now, just update local state
+      // Send each change to the API
+      for (const change of changedData) {
+        try {
+          const requestBody: any = {
+            userId: userId,
+            requestTimestamp: requestTimestamp,
+            data: {
+              exchangeId: selectedExchange,
+              date: change.date,
+              operational: change.operational
+            }
+          }
+
+          // Add particulars and timings based on operational status
+          if (change.operational) {
+            requestBody.data.particulars = ''
+            requestBody.data.timings = change.timings
+          } else {
+            requestBody.data.particulars = change.particulars || ''
+          }
+
+          const response = await fetch('https://api-staging.rivoplus.live/user/settings/editHolidays', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          })
+
+          const result = await response.json()
+          if (result?.responseCode === '0') {
+            successCount++
+          } else {
+            errorCount++
+            console.error(`Failed to save ${change.date}:`, result?.responseMessage)
+          }
+        } catch (error) {
+          errorCount++
+          console.error(`Error saving ${change.date}:`, error)
+        }
+      }
+
+      // Update local state and show results
       const updatedSchedule = scheduleData.map(item => 
         editedData[item.date] || item
       )
       setScheduleData(updatedSchedule)
       setEditedData({})
       setShowConfirmModal(false)
-      toast.success(`${changedData.length} schedule(s) updated successfully`)
+
+      if (errorCount === 0) {
+        toast.success(`${successCount} schedule(s) updated successfully`)
+      } else {
+        toast.error(`Saved ${successCount}, Failed ${errorCount}`)
+      }
     } catch (error) {
       console.error('Error saving changes:', error)
       toast.error('Failed to save changes')
+    } finally {
+      setSavingChanges(false)
     }
   }
 
@@ -238,6 +468,18 @@ const ExchangeSchedulePage: React.FC = () => {
                 ))}
               </select>
 
+              {isAdmin && (
+                <button
+                  onClick={handleOpenDefaultTimingsModal}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white rounded-lg font-semibold text-xs transition border border-purple-700 shadow-sm"
+                  title="Edit default market timings"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  Default Timings
+                </button>
+              )}
+
               <button
                 onClick={handleToday}
                 className="px-2.5 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-semibold text-xs transition border border-slate-300 dark:border-slate-600 shadow-sm"
@@ -308,14 +550,16 @@ const ExchangeSchedulePage: React.FC = () => {
                     >
                       {day && displayData && (
                         <>
-                          {/* Edit Button - Hidden until hover */}
-                          <button
-                            onClick={() => handleEditClick(day.date)}
-                            className="absolute top-1 right-1 p-1 rounded bg-blue-500 hover:bg-blue-600 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                            title="Edit schedule"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
+                          {/* Edit Button - Only shown for admins, hidden for others */}
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleEditClick(day.date)}
+                              className="absolute top-1 right-1 p-1 rounded bg-blue-500 hover:bg-blue-600 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                              title="Edit schedule"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                          )}
 
                           {/* Modified Indicator */}
                           {isEdited && (
@@ -352,8 +596,8 @@ const ExchangeSchedulePage: React.FC = () => {
                                 ))}
                               </div>
                             ) : (
-                              <div className="text-[9px] text-slate-500 dark:text-slate-400 italic font-medium">
-                                {displayData.operational ? '-' : 'Holiday'}
+                              <div className="text-[9px] text-red-600 dark:text-red-400 italic font-semibold truncate" title={displayData.particulars || 'Holiday'}>
+                                {displayData.operational ? '-' : (displayData.particulars || 'Holiday')}
                               </div>
                             )}
                           </div>
@@ -367,8 +611,8 @@ const ExchangeSchedulePage: React.FC = () => {
           )}
         </div>
 
-        {/* Save All Button */}
-        {Object.keys(editedData).length > 0 && (
+        {/* Save All Button - Only for admins */}
+        {Object.keys(editedData).length > 0 && isAdmin && (
           <div className="mt-4 flex items-center gap-3">
             <button
               onClick={() => setShowConfirmModal(true)}
@@ -391,8 +635,8 @@ const ExchangeSchedulePage: React.FC = () => {
         )}
       </div>
 
-      {/* Edit Modal */}
-      {showEditModal && editingDate && createPortal(
+      {/* Edit Modal - Only show for admin users */}
+      {showEditModal && editingDate && isAdmin && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
@@ -429,12 +673,44 @@ const ExchangeSchedulePage: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Particulars (for non-operational days) */}
+                {!(editedData[editingDate] || scheduleData.find(d => d.date === editingDate))!.operational && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Reason for Holiday</label>
+                    <input
+                      type="text"
+                      value={(editedData[editingDate] || scheduleData.find(d => d.date === editingDate))!.particulars || ''}
+                      onChange={(e) => handleUpdateParticulars(editingDate, e.target.value)}
+                      placeholder="e.g., Diwali, Republic Day, Dussehra"
+                      className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                )}
+
                 {/* Timings */}
                 {(editedData[editingDate] || scheduleData.find(d => d.date === editingDate))!.operational && (
                   <div className="space-y-3">
-                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Trading Hours</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Trading Hours</label>
+                      <button
+                        onClick={() => handleAddTiming(editingDate)}
+                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold transition"
+                      >
+                        + Add Slot
+                      </button>
+                    </div>
                     {(editedData[editingDate] || scheduleData.find(d => d.date === editingDate))!.timings.map((timing, idx) => (
                       <div key={idx} className="space-y-2 p-3 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Slot {idx + 1}</span>
+                          <button
+                            onClick={() => handleRemoveTiming(editingDate, idx)}
+                            disabled={(editedData[editingDate] || scheduleData.find(d => d.date === editingDate))!.timings.length <= 1}
+                            className="px-2 py-0.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Remove
+                          </button>
+                        </div>
                         <div className="flex gap-2">
                           <div className="flex-1">
                             <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold">Start Time</label>
@@ -482,8 +758,8 @@ const ExchangeSchedulePage: React.FC = () => {
         document.body
       )}
 
-      {/* Confirmation Modal */}
-      {showConfirmModal && createPortal(
+      {/* Confirmation Modal - Only for admins */}
+      {showConfirmModal && isAdmin && createPortal(
         <div className="fixed inset-0 z-[10000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-md w-full">
             <div className="flex items-start gap-3 mb-4">
@@ -516,18 +792,158 @@ const ExchangeSchedulePage: React.FC = () => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-semibold text-sm transition"
+                disabled={savingChanges}
+                className="flex-1 px-4 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveAll}
-                className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition flex items-center justify-center gap-2"
+                disabled={savingChanges}
+                className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="w-4 h-4" />
-                Save Changes
+                {savingChanges ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Changes
+                  </>
+                )}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Default Timings Modal - Only for admins */}
+      {showDefaultTimingsModal && isAdmin && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-2xl w-full">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-gradient-to-br from-purple-600 to-purple-500 rounded-lg">
+                  <Clock className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Default Market Timings</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {EXCHANGES.find(ex => ex.id === selectedExchange)?.name || 'Exchange'} - These are the default trading hours
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDefaultTimingsModal(false)}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition text-slate-500 dark:text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingDefaultTimings ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-10 h-10 border-3 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+                  <p className="text-xs text-slate-400 dark:text-slate-400 uppercase tracking-wider font-semibold">Loading</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Info Box */}
+                <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg p-3">
+                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                    <span className="font-semibold">ℹ️ Info:</span> {selectedExchange === 3 ? 'SGX requires exactly 2 trading sessions.' : 'You can add multiple trading sessions for this exchange.'}
+                  </p>
+                </div>
+
+                {/* Timings List */}
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {editingDefaultTimings.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                      <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No default timings set. Click "Add Timing" to add one.</p>
+                    </div>
+                  ) : (
+                    editingDefaultTimings.map((timing, idx) => (
+                      <div key={idx} className="space-y-2 p-4 bg-slate-50 dark:bg-slate-700/30 rounded-lg border border-slate-200 dark:border-slate-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Session {idx + 1}</span>
+                          <button
+                            onClick={() => handleRemoveDefaultTiming(idx)}
+                            disabled={editingDefaultTimings.length <= 1}
+                            className="px-2.5 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex-1">
+                            <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold block mb-1.5">Start Time</label>
+                            <input
+                              type="time"
+                              value={timing.startTime.slice(0, 5)}
+                              onChange={(e) => handleUpdateDefaultTiming(idx, 'startTime', e.target.value)}
+                              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold block mb-1.5">End Time</label>
+                            <input
+                              type="time"
+                              value={timing.endTime.slice(0, 5)}
+                              onChange={(e) => handleUpdateDefaultTiming(idx, 'endTime', e.target.value)}
+                              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Add Timing Button */}
+                {selectedExchange !== 3 || editingDefaultTimings.length < 2 ? (
+                  <button
+                    onClick={handleAddDefaultTiming}
+                    className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition"
+                  >
+                    + Add Timing Session
+                  </button>
+                ) : null}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-600">
+                  <button
+                    onClick={() => setShowDefaultTimingsModal(false)}
+                    disabled={savingDefaultTimings}
+                    className="flex-1 px-4 py-2.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveDefaultTimings}
+                    disabled={savingDefaultTimings}
+                    className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingDefaultTimings ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Save Timings
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body

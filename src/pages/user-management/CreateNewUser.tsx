@@ -170,7 +170,8 @@ const CreateNewUser: React.FC = () => {
           .min(0, 'Must be positive')
           .required('P&L sharing is required')
           .test('max-pnl', 'Cannot exceed available P&L sharing', function (value) {
-            const availablePnl = userConfig?.pnlSharing || 100
+            // In edit mode, use parent's P&L sharing limit; in create mode, use userConfig
+            const availablePnl = isEditMode ? (editingUser?.parentPnlSharing) : (userConfig?.pnlSharing)
             if (value && value > availablePnl) {
               return this.createError({ message: `Cannot exceed available P&L sharing of ${availablePnl}` })
             }
@@ -195,7 +196,8 @@ const CreateNewUser: React.FC = () => {
           .min(0, 'Must be positive')
           .required('Brokerage sharing is required')
           .test('max-brokerage', 'Cannot exceed available brokerage', function (value) {
-            const availableBrokerage = userConfig?.brokeragePercentage || 100
+            // In edit mode, use parent's brokerage sharing limit; in create mode, use userConfig
+            const availableBrokerage = isEditMode ? (editingUser?.parentBrkSharing || 100) : (userConfig?.brokeragePercentage || 100)
             if (value && value > availableBrokerage) {
               return this.createError({ message: `Cannot exceed available brokerage of ${availableBrokerage}` })
             }
@@ -875,8 +877,8 @@ const CreateNewUser: React.FC = () => {
         {/* Success State */}
         {!configLoading && userConfig && (
           <Formik
-            // Key handles cache state reset and prevents stale layout components matching conflicts
-            key={isEditMode ? `edit-${editingUserId}-${Object.keys(exchangeGroups).length}` : `create-${Object.keys(exchangeGroups).length}`}
+            // Key includes userConfig and editingUser sharing values so form remounts when they change
+            key={isEditMode ? `edit-${editingUserId}-${Object.keys(exchangeGroups).length}-${userConfig?.pnlSharing}-${userConfig?.brokeragePercentage}-${editingUser?.parentPnlSharing}-${editingUser?.parentBrkSharing}` : `create-${Object.keys(exchangeGroups).length}-${userConfig?.pnlSharing}-${userConfig?.brokeragePercentage}`}
             enableReinitialize={true} 
             initialValues={patchedFormInitialValues}
             validationSchema={getValidationSchema()}
@@ -884,10 +886,29 @@ const CreateNewUser: React.FC = () => {
             validateOnBlur={true}
             onSubmit={handleSubmit}
           >
-            {({ values, errors, touched, setFieldValue, isValid, validateForm }: any) => {
+            {({ values, errors, touched, setFieldValue, isValid, validateForm, validateField }: any) => {
               React.useEffect(() => {
                 validateForm()
-              }, [selectedUserRole, availableUserTypes.length, validateForm])
+              }, [selectedUserRole, availableUserTypes.length, validateForm, userConfig, editingUser?.parentPnlSharing, editingUser?.parentBrkSharing])
+
+              // Re-validate sharing fields when userConfig or editingUser changes
+              React.useEffect(() => {
+                if (values.pnlSharing) validateField('pnlSharing')
+                if (values.brokerageSharing) validateField('brokerageSharing')
+              }, [userConfig?.pnlSharing, userConfig?.brokeragePercentage, editingUser?.parentPnlSharing, editingUser?.parentBrkSharing, validateField])
+
+              // Validate pnl and brokerage sharing fields whenever their values change
+              React.useEffect(() => {
+                if (values.pnlSharing !== undefined && values.pnlSharing !== null && values.pnlSharing !== '') {
+                  validateField('pnlSharing')
+                }
+              }, [values.pnlSharing, validateField])
+
+              React.useEffect(() => {
+                if (values.brokerageSharing !== undefined && values.brokerageSharing !== null && values.brokerageSharing !== '') {
+                  validateField('brokerageSharing')
+                }
+              }, [values.brokerageSharing, validateField])
 
               // Update High Trade Limit values when a user is selected
               React.useEffect(() => {
@@ -987,7 +1008,7 @@ const CreateNewUser: React.FC = () => {
                                       }}
                                       className="px-4 py-2 hover:bg-surface-hover cursor-pointer text-text-primary text-sm border-b border-border-primary last:border-b-0"
                                     >
-                                      {user.name} ({user.username})
+                                       {user.username}
                                     </div>
                                   ))}
                                 {userConfig.userList.filter((user) =>
@@ -1798,7 +1819,42 @@ const CreateNewUser: React.FC = () => {
                       </button>
                       <button
                         type="submit"
-                        disabled={!isValid || (!isEditMode && usernameError !== null)}
+                        disabled={(() => {
+                          // Parse values - use same logic as UI for consistency
+                          const pnlValue = parseFloat(String(values.pnlSharing)) || 0
+                          const brokerageValue = parseFloat(String(values.brokerageSharing)) || 0
+                          const availablePnl = isEditMode ? (editingUser?.parentPnlSharing || 100) : (userConfig?.pnlSharing || 100)
+                          const availableBrokerage = isEditMode ? (editingUser?.parentBrkSharing || 100) : (userConfig?.brokeragePercentage || 100)
+                          
+                          const pnlSharingExceeds = pnlValue > 0 && pnlValue > availablePnl
+                          const brokerageSharingExceeds = brokerageValue > 0 && brokerageValue > availableBrokerage
+
+                          // If errors exist, always disable
+                          if (errors?.pnlSharing || errors?.brokerageSharing) {
+                            return true
+                          }
+                          
+                          // Check if there are any errors in the form
+                          const hasFormErrors = Object.keys(errors || {}).length > 0
+                          if (hasFormErrors) {
+                            return true
+                          }
+                          
+                          // Always disable if limits are exceeded
+                          if (pnlSharingExceeds || brokerageSharingExceeds) {
+                            return true
+                          }
+                          
+                          // Check isValid and username errors
+                          const shouldDisableForInvalid = !isValid
+                          const shouldDisableForUsername = !isEditMode && usernameError !== null
+                          
+                          if (shouldDisableForInvalid || shouldDisableForUsername) {
+                            return true
+                          }
+                          
+                          return false
+                        })()}
                         className="px-8 py-3 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isEditMode ? 'Update User' : 'Save'}

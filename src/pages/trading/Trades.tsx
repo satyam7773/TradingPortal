@@ -8,6 +8,7 @@ import FilterLayout from '../../components/FilterLayout'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import DurationDetailsModal from '../reports/DurationDetailsModal'
 import DealBrkDetailsModal from '../reports/DealBrkDetailsModal'
+import ConfirmAlert from '../../components/modals/ConfirmAlert'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import ConfigManager from '../../utils/configManager'
@@ -15,6 +16,8 @@ import DownloadReport from '../../components/DownloadReport'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
 import { useSorting } from '../../hooks/useSorting'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
+import { useAppSelector } from '../../hooks/reduxHooks'
 
 interface TradeData {
   tradeId: number
@@ -164,7 +167,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
   });
   
   const [selectedUserId, setSelectedUserId] = useState<number>(
-    isModalMode ? (propsUserId ? parseInt(propsUserId) : loggedInUserId) : initialFilters.selectedUserId
+    isModalMode ? (propsUserId ? parseInt(propsUserId) : loggedInUserId) : (initialFilters.selectedUserId || loggedInUserId)
   )
   const [selectedExchange, setSelectedExchange] = useState<string>(propsExchange || initialFilters.selectedExchange)
   const [selectedSymbol, setSelectedSymbol] = useState<string>(propsSymbol || initialFilters.selectedSymbol)
@@ -201,6 +204,20 @@ const TradesPage: React.FC<TradesPageProps> = ({
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<number>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+
+  // Alert states
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string
+    message: string | string[]
+    confirmText: string
+    onConfirm: () => void | Promise<void>
+  }>({
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    onConfirm: () => {},
+  })
   
   const pageSize = 100
 
@@ -221,16 +238,13 @@ const TradesPage: React.FC<TradesPageProps> = ({
   // Log cache found once
   useEffect(() => {
     if (cacheData && !cacheLoggedRef.current) {
-      console.log('✅ [Trades] Initializing from cache:', cacheData)
       cacheLoggedRef.current = true
     }
   }, [cacheData])
 
-  // Fetch initial data only if cache doesn't exist
+  // Mark cache as initialized but DON'T auto-fetch (wait for user selection)
   useEffect(() => {
     if (!cacheInitializedRef.current && !cacheData) {
-      console.log('📡 [Trades] No cache found, fetching initial data...')
-      handleView()
       cacheInitializedRef.current = true
     }
   }, [cacheData]) // Watch cacheData to handle first load
@@ -238,12 +252,10 @@ const TradesPage: React.FC<TradesPageProps> = ({
   // Handle cache data changes (when switching back to this tab with cache)
   useEffect(() => {
     if (cacheData && !cacheInitializedRef.current) {
-      console.log('🔄 [Trades] Cache found, initializing from cache')
       cacheInitializedRef.current = true
       
       // Restore table data if available
       if (apiData?.tradesData) {
-        console.log('📊 [Trades] Restoring cached table data')
         setTradesData(apiData.tradesData)
       }
     }
@@ -305,7 +317,6 @@ const TradesPage: React.FC<TradesPageProps> = ({
         totalRecords,
         totalPages
       }
-      console.log('💾 [Trades] Saving filters to cache')
       onCacheSave!(filters, { tradesData, totalRecords, totalPages })
     }, 500)
     
@@ -316,7 +327,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
 
   // Function to fetch symbols for a specific exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
-    if (!exchangeName || exchangeName === 'All Exchanges') {
+    if (!exchangeName) {
       setSymbols([])
       return
     }
@@ -360,14 +371,12 @@ const TradesPage: React.FC<TradesPageProps> = ({
         requestData.tradeSymbol = selectedSymbol
       }
 
-      // In modal mode, use targetUserId; in dashboard mode, use selectedUserId
-      const userIdForRequest = isModalMode ? targetUserId : (selectedUserId || loggedInUserId)
+      // Always use selectedUserId if > 0, otherwise fall back to loggedInUserId
+      const userIdForRequest = selectedUserId > 0 ? selectedUserId : loggedInUserId
       const response = await userManagementService.fetchTrades(userIdForRequest, { ...requestData, userId: userIdForRequest })
 
       if (response?.responseCode === '0') {
         const tradesList = response.data?.trades || response.data?.content || response.data || []
-        console.log('📊 API Response data:', response.data)
-        console.log('📊 response.data keys:', Object.keys(response.data || {}))
         // Use 'total' for total records across all pages, fallback to 'size' for current page
         const totalSize = response.data?.total || response.data?.size || (Array.isArray(tradesList) ? tradesList.length : 0)
         setTradesData(Array.isArray(tradesList) ? tradesList : [])
@@ -402,9 +411,10 @@ const TradesPage: React.FC<TradesPageProps> = ({
     const userData = localStorage.getItem('userData')
     const user = userData ? JSON.parse(userData) : null
     const roleId = user?.roleId
+    const marketTradeRight = user?.marketTradeRight
     const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
 
-    if (!isAdminUser) {
+    if (!isAdminUser || !marketTradeRight) {
       toast.error('You do not have permission to delete trades')
       return
     }
@@ -414,29 +424,38 @@ const TradesPage: React.FC<TradesPageProps> = ({
       return
     }
 
-    if (!window.confirm(`Are you sure you want to delete ${selectedTradeIds.size} trade(s)? This action cannot be undone.`)) {
-      return
-    }
+    setAlertConfig({
+      title: '⚠️ Delete Trades?',
+      message: [
+        `Are you sure you want to delete ${selectedTradeIds.size} trade${selectedTradeIds.size > 1 ? '(s)' : ''}?`,
+        '',
+        'This action cannot be undone.',
+      ],
+      confirmText: 'Yes, Delete Trades',
+      onConfirm: async () => {
+        try {
+          setIsDeleting(true)
+          const tradeIdsArray = Array.from(selectedTradeIds)
+          const response = await userManagementService.deleteTrades(loggedInUserId, selectedUserId || loggedInUserId, tradeIdsArray)
 
-    setIsDeleting(true)
-    try {
-      const tradeIdsArray = Array.from(selectedTradeIds)
-      const response = await userManagementService.deleteTrades(loggedInUserId, selectedUserId || loggedInUserId, tradeIdsArray)
-
-      if (response?.responseCode === '0' || response?.success) {
-        toast.success(`${selectedTradeIds.size} trade(s) deleted successfully`)
-        setSelectedTradeIds(new Set())
-        // Refresh the current page
-        handleView(currentPage)
-      } else {
-        toast.error(response?.responseMessage || response?.message || 'Failed to delete trades')
-      }
-    } catch (error: any) {
-      console.error('Error deleting trades:', error)
-      toast.error(error?.message || 'Error deleting trades')
-    } finally {
-      setIsDeleting(false)
-    }
+          if (response?.responseCode === '0' || response?.success) {
+            toast.success(`✅ ${selectedTradeIds.size} trade${selectedTradeIds.size > 1 ? '(s)' : ''} deleted successfully`)
+            setSelectedTradeIds(new Set())
+            // Refresh the current page
+            handleView(currentPage)
+          } else {
+            toast.error(response?.responseMessage || response?.message || 'Failed to delete trades')
+          }
+        } catch (error: any) {
+          console.error('Error deleting trades:', error)
+          toast.error(error?.message || 'Error deleting trades')
+        } finally {
+          setIsDeleting(false)
+          setAlertOpen(false)
+        }
+      },
+    })
+    setAlertOpen(true)
   }
 
   const handleSelectTrade = (tradeId: number) => {
@@ -579,6 +598,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
   const userRoleId = user?.roleId
   const isAdminUser = userRoleId === 1 || userRoleId === 2 || userRoleId === 3
 
+
   // Sorting hook
   const { sortColumn, sortDirection, handleSort, sortedData: sortedTrades, getSortIcon } = useSorting({ data: tradesData })
 
@@ -667,7 +687,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  {selectedTradeIds.size > 0 && isAdminUser && (
+                  {selectedTradeIds.size > 0 && isAdminUser  && (
                     <button
                       onClick={handleDeleteTrades}
                       disabled={isDeleting}
@@ -689,7 +709,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
               <table className="w-full border-collapse min-w-max">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                   <tr>
-                    {isAdminUser && !hideCheckboxes && (
+                    {isAdminUser && !hideCheckboxes  && (
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
                         <input
                           type="checkbox"
@@ -756,7 +776,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
 
                     return (
                       <tr key={trade.tradeId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                        {isAdminUser && !hideCheckboxes && (
+                        {isAdminUser && !hideCheckboxes  && (
                           <td className="px-4 py-4 text-center">
                             <input
                               type="checkbox"
@@ -920,6 +940,16 @@ const TradesPage: React.FC<TradesPageProps> = ({
           setIsDealBrkModalOpen(false);
           setSelectedTradeId(null);
         }}
+      />
+
+      <ConfirmAlert
+        isOpen={alertOpen}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText={alertConfig.confirmText}
+        isLoading={isDeleting}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setAlertOpen(false)}
       />
     </div>
   )

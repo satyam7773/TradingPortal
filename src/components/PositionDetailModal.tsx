@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import UserDetailsModal from '../pages/user-management/UserDetailsModal';
+import { useUserDetailsModal } from '../hooks/useUserDetailsModal';
+import { useModalDepth } from '../contexts/ModalContext';
 
 interface PositionDetailModalProps {
   isOpen: boolean;
@@ -9,6 +12,7 @@ interface PositionDetailModalProps {
   loading: boolean;
   liveTicks: any;
   onClose: () => void;
+  depth?: number;
 }
 
 const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
@@ -18,6 +22,7 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
   loading,
   liveTicks,
   onClose,
+  depth = 0,
 }) => {
   const [showFilters, setShowFilters] = useState(true);
   const [filterUsername, setFilterUsername] = useState('');
@@ -26,6 +31,22 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
   const [filterPnlMax, setFilterPnlMax] = useState('');
   const [filterDaysMin, setFilterDaysMin] = useState('');
   const [filterDaysMax, setFilterDaysMax] = useState('');
+  const { selectedUser, setSelectedUser, isLoadingUser, handleUserNameClick } = useUserDetailsModal();
+  
+  // Calculate z-index based on depth prop (if provided) or modal context
+  let modalZIndex: number;
+  let childModalZIndex: number;
+  
+  if (depth > 0) {
+    // If depth is provided, calculate z-index from it
+    modalZIndex = 10000 + (depth * 5000);
+    childModalZIndex = modalZIndex + 1000;
+  } else {
+    // Otherwise use modal context
+    const { getNextZIndex } = useModalDepth();
+    modalZIndex = getNextZIndex();
+    childModalZIndex = modalZIndex + 1000;
+  }
 
   // Compute filtered positions - must be before early return to maintain hook order
   const filteredPositions = useMemo(() => {
@@ -85,9 +106,26 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
     onClose();
   };
 
+  // If selectedUser is set, show UserDetailsModal instead
+  if (selectedUser) {
+    return createPortal(
+      <div className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md" style={{ zIndex: childModalZIndex }} onClick={() => setSelectedUser(null)}>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col border border-gray-200/50 overflow-hidden" style={{ width: '98vw', height: '96vh', maxWidth: '1800px' }} onClick={(e) => e.stopPropagation()}>
+          <UserDetailsModal
+            user={selectedUser}
+            depth={depth + 1}
+            onClose={() => setSelectedUser(null)}
+            onToggle={() => { }}
+          />
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
   return createPortal(
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-7xl h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: modalZIndex, pointerEvents: 'auto' }}>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-7xl h-[85vh] flex flex-col" style={{ pointerEvents: 'auto' }}>
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <div>
@@ -161,8 +199,8 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
                         className="w-full mt-1 px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
                       >
                         <option value="">All Symbols</option>
-                        {[...new Set((data.positions || []).map((p: any) => p.tradeSymbol))].map((sym) => (
-                          <option key={sym} value={sym}>{sym}</option>
+                        {[...new Set((data.positions || []).map((p: any) => p.tradeSymbol))].map((sym: any) => (
+                          <option key={sym as string} value={sym as string}>{sym as string}</option>
                         ))}
                       </select>
                     </div>
@@ -256,8 +294,24 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                       {positionsWithLiveData.map((pos: any, idx: number) => (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition text-xs">
-                          <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-white whitespace-nowrap">{pos.username}</td>
-                          <td className="px-3 py-3 text-left text-slate-700 dark:text-slate-300 whitespace-nowrap">{pos.parentUsername}</td>
+                          <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                            <button
+                              onClick={(e) => handleUserNameClick(e, pos.username, pos.userId)}
+                              disabled={isLoadingUser}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isLoadingUser ? 'Loading...' : pos.username}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3 text-left text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            <button
+                              onClick={(e) => handleUserNameClick(e, pos.parentUsername, pos.parentUserId)}
+                              disabled={isLoadingUser}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isLoadingUser ? 'Loading...' : pos.parentUsername}
+                            </button>
+                          </td>
                           <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-white whitespace-nowrap">{pos.tradeSymbol}</td>
                           <td className="px-3 py-3 text-center">
                             <span className={`text-xs font-bold px-2 py-1 rounded whitespace-nowrap ${pos.position === 'BUY' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>

@@ -118,7 +118,7 @@ class OrderService {
   ): Promise<PlaceOrderResponse> {
     // Determine tradeOrderMethod dynamically based on current user
     const currentUser = this.getCurrentUser();
-    const finalTradeOrderMethod = tradeOrderMethod || (currentUser?.roleId == 4 ? "WEB" : "MANUAL_ORDER");
+    const finalTradeOrderMethod = tradeOrderMethod || "WEB";
 
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),
@@ -162,7 +162,7 @@ class OrderService {
   ): Promise<PlaceOrderResponse> {
     // Determine tradeOrderMethod dynamically based on current user
     const currentUser = this.getCurrentUser();
-    const finalTradeOrderMethod = tradeOrderMethod || (currentUser?.roleId == 4 ? "WEB" : "MANUAL_ORDER");
+    const finalTradeOrderMethod = tradeOrderMethod || "WEB"
 
     const orderData: PlaceOrderRequest = {
       requestTimestamp: Date.now().toString(),

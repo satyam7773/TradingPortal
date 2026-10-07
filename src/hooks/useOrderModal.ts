@@ -55,6 +55,8 @@ interface UseOrderModalReturn {
   selectedOrderInstrument: SelectedInstrument | null
   selectedClient: { userId: number; name: string; username: string } | null
   setSelectedClient: (client: { userId: number; name: string; username: string } | null) => void
+  availableClients: Client[]
+  setAvailableClients: (clients: Client[]) => void
   clientSearchTerm: string
   setClientSearchTerm: (value: string) => void
   
@@ -102,6 +104,7 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
   
   // Client Selection
   const [selectedClient, setSelectedClient] = useState<{ userId: number; name: string; username: string } | null>(null)
+  const [availableClients, setAvailableClients] = useState<Client[]>([])
   const [clientSearchTerm, setClientSearchTerm] = useState('')
   
   // Draggable State
@@ -308,6 +311,8 @@ export const useOrderModal = (isAdminUser: boolean = false): UseOrderModalReturn
     selectedOrderInstrument,
     selectedClient,
     setSelectedClient,
+    availableClients,
+    setAvailableClients,
     clientSearchTerm,
     setClientSearchTerm,
     

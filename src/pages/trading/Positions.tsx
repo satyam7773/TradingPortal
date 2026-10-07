@@ -11,12 +11,14 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import userManagementService from "../../services/userManagementService";
 import marketWatchService from "../../services/marketWatchService";
+import { useModalDepth } from "../../contexts/ModalContext";
 import FilterLayout from "../../components/FilterLayout";
 import PositionDetailModal from "../../components/PositionDetailModal";
 import OwnUserPositionModal from "../../components/OwnUserPositionModal";
 import { useOrderModal } from "../../hooks/useOrderModal";
 import OrderModal from "../../components/modals/OrderModal";
 import PositionDetailsModal from "../../components/PositionDetailsModal";
+import ConfirmAlert from "../../components/modals/ConfirmAlert";
 import ConfigManager from "../../utils/configManager";
 import { orderUpdateService } from "../../services";
 import SearchableSelect from "../../components/ui/SearchableSelect";
@@ -58,7 +60,21 @@ interface PositionResponse {
 }
 
 const Positions: React.FC = () => {
-  const [selectedUserId, setSelectedUserId] = useState<number>(0);
+  // Extract userData first, before using in state initialization
+  const userDataStr = localStorage.getItem("userData");
+  const userData = userDataStr ? JSON.parse(userDataStr) : null;
+  const loggedInUserId = userData?.userId;
+  const isAdminUser =
+    userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3;
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
+  const orderModal = useOrderModal(isAdminUser);
+  
+  // Get dynamic z-index based on modal nesting depth
+  const { getNextZIndex } = useModalDepth();
+  const modalZIndex = getNextZIndex();
+  const childModalZIndex = modalZIndex + 1000;
+
+  const [selectedUserId, setSelectedUserId] = useState<number>(loggedInUserId);
   const [selectedExchange, setSelectedExchange] =
     useState<string>("All Exchanges");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("");
@@ -77,7 +93,7 @@ const Positions: React.FC = () => {
   const [viewModalSymbol, setViewModalSymbol] = useState<string>("");
 
   const [showOwnPositionDetailModal, setShowOwnPositionDetailModal] = useState(false);
-  const [ownDetailModalData, setOwnDetailModalData] = useState<PositionData[]>([]);
+  const [ownDetailModalData, setOwnDetailModalData] = useState<any[]>([]);
   const [ownDetailModalExchange, setOwnDetailModalExchange] = useState<string>("All Exchanges");
   const [ownDetailModalSymbol, setOwnDetailModalSymbol] = useState<string>("");
 
@@ -92,6 +108,20 @@ const Positions: React.FC = () => {
   const [tradesModalToken, setTradesModalToken] = useState<number | null>(null);
   const [tradesModalExchange, setTradesModalExchange] = useState<string>("");
 
+  // Alert states
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    message: string | string[];
+    confirmText: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    onConfirm: () => {},
+  });
+
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [positionData, setPositionData] = useState<PositionResponse | null>(
@@ -103,6 +133,7 @@ const Positions: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
+  const [availableClients, setAvailableClients] = useState<Array<{ userId: number; username: string; name: string }>>([]);
 
   const feedUnsubscribeRef = useRef<(() => void) | null>(null);
   const subscriptionRef = useRef({
@@ -111,14 +142,6 @@ const Positions: React.FC = () => {
   });
   const lastUpdateRef = useRef<number>(0);
   const instrumentConfigRef = useRef<Record<number, any>>({});
-
-  const userDataStr = localStorage.getItem("userData");
-  const userData = userDataStr ? JSON.parse(userDataStr) : null;
-  const loggedInUserId = userData?.userId;
-  const isAdminUser =
-    userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3;
-  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
-  const orderModal = useOrderModal(isAdminUser);
 
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
 
@@ -332,13 +355,28 @@ const Positions: React.FC = () => {
   const fetchOldPositionsAPI = async () => {
     try {
       // Use existing service method for /oms/positions POST API
-      const result = await userManagementService.getUserPositions(loggedInUserId);
+      // Now passing exchange and token to support filtering
+      const exchangeToSend = selectedExchange && selectedExchange !== "All Exchanges" ? selectedExchange : undefined;
+      const tokenToSend = selectedToken || 0;
+      
+      console.log("📌 fetchOldPositionsAPI - Params:", {
+        selectedExchange,
+        selectedToken,
+        exchangeToSend,
+        tokenToSend,
+      });
+
+      const result = await userManagementService.getUserPositions(
+        loggedInUserId,
+        exchangeToSend,
+        tokenToSend
+      );
 
       if (result?.responseCode === "0" && result?.data?.positionsData) {
         // Transform old API response to PositionData format
         let positions = (result.data.positionsData || []).map((p: any) => ({
-          positionId: 0,
-          positionIds: [0],
+          positionId: p.positionId || 0, // Use API's unique positionId directly
+          positionIds: [p.positionId || 0],
           positionDate: null,
           positionDays: 0,
           username: userData?.username || "",
@@ -346,7 +384,7 @@ const Positions: React.FC = () => {
           exchange: p.exchange,
           tradeSymbol: p.tradeSymbol,
           position: p.positionSide === "BUY" ? "BUY" : "SELL",
-          quantity: p.netQuantity || 0,
+          quantity: p.lots || 0, // Bind to lots instead of netQuantity
           averagePrice: p.averagePrice || 0,
           ltp: null,
           pnl: p.unrealisedPnl || 0,
@@ -359,9 +397,10 @@ const Positions: React.FC = () => {
           marginUsed: p.marginUsed || 0,
         }));
 
-        if (selectedSymbol)
+        // Filter by token instead of symbol string (since API uses different symbol formats)
+        if (selectedToken && selectedToken > 0)
           positions = positions.filter(
-            (p: PositionData) => p.tradeSymbol === selectedSymbol,
+            (p: PositionData) => p.token === selectedToken,
           );
 
         setFilteredPositions(positions);
@@ -408,13 +447,14 @@ const Positions: React.FC = () => {
           );
 
         if (response?.responseCode === "0" && response.data) {
+          console.log("📊 API Response Data:", response.data);
           setPositionData(response.data);
           let positions = (response.data || []).map((p: any) => {
             // ✅ Extract all positionIds from the users array
             const positionIdsArray = (p.users || []).flatMap((u: any) => u.positionId || []);
             const firstUser = p.users?.[0];
             
-            return {
+            const transformed = {
               positionId: positionIdsArray[0] || 0, // First positionId as primary
               positionIds: positionIdsArray, // ✅ All positionIds for closing
               positionDate: p.positionDate,
@@ -436,15 +476,27 @@ const Positions: React.FC = () => {
               realisedPnl: p.realisedPnl,
               marginUsed: p.marginUsed,
             } as PositionData;
+            
+            console.log("✅ Transformed position:", transformed);
+            return transformed;
           });
 
-          if (selectedSymbol)
+          console.log("📈 Total positions after transform:", positions.length);
+          
+          // Filter by token instead of symbol string (since API uses different symbol formats)
+          if (selectedToken && selectedToken > 0) {
+            console.log("🔍 Filtering by token:", selectedToken);
             positions = positions.filter(
-              (p: PositionData) => p.tradeSymbol === selectedSymbol,
+              (p: PositionData) => p.token === selectedToken,
             );
+            console.log("📈 Positions after token filter:", positions.length);
+          }
+          
+          console.log("🎯 Final filtered positions:", positions);
           setFilteredPositions(positions);
           if (positions.length > 0) setupLivePositionFeed(positions);
         } else {
+          console.log("❌ API Response error:", { responseCode: response?.responseCode, hasData: !!response?.data });
           setFilteredPositions([]);
         }
       }
@@ -467,7 +519,6 @@ const Positions: React.FC = () => {
         const loggedInUserId = user?.userId;
         const usersResponse =
           await userManagementService.fetchOwnUsers(loggedInUserId);
-        // const usersResponse = await userManagementService.fetchUserClientsForTrade()
         const exchangesResponse = await userManagementService.fetchExchanges();
 
         let initialUserIds = [loggedInUserId];
@@ -477,7 +528,6 @@ const Positions: React.FC = () => {
           Array.isArray(usersResponse.data)
         ) {
           setUsers(usersResponse.data);
-          // CRITICAL: Extract IDs here in the local scope so they aren't empty
           initialUserIds = usersResponse.data.map((u: any) => u.id);
         }
 
@@ -486,10 +536,30 @@ const Positions: React.FC = () => {
           const defaultExchange = exchangesResponse[0].name;
           setSelectedExchange(defaultExchange);
           
-          // Fetch symbols for the default exchange on page load
           const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange);
           if (symbolsResponse?.responseCode === "0" && Array.isArray(symbolsResponse.data)) {
             setSymbols(symbolsResponse.data);
+          }
+        }
+
+        // Fetch clients if admin user
+        if (isAdminUser) {
+          try {
+            const clientsResponse = await userManagementService.fetchClients();
+            const clientsData = Array.isArray(clientsResponse) 
+              ? clientsResponse 
+              : clientsResponse?.data;
+            
+            if (clientsData && Array.isArray(clientsData)) {
+              const formattedClients = clientsData.map((client: any) => ({
+                userId: client.userId,
+                username: client.username,
+                name: client.name,
+              }));
+              setAvailableClients(formattedClients);
+            }
+          } catch (error) {
+            console.error("❌ Error fetching clients on mount:", error);
           }
         }
 
@@ -508,7 +578,6 @@ const Positions: React.FC = () => {
           );
         }
 
-        // Pass IDs explicitly to avoid race condition with the 'users' state
         await handleView(
           exchangesResponse?.[0]?.name || "All Exchanges",
           initialUserIds,
@@ -523,58 +592,65 @@ const Positions: React.FC = () => {
 
   const handleCloseSelectedPositions = async () => {
     if (selectedPositions.size === 0) return;
-    if (
-      !window.confirm(
-        `Are you sure you want to close the ${selectedPositions.size} selected position(s)?`,
-      )
-    )
-      return;
 
-    try {
-      setLoading(true);
-      // ✅ Extract all positionIds from selected positions
-      const allPositionIds: number[] = [];
-      filteredPositions.forEach((p) => {
-        if (selectedPositions.has(p.positionId)) {
-          // If we have multiple positionIds (from users array), add them all
-          if (p.positionIds && p.positionIds.length > 0) {
-            allPositionIds.push(...p.positionIds);
+    setAlertConfig({
+      title: "⚠️ Close Positions?",
+      message: [
+        `Are you sure you want to close the ${selectedPositions.size} selected position${selectedPositions.size > 1 ? "(s)" : ""}?`,
+        "",
+        "This action cannot be undone.",
+      ],
+      confirmText: "Yes, Close Positions",
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          // ✅ Extract all positionIds from selected positions
+          const allPositionIds: number[] = [];
+          filteredPositions.forEach((p) => {
+            if (selectedPositions.has(p.positionId)) {
+              // If we have multiple positionIds (from users array), add them all
+              if (p.positionIds && p.positionIds.length > 0) {
+                allPositionIds.push(...p.positionIds);
+              } else {
+                allPositionIds.push(p.positionId);
+              }
+            }
+          });
+
+          const payload = {
+            userId: loggedInUserId,
+            requestTimestamp: new Date().getTime().toString(),
+            deviceId: "WEB",
+            tradeOrderMethod: "WEB",
+            data: allPositionIds, // ✅ Send all extracted positionIds
+          };
+
+          const response = await fetch(
+            API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            },
+          );
+
+          const result = await response.json();
+          if (result?.responseCode === "0" || result?.status === "success") {
+            toast.success("✅ Selected positions closed successfully");
+            setSelectedPositions(new Set());
+            handleView();
           } else {
-            allPositionIds.push(p.positionId);
+            toast.error(result?.message || "Failed to close positions");
           }
+        } catch (err) {
+          toast.error("Error closing positions");
+        } finally {
+          setLoading(false);
+          setAlertOpen(false);
         }
-      });
-
-      const payload = {
-        userId: loggedInUserId,
-        requestTimestamp: new Date().getTime().toString(),
-        deviceId: "WEB",
-        tradeOrderMethod: "WEB",
-        data: allPositionIds, // ✅ Send all extracted positionIds
-      };
-
-      const response = await fetch(
-        API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
-
-      const result = await response.json();
-      if (result?.responseCode === "0" || result?.status === "success") {
-        toast.success("Selected positions closed successfully");
-        setSelectedPositions(new Set());
-        handleView();
-      } else {
-        toast.error(result?.message || "Failed to close positions");
-      }
-    } catch (err) {
-      toast.error("Error closing positions");
-    } finally {
-      setLoading(false);
-    }
+      },
+    });
+    setAlertOpen(true);
   };
 
   useEffect(() => {
@@ -585,7 +661,7 @@ const Positions: React.FC = () => {
   }, [handleView]);
 
   const fetchSymbolsForExchange = async (exchangeName: string) => {
-    if (!exchangeName || exchangeName === "All Exchanges") {
+    if (!exchangeName) {
       setSymbols([]);
       return;
     }
@@ -617,16 +693,13 @@ const Positions: React.FC = () => {
     p: PositionData,
     targetType: "BUY" | "SELL",
   ) => {
-    const matchedProfile = users.find((u) => u.username === p.username);
-    const targetClientId = p.userId || matchedProfile?.id || loggedInUserId;
-    orderModal.setSelectedClient({
-      userId: targetClientId,
-      name: matchedProfile?.name || p.username,
-      username: p.username,
-    });
-    orderModal.setClientSearchTerm(
-      `${matchedProfile?.name || p.username} (${p.username})`,
-    );
+    // ✅ Use pre-loaded clients from state
+    if (isAdminUser && availableClients.length > 0) {
+      orderModal.setAvailableClients(availableClients);
+      orderModal.setSelectedClient(availableClients[0]);
+      orderModal.setClientSearchTerm(availableClients[0].username);
+    }
+
     maxAvailableQuantityRef.current =
       p.exchange === "CALLPUT" ? Math.abs(p.quantity) : 999999;
     const cachedConfig = p.token ? instrumentConfigRef.current[p.token] : null;
@@ -671,7 +744,7 @@ const Positions: React.FC = () => {
           parentUserId: pos.parentUserId,
           tradeSymbol: pos.tradeSymbol,
           price: pos.price, // Current market price (CMP)
-          token: pos.token || p.token, // Include token for live price lookup
+          token: pos.token || p.token || 0, // Include token for live price lookup
           netPosition: pos.netPosition, // BUY/SELL
           netQuantity: pos.netQuantity,
           netAvgPrice: pos.netAvgPrice,
@@ -681,6 +754,8 @@ const Positions: React.FC = () => {
           netBuyAveragePrice: pos.netBuyAveragePrice,
           netSellQuantity: pos.netSellQuantity,
           netSellAveragePrice: pos.netSellAveragePrice,
+          exchange: pos.exchange || p.exchange,
+          positionDays: pos.positionDays,
         }));
         
         // Set data for modal display
@@ -809,12 +884,8 @@ const Positions: React.FC = () => {
                   onChange={(e) => {
                     const newExchange = e.target.value;
                     setSelectedExchange(newExchange);
-                    // Only fetch symbols if not "All Exchanges"
-                    if (newExchange !== "All Exchanges") {
-                      fetchSymbolsForExchange(newExchange);
-                    } else {
-                      setSymbols([]);
-                    }
+                    // Fetch symbols for any exchange including "All Exchanges"
+                    fetchSymbolsForExchange(newExchange);
                   }}
                   className="w-full px-3 py-2 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:outline-none"
                 >
@@ -874,7 +945,7 @@ const Positions: React.FC = () => {
                   <Briefcase className="w-8 h-8 text-blue-500" /> Positions
                 </h1>
                 <div className="grid grid-cols-4 gap-6">
-                  <div className="text-center">
+                  <div className="text-center w-32">
                     <div className="text-2xl font-bold text-slate-900 dark:text-white">
                       {stats.total}
                     </div>
@@ -882,7 +953,7 @@ const Positions: React.FC = () => {
                       Total
                     </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center w-32">
                     <div className="text-2xl font-bold text-blue-600">
                       {stats.buy}
                     </div>
@@ -890,7 +961,7 @@ const Positions: React.FC = () => {
                       Buy
                     </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center w-32">
                     <div className="text-2xl font-bold text-red-600">
                       {stats.sell}
                     </div>
@@ -898,7 +969,7 @@ const Positions: React.FC = () => {
                       Sell
                     </div>
                   </div>
-                  <div className="text-center">
+                  <div className="text-center w-40">
                     <div
                       className={`text-2xl font-bold ${stats.totalPnL >= 0 ? "text-emerald-600" : "text-red-600"}`}
                     >
@@ -961,12 +1032,16 @@ const Positions: React.FC = () => {
                           />
                         </th>
                       )}
-                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
-                        View
-                      </th>
-                      <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
-                        Own
-                      </th>
+                      {userData?.roleId !== 4 && (
+                        <>
+                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                            View
+                          </th>
+                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                            Own
+                          </th>
+                        </>
+                      )}
                       {hasMarketTradeRights && (
                         <>
                           <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
@@ -1022,23 +1097,27 @@ const Positions: React.FC = () => {
                             />
                           </td>
                         )}
-                        <td className="px-4 py-4 text-center">
-                          <button 
-                            onClick={() => handleOpenViewPositionModal(p)}
-                            className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg transition"
-                          >
-                            <Eye className="w-4 h-4 text-blue-600" />
-                          </button>
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button 
-                            onClick={() => handleOpenOwnPositionModal(p)}
-                            disabled={loadingOwnPosition}
-                            className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900 rounded-lg font-bold text-purple-600 hover:text-purple-700 disabled:opacity-50"
-                          >
-                            {loadingOwnPosition ? "..." : "Own"}
-                          </button>
-                        </td>
+                        {userData?.roleId !== 4 && (
+                          <>
+                            <td className="px-4 py-4 text-center">
+                              <button 
+                                onClick={() => handleOpenViewPositionModal(p)}
+                                className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg transition"
+                              >
+                                <Eye className="w-4 h-4 text-blue-600" />
+                              </button>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <button 
+                                onClick={() => handleOpenOwnPositionModal(p)}
+                                disabled={loadingOwnPosition}
+                                className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900 rounded-lg font-bold text-purple-600 hover:text-purple-700 disabled:opacity-50"
+                              >
+                                {loadingOwnPosition ? "..." : "Own"}
+                              </button>
+                            </td>
+                          </>
+                        )}
                         {hasMarketTradeRights && (
                           <>
                             <td className="px-4 py-4 text-center">
@@ -1100,6 +1179,7 @@ const Positions: React.FC = () => {
                         <td className="px-6 py-4 text-right font-mono text-sm">
                           {p.averagePrice.toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
                           })}
                         </td>
                         <td
@@ -1124,7 +1204,7 @@ const Positions: React.FC = () => {
 
       {/* View Position Details Modal */}
       {selectedViewPosition && viewPositionData && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: childModalZIndex }}>
           <PositionDetailsModal
             positions={filteredPositions}
             exchanges={exchanges}
@@ -1146,7 +1226,7 @@ const Positions: React.FC = () => {
 
       {/* Own User Position Details Modal */}
       {showOwnPositionDetailModal && ownDetailModalData.length > 0 && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: childModalZIndex }}>
           <OwnUserPositionModal
             positions={ownDetailModalData}
             selectedSymbol={ownDetailModalSymbol}
@@ -1200,6 +1280,9 @@ const Positions: React.FC = () => {
         isAdminUser={isAdminUser}
         clientSearchTerm={orderModal.clientSearchTerm}
         onClientSearchChange={orderModal.setClientSearchTerm}
+        availableClients={orderModal.availableClients}
+        selectedClient={orderModal.selectedClient}
+        onClientSelect={orderModal.setSelectedClient}
         isSubmitting={orderModal.isBuyOrderSubmitting}
         onSubmit={handleBuySubmitAction}
         onCancel={() => orderModal.resetBuyForm(isAdminUser)}
@@ -1231,6 +1314,9 @@ const Positions: React.FC = () => {
         isAdminUser={isAdminUser}
         clientSearchTerm={orderModal.clientSearchTerm}
         onClientSearchChange={orderModal.setClientSearchTerm}
+        availableClients={orderModal.availableClients}
+        selectedClient={orderModal.selectedClient}
+        onClientSelect={orderModal.setSelectedClient}
         isSubmitting={orderModal.isSellOrderSubmitting}
         onSubmit={handleSellSubmitAction}
         onCancel={() => orderModal.resetSellForm(isAdminUser)}
@@ -1241,8 +1327,8 @@ const Positions: React.FC = () => {
 
       {/* Trades Modal */}
       {showTradesModal && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: childModalZIndex }}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-[1500px] h-[90vh] flex flex-col">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
               <div>
@@ -1268,6 +1354,16 @@ const Positions: React.FC = () => {
         </div>,
         document.body
       )}
+
+      <ConfirmAlert
+        isOpen={alertOpen}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText={alertConfig.confirmText}
+        isLoading={loading}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setAlertOpen(false)}
+      />
     </div>
   );
 };

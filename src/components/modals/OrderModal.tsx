@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { X, TrendingUp, TrendingDown } from 'lucide-react'
 import { createPortal } from 'react-dom'
@@ -43,6 +43,9 @@ interface OrderModalProps {
   isAdminUser?: boolean
   clientSearchTerm: string
   onClientSearchChange: (value: string) => void
+  availableClients?: Array<{ userId: number; username: string; name: string }>
+  selectedClient?: { userId: number; username: string; name: string } | null
+  onClientSelect?: (client: { userId: number; username: string; name: string }) => void
 
   // Submission
   isSubmitting: boolean
@@ -80,6 +83,9 @@ const OrderModal: React.FC<OrderModalProps> = ({
   isAdminUser = false,
   clientSearchTerm,
   onClientSearchChange,
+  availableClients,
+  selectedClient,
+  onClientSelect,
 
   isSubmitting,
   onSubmit,
@@ -90,6 +96,33 @@ const OrderModal: React.FC<OrderModalProps> = ({
   isDragging = false,
   isOrderMethodDisabled = false
 }) => {
+  // Searchable select state for Client Account
+  const [clientSearchOpen, setClientSearchOpen] = useState(false)
+  const [clientSearch, setClientSearch] = useState('')
+  const clientDropdownRef = useRef<HTMLDivElement>(null)
+
+  // When modal opens or selected client changes, show the selected client's display name
+  useEffect(() => {
+    if (isOpen && selectedClient) {
+      setClientSearch(`${selectedClient.username}`)
+    } else if (!isOpen) {
+      setClientSearch('')
+    }
+  }, [selectedClient, isOpen])
+
+  // Handle click outside for dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+        setClientSearchOpen(false)
+      }
+    }
+    if (clientSearchOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [clientSearchOpen])
+
   if (!isOpen || !selectedInstrument) return null
 
   const isBuy = typeParam === 'BUY'
@@ -103,6 +136,12 @@ const OrderModal: React.FC<OrderModalProps> = ({
   const config = selectedInstrument.config
   const isCallPutExchange = config?.exchange === 'CALLPUT'
   const isMarketMode = orderMethod === 'MARKET'
+
+  // Filter clients based on search term
+  const filteredClients = availableClients?.filter(client =>
+    client.username.toLowerCase().includes(clientSearch.toLowerCase()) ||
+    client.name.toLowerCase().includes(clientSearch.toLowerCase())
+  ) || []
 
   // Fallback coordinates matching implementation mechanics
   const hasMoved = modalPosition.x !== 0 || modalPosition.y !== 0
@@ -147,14 +186,61 @@ const OrderModal: React.FC<OrderModalProps> = ({
           <div className="space-y-4">
             <div className="grid gap-4" style={{ gridTemplateColumns: isAdminUser ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr' }}>
               {isAdminUser && (
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-2">Client Account</label>
-                  <input
-                    type="text"
-                    value={clientSearchTerm}
-                    disabled
-                    className="w-full px-3 py-3 bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg text-slate-500 font-bold cursor-not-allowed outline-none"
-                  />
+                <div ref={clientDropdownRef} className="relative client-dropdown-container">
+                  <label className="block text-sm font-bold text-blue-600 dark:text-blue-400 mb-2">Client Name</label>
+                  {availableClients && availableClients.length > 0 ? (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={clientSearch}
+                        onChange={(e) => {
+                          setClientSearch(e.target.value)
+                          setClientSearchOpen(true)
+                        }}
+                        onFocus={() => {
+                          setClientSearch('')
+                          setClientSearchOpen(true)
+                        }}
+                        placeholder="Search client..."
+                        className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500"
+                      />
+
+                      {/* Dropdown List */}
+                      {clientSearchOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {filteredClients.length > 0 ? (
+                            filteredClients.map((client) => (
+                              <button
+                                key={client.userId}
+                                type="button"
+                                onClick={() => {
+                                  onClientSelect?.(client)
+                                  setClientSearch(`${client.username}`)
+                                  setClientSearchOpen(false)
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-gray-200 dark:border-slate-700 last:border-b-0"
+                              >
+                                <div className="text-xs text-gray-600 dark:text-gray-400">
+                                  {client.username}
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-4 text-center text-gray-500 dark:text-gray-400 text-sm">
+                              No clients found
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={clientSearch}
+                      disabled
+                      className="w-full px-3 py-3 bg-gray-100 dark:bg-slate-700 border-2 border-gray-200 dark:border-slate-600 rounded-lg text-gray-600 dark:text-gray-400 font-medium cursor-not-allowed outline-none"
+                    />
+                  )}
                 </div>
               )}
               <div>

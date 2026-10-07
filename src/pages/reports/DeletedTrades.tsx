@@ -7,6 +7,8 @@ import userManagementService from '../../services/userManagementService';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useSorting } from '../../hooks/useSorting';
 import { API_ENDPOINTS } from '../../config/apiConfig';
+import { selectMarketTradeRight } from '../../store/selectors/authSelectors';
+import { useAppSelector } from '../../hooks/reduxHooks';
 
 interface DeletedTradeData {
   tradeId: number;
@@ -83,6 +85,9 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   const tradeOrderMethod = userData?.tradeOrderMethod || 'WEB';
   const userRoleId = userData?.roleId;
   const isAdminUser = userRoleId === 1 || userRoleId === 2 || userRoleId === 3;
+
+  // Get hasMarketTradeRights from Redux
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
 
   // In modal mode, use propsUserId; in dashboard mode, use selectedUserId
   const targetUserId = isModalMode && propsUserId ? parseInt(propsUserId) : loggedInUserId;
@@ -186,8 +191,8 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   };
 
   const handleRestoreTrades = async () => {
-    if (!isAdminUser) {
-      toast.error('Only admins can restore trades');
+    if (!isAdminUser || !hasMarketTradeRights) {
+      toast.error('You do not have permission to restore trades');
       return;
     }
 
@@ -238,8 +243,8 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   };
 
   const handleRestoreTrade = async (tradeId: number) => {
-    if (!isAdminUser) {
-      toast.error('Only admins can restore trades');
+    if (!isAdminUser || !hasMarketTradeRights) {
+      toast.error('You do not have permission to restore trades');
       return;
     }
 
@@ -396,7 +401,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
-            {isAdminUser && selectedTradeIds.size > 0 && (
+            {isAdminUser && hasMarketTradeRights && selectedTradeIds.size > 0 && (
               <button
                 onClick={handleRestoreTrades}
                 disabled={isRestoring}

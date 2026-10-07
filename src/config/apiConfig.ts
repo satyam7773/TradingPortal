@@ -31,7 +31,7 @@ export const API_ENDPOINTS = {
     IP_DEVICE_SUMMARY_DOWNLOAD: `${BASE_URL}/reports/ipDeviceSummary/download`,
     IP_DEVICE_DETAILS: `${BASE_URL}/reports/ipDeviceDetails`,
     WEEKLY_ADMIN: `${BASE_URL}/reports/weeklyAdmin`,
-    USER_WISE_POSITIONS: `${BASE_URL}/oms/positions/download`,
+    USER_WISE_POSITIONS: `${BASE_URL}/reports/userWisePositions`,
   },
 
   // OMS (Order Management System)

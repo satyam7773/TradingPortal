@@ -7,6 +7,7 @@ import userManagementService from '../../services/userManagementService';
 import { API_ENDPOINTS } from '../../config/apiConfig'
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
+import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { useSorting } from '../../hooks/useSorting';
 

@@ -2,27 +2,73 @@
 
 // --- REUSE LOGIC FROM Positions.tsx ---
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Briefcase, Eye } from 'lucide-react';
+import { useModalDepth } from '../contexts/ModalContext';
+import { Briefcase, Eye, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import userManagementService from '../services/userManagementService';
 import marketWatchService from '../services/marketWatchService';
 import orderService from '../services/orderService';
 import FilterLayout from '../components/FilterLayout';
 import { useOrderModal } from '../hooks/useOrderModal';
+import { useUserDetailsModal } from '../hooks/useUserDetailsModal';
 import OrderModal from '../components/modals/OrderModal';
+import OwnUserPositionModal from './OwnUserPositionModal';
+import PositionDetailModal from './PositionDetailModal';
+import UserDetailsModal from '../pages/user-management/UserDetailsModal';
 import SearchableSelect from '../components/ui/SearchableSelect';
 import ConfigManager from '../utils/configManager';
 import { API_ENDPOINTS } from '../config/apiConfig';
+import { BUY_SELL_DISABLED_MESSAGE } from '../utils/permissionUtils';
+import { Trades as TradesPage } from '../pages/trading/Trades';
 
 interface UserPositionsPanelProps {
   username: string;
   userId?: string | number;
   roleId?: any;
-  user?: any
+  user?: any;
+  depth?: number;
 }
 
-const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId, user }) => {
+const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId, user, depth = 0 }) => {
   console.log('user', user?.userSettings?.userInfo)
+  
+  // Guard: If user is null/undefined, show loading message
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-slate-500 dark:text-slate-400">Loading user details...</p>
+      </div>
+    );
+  }
+  
+  // Calculate z-index based on depth prop (if provided) or modal context
+  let modalZIndex: number;
+  let childModalZIndex: number;
+  
+  if (depth > 0) {
+    // If depth is provided, calculate z-index from it
+    modalZIndex = 10000 + (depth * 5000);
+    childModalZIndex = modalZIndex + 1000;
+  } else {
+    // Otherwise use modal context
+    const { getNextZIndex } = useModalDepth();
+    modalZIndex = getNextZIndex();
+    childModalZIndex = modalZIndex + 1000;
+  }
+  
+  // Get user details modal hook for opening UserDetailsModal
+  const { selectedUser, setSelectedUser, isLoadingUser, handleUserNameClick } = useUserDetailsModal();
+  
+  // Log when selectedUser changes
+  useEffect(() => {
+    console.log("📢 selectedUser state changed in UserPositionsPanel:", {
+      selectedUserExists: !!selectedUser,
+      username: selectedUser?.username,
+      userId: selectedUser?.id,
+    });
+  }, [selectedUser]);
+  
   // --- State (mostly copied from Positions.tsx) ---
   const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges');
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
@@ -35,6 +81,28 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
+  
+  // Own positions modal state
+  const [showOwnPositionDetailModal, setShowOwnPositionDetailModal] = useState(false);
+  const [ownDetailModalData, setOwnDetailModalData] = useState<any[]>([]);
+  const [ownDetailModalExchange, setOwnDetailModalExchange] = useState<string>('All Exchanges');
+  const [ownDetailModalSymbol, setOwnDetailModalSymbol] = useState<string>('');
+  const [loadingOwnPosition, setLoadingOwnPosition] = useState(false);
+  const [selectedOwnPosition, setSelectedOwnPosition] = useState<any>(null);
+  
+  // View position modal state
+  const [showRowClickModal, setShowRowClickModal] = useState(false);
+  const [rowClickModalData, setRowClickModalData] = useState<any>(null);
+  const [loadingRowClickModal, setLoadingRowClickModal] = useState(false);
+  const [selectedViewPosition, setSelectedViewPosition] = useState<any>(null);
+  const [viewModalExchange, setViewModalExchange] = useState<string>('All Exchanges');
+  const [viewModalSymbol, setViewModalSymbol] = useState<string>('');
+  
+  // Trades modal state
+  const [showTradesModal, setShowTradesModal] = useState(false);
+  const [tradesModalSymbol, setTradesModalSymbol] = useState<string>('');
+  const [tradesModalToken, setTradesModalToken] = useState<number | null>(null);
+  const [tradesModalExchange, setTradesModalExchange] = useState<string>('');
 
 
 
@@ -47,8 +115,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     isManualOrderEnabled ? 'addOrder' : 'cfMarginSquareOff'
   );
 
-  const displayRoleId = roleId;
-  console.log('displayRoleId', displayRoleId, username)
+  // ✅ Extract roleId from user.userProfile (already fetched by parent) with fallback to prop roleId
+  const displayRoleId = user?.userProfile?.roleId || roleId;
+  console.log('displayRoleId', displayRoleId, username);
   const isClient = Number(displayRoleId) === 4 || displayRoleId === 'Client';
   const feedUnsubscribeRef = useRef<(() => void) | null>(null);
   const selectedFeedUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -255,8 +324,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
       if (result?.responseCode === "0" && result?.data?.positionsData) {
         // Transform old API response to PositionData format
-        let positions = (result.data.positionsData || []).map((p: any) => ({
-          positionId: 0,
+        let positions = (result.data.positionsData || []).map((p: any, index: number) => ({
+          positionId: `${p.exchange}_${p.token}_${index}`, // ✅ Unique key combining exchange + token + index
           positionIds: [0],
           positionDate: null,
           positionDays: 0,
@@ -306,7 +375,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     setSelectedPositions(new Set());
     try {
       // Check roleId - for roleId 4, use old API; otherwise use cumulative API
-      if (Number(roleId) === 4) {
+      // ✅ Use displayRoleId which is extracted from user.userProfile (parent component already fetched it)
+      if (Number(displayRoleId) === 4) {
         await fetchOldPositionsAPI();
       } else {
         const tokenToFetch = targetToken !== undefined ? targetToken : (selectedToken || 0);
@@ -320,7 +390,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             const positionIds = userInfo.positionId || [0];
             
             return {
-              positionId: positionIds[0] || 0,
+              // ✅ Include actual positionId from API to handle multiple positions at same token
+              positionId: `${p.exchange}_${p.token}_${positionIds[0] || userInfo.userId || userId}`,
               positionIds: positionIds,
               positionDate: null,
               positionDays: 0,
@@ -402,7 +473,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     if (!selectedToken || !userId) return;
     const userIdStr = String(userId);
     const tokenString = String(selectedToken);
-    let pollingInterval: number | null = null;
+    let pollingInterval: NodeJS.Timeout | null = null;
 
     const fetchInstrumentTick = async () => {
       if (!marketWatchService.isConnected()) {
@@ -562,7 +633,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       return;
     }
 
-    const submitToast = toast.loading('Placing manual order...');
+    // const submitToast = toast.loading('Placing manual order...');
     const loggedInUserId = Number(JSON.parse(localStorage.getItem('userData') || '{}')?.userId || 0);
     const recipientUserId = Number(userId);
     const isSpecialExchange = ['NSE', 'SGX', 'OTHERS'].includes(exchange);
@@ -597,14 +668,14 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         );
 
       if (response?.responseCode === '0') {
-        toast.success(`Manual order placed successfully!`, { id: submitToast });
+        // toast.success(`Manual order placed successfully!`, { id: submitToast });
         await handleView(selectedExchange, userId ? [Number(userId)] : [], true, 0);
         resetManualOrderForm();
       } else {
-        toast.error(response?.responseMessage || 'Failed to place manual order', { id: submitToast });
+        toast.error(response?.responseMessage || 'Failed to place manual order');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Error placing manual order', { id: submitToast });
+      toast.error(error.message || 'Error placing manual order');
     }
   };
 
@@ -762,11 +833,23 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- Buy/Sell modal and close selected logic from Positions page ---
   const handleOpenModifyModal = (p: any, targetType: 'BUY' | 'SELL') => {
-    // Find user profile for modal (if needed)
-    const matchedProfile = users.find((u: any) => u.username === p.username);
-    const targetClientId = p.userId || matchedProfile?.id || userId;
-    orderModal.setSelectedClient({ userId: targetClientId, name: matchedProfile?.name || p.username, username: p.username });
-    orderModal.setClientSearchTerm(`${matchedProfile?.name || p.username} (${p.username})`);
+    // ✅ If roleId = 4 (client), pass direct userId. Otherwise (cumulative), allow user selection
+    if (Number(displayRoleId) === 4) {
+      // Client mode: set the specific user as selected (disabled field)
+      const matchedProfile = users.find((u: any) => u.username === p.username);
+      const targetClientId = p.userId || matchedProfile?.id || userId;
+      orderModal.setSelectedClient({ userId: targetClientId, name: matchedProfile?.name || p.username, username: p.username });
+      orderModal.setClientSearchTerm(`${matchedProfile?.name || p.username} (${p.username})`);
+      orderModal.setAvailableClients([]);
+    } else {
+      // Cumulative mode: allow user selection
+      if (users.length > 0) {
+        orderModal.setAvailableClients(users);
+        orderModal.setSelectedClient(users[0]);
+        orderModal.setClientSearchTerm(users[0].username);
+      }
+    }
+    
     maxAvailableQuantityRef.current = p.exchange === 'CALLPUT' ? Math.abs(p.quantity) : 999999;
     const cachedConfig = p.token ? instrumentConfigRef.current[p.token] : null;
     const mergedConfig = { exchange: p.exchange, tradeSymbol: p.tradeSymbol, instrumentName: p.tradeSymbol, script: p.tradeSymbol, lotSize: cachedConfig?.lotSize || 100 };
@@ -780,6 +863,117 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       orderModal.setSellOrderPrice(p.averagePrice.toString());
       orderModal.setSellOrderType('MARKET');
       orderModal.openSellModal({ token: p.token || 0, config: mergedConfig });
+    }
+  };
+
+  const handleOpenOwnPositionModal = async (p: any) => {
+    try {
+      console.log("👤 Opening own position modal for position:", p);
+      setSelectedOwnPosition(p);
+      setLoadingOwnPosition(true);
+
+      // Fetch own user positions from API
+      const response = await userManagementService.fetchOwnUserPositions(
+        Number(userId),
+        p.token || 0,
+      );
+      
+      console.log("📦 Own positions API response:", response);
+
+      if (response?.responseCode === '0' && response.data) {
+        console.log("🎯 Transforming API response data...", { responseDataLength: response.data.length, parentPosition: p });
+        
+        // Transform API response data to match modal structure
+        const userPositions: any[] = response.data.map((pos: any, idx: number) => {
+          const transformed = {
+            username: pos.username,
+            userId: pos.userId,
+            name: pos.name,
+            parentUsername: pos.parentUsername,
+            parentUserId: pos.parentUserId,
+            tradeSymbol: pos.tradeSymbol,
+            price: pos.price,
+            token: pos.token || p.token || 0,
+            netPosition: pos.netPosition,
+            netQuantity: pos.netQuantity,
+            netAvgPrice: pos.netAvgPrice,
+            pnl: pos.pnl,
+            pnlPercentage: pos.pnlPercentage,
+            netBuyQuantity: pos.netBuyQuantity,
+            netBuyAveragePrice: pos.netBuyAveragePrice,
+            netSellQuantity: pos.netSellQuantity,
+            netSellAveragePrice: pos.netSellAveragePrice,
+            exchange: pos.exchange || p.exchange,
+            positionDays: pos.positionDays,
+          };
+          console.log(`📝 Transformed position [${idx}]:`, { raw: pos, transformed });
+          return transformed;
+        });
+        
+        console.log("✅ Final transformed array:", userPositions);
+        
+        // Set data for modal display
+        setOwnDetailModalData(userPositions);
+        console.log("✅ Called setOwnDetailModalData with:", userPositions.length, "items");
+        setShowOwnPositionDetailModal(true);
+        console.log("✅ Called setShowOwnPositionDetailModal(true)");
+        setOwnDetailModalExchange(p.exchange);
+        setOwnDetailModalSymbol(p.tradeSymbol);
+      } else {
+        console.error("❌ Own positions API error:", response?.responseMessage);
+        toast.error(response?.responseMessage || "Failed to fetch own positions");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching own position:", error);
+      toast.error("Failed to fetch position details");
+    } finally {
+      setLoadingOwnPosition(false);
+    }
+  };
+
+  // ✅ Handle opening view position modal (shows View Position Details)
+  const handleOpenViewPositionModal = async (p: any) => {
+    try {
+      console.log("📊 Opening view modal for position:", p);
+      setLoadingRowClickModal(true);
+      setSelectedViewPosition(p);
+
+      const payload = {
+        requestTimestamp: Date.now().toString(),
+        userId: Number(userId),
+        data: {
+          userId: Number(userId),
+          token: p.token || 0,
+        }
+      };
+
+      const response = await fetch(
+        API_ENDPOINTS.OMS.POSITIONS_PORTAL,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const result = await response.json();
+      console.log("📦 View modal API response:", result);
+
+      if (result?.responseCode === "0" && result?.data) {
+        console.log("✅ Setting rowClickModalData and showing modal");
+        setRowClickModalData(result.data);
+        setShowRowClickModal(true);
+        setViewModalExchange(p.exchange);
+        setViewModalSymbol(p.tradeSymbol);
+      } else {
+        console.error("❌ API Error:", result?.responseMessage);
+        toast.error(result?.responseMessage || "Failed to fetch position details");
+      }
+    } catch (error) {
+      console.error("❌ Error fetching view position details:", error);
+      toast.error("Failed to fetch position details");
+    } finally {
+      setLoadingRowClickModal(false);
     }
   };
 
@@ -868,6 +1062,31 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   }
 }, [isManualOrderEnabled, unsubscribeCurrentFeed]);
 
+  // ✅ Debug logging for own modal state
+  useEffect(() => {
+    if (showOwnPositionDetailModal) {
+      console.log("📢 OwnPositionDetailModal shown with data:", {
+        showOwnPositionDetailModal,
+        ownDetailModalDataLength: ownDetailModalData?.length,
+        ownDetailModalData
+      });
+    }
+  }, [showOwnPositionDetailModal, ownDetailModalData]);
+
+  // ✅ Debug logging for modal state changes
+  useEffect(() => {
+    console.log("🔔 Modal State Changed:", {
+      showOwnPositionDetailModal,
+      ownDetailModalDataLength: ownDetailModalData?.length,
+      ownDetailModalData: ownDetailModalData,
+      showRowClickModal,
+      showTradesModal,
+      selectedViewPosition: !!selectedViewPosition,
+      rowClickModalData: !!rowClickModalData,
+      tradesModalSymbol
+    });
+  }, [showOwnPositionDetailModal, ownDetailModalData, showRowClickModal, showTradesModal, selectedViewPosition, rowClickModalData, tradesModalSymbol]);
+
   // --- Table and content (now matches Positions page) ---
   return (
     <FilterLayout
@@ -912,7 +1131,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                     <th className="px-3 py-4 text-center">
                       <input type="checkbox" checked={filteredPositions.length > 0 && selectedPositions.size === filteredPositions.length} onChange={() => setSelectedPositions(selectedPositions.size === filteredPositions.length ? new Set() : new Set(filteredPositions.map(p => p.positionId)))} className="cursor-pointer" />
                     </th>
-                    <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">View</th>
+                    {/* ✅ Only show View & Own columns for non-client users (roleId !== 4) */}
+                    {Number(displayRoleId) !== 4 && (
+                      <>
+                        <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">View</th>
+                        <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Own</th>
+                      </>
+                    )}
                     <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Buy</th>
                     <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
@@ -927,19 +1152,25 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {filteredPositions.length === 0 ? (
-                    <tr><td colSpan={12} className="text-center py-8 text-gray-400">No positions found.</td></tr>
-                  ) : filteredPositions.map((p) => (
-                    <tr key={p.positionId} className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors ${selectedPositions.has(p.positionId) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                    <tr><td colSpan={Number(displayRoleId) !== 4 ? 13 : 11} className="text-center py-8 text-gray-400">No positions found.</td></tr>
+                  ) : filteredPositions.map((p, index) => (
+                    <tr key={p.positionId || `pos_${index}`} className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors ${selectedPositions.has(p.positionId) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                       <td className="px-3 py-4 text-center">
                         <input type="checkbox" checked={selectedPositions.has(p.positionId)} onChange={() => { const next = new Set(selectedPositions); next.has(p.positionId) ? next.delete(p.positionId) : next.add(p.positionId); setSelectedPositions(next); }} className="cursor-pointer" />
                       </td>
-                      <td className="px-4 py-4 text-center"><button className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"><Eye className="w-4 h-4 text-blue-600" /></button></td>
+                      {/* ✅ Only show View & Own columns for non-client users */}
+                      {Number(displayRoleId) !== 4 && (
+                        <>
+                          <td className="px-4 py-4 text-center"><button onClick={() => handleOpenViewPositionModal(p)} className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"><Eye className="w-4 h-4 text-blue-600" /></button></td>
+                          <td className="px-4 py-4 text-center"><button onClick={() => { console.log("🖱️ Own User button clicked for position:", p); handleOpenOwnPositionModal(p); }} disabled={loadingOwnPosition} className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900 rounded-lg" title="View own positions"><Eye className="w-4 h-4 text-purple-600" /></button></td>
+                        </>
+                      )}
                       <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'BUY')} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
                       <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'SELL')} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
                       <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">{p.username}</td>
                       <td className="px-6 py-4 text-left"><span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 uppercase">{p.exchange}</span></td>
                       <td className="px-6 py-4 text-left"><span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${p.position === 'BUY' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-red-600 border-red-200 bg-red-50'}`}>{p.position}</span></td>
-                      <td className={`px-6 py-4 text-left font-bold ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`}>{p.tradeSymbol}</td>
+                      <td className={`px-6 py-4 text-left font-bold cursor-pointer hover:underline ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`} onClick={() => { console.log("📈 Opening trades modal for symbol:", p.tradeSymbol); setTradesModalSymbol(p.tradeSymbol); setTradesModalToken(p.token || null); setTradesModalExchange(p.exchange); setShowTradesModal(true); }}>{p.tradeSymbol}</td>
                       <td className="px-6 py-4 text-center font-bold text-sm">{p.quantity}</td>
                       <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                       <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${getCMPColor(p.ltp, p.averagePrice)}`}>{p.ltp?.toFixed(2) || '0.00'}</td>
@@ -959,7 +1190,171 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           )}
         </div>
-        {/* Order Modals */}u
+        
+        {/* Own User Position Details Modal */}
+        {showOwnPositionDetailModal && createPortal(
+          <>
+            {/* Backdrop - LOWER z-index */}
+            <div 
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              style={{ zIndex: childModalZIndex }}
+              onClick={() => {
+                setShowOwnPositionDetailModal(false);
+                setOwnDetailModalData([]);
+                setSelectedOwnPosition(null);
+                setLoadingOwnPosition(false);
+              }}
+            />
+            
+            {/* Modal Container - HIGHER z-index */}
+            <div 
+              className="fixed inset-0 flex items-center justify-center p-4"
+              style={{ zIndex: childModalZIndex + 1, pointerEvents: 'auto' }}
+            >
+              <div 
+                className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col"
+                style={{ pointerEvents: 'auto' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-900 dark:to-blue-800 px-8 py-4 flex items-center justify-between flex-shrink-0">
+                  <h2 className="text-xl font-bold text-white">Own User Open Positions</h2>
+                  <button
+                    onClick={() => {
+                      setShowOwnPositionDetailModal(false);
+                      setOwnDetailModalData([]);
+                      setSelectedOwnPosition(null);
+                      setLoadingOwnPosition(false);
+                    }}
+                    className="text-white hover:bg-blue-500/20 p-2 rounded-lg transition"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Table Container */}
+                <div className="flex-1 overflow-auto">
+                  {ownDetailModalData && ownDetailModalData.length > 0 ? (
+                    <table className="w-full border-collapse">
+                      <thead className="sticky top-0 bg-slate-200 dark:bg-slate-700 z-20">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Username</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Parent</th>
+                          <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap">Symbol</th>
+                          <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider whitespace-nowrap">Position</th>
+                          <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Qty</th>
+                          <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">Avg Price</th>
+                          <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">CMP</th>
+                          <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">P&L</th>
+                          <th className="px-6 py-3 text-right text-xs font-bold uppercase tracking-wider whitespace-nowrap">% P&L</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {ownDetailModalData.map((pos: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                            <td className="px-6 py-4 text-sm font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={(e) => handleUserNameClick(e, pos.username, pos.userId)}>
+                              {isLoadingUser ? 'Loading...' : pos.username}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{pos.name || "-"}</td>
+                            <td className="px-6 py-4 text-sm">
+                              {pos.parentUsername ? (
+                                <button
+                                  onClick={(e) => handleUserNameClick(e, pos.parentUsername, pos.parentUserId)}
+                                  disabled={isLoadingUser}
+                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                                >
+                                  {isLoadingUser ? 'Loading...' : pos.parentUsername}
+                                </button>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{pos.tradeSymbol}</td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`text-xs font-bold px-3 py-1 rounded-lg ${
+                                pos.netPosition === "BUY"
+                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                                  : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                              }`}>
+                                {pos.netPosition}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right text-sm font-bold text-slate-900 dark:text-white">{pos.netQuantity}</td>
+                            <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 dark:text-white">₹{pos.netAvgPrice?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                            <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 dark:text-white">₹{pos.price?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                            <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${pos.pnl > 0 ? "text-emerald-600" : pos.pnl < 0 ? "text-red-600" : "text-slate-600"}`}>
+                              ₹{pos.pnl?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${pos.pnlPercentage > 0 ? "text-emerald-600" : pos.pnlPercentage < 0 ? "text-red-600" : "text-slate-600"}`}>
+                              {pos.pnlPercentage?.toFixed(2)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="flex items-center justify-center h-64">
+                      <p className="text-slate-500 dark:text-slate-400 text-lg">No positions to display</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
+        
+        {/* View Position Details Modal */}
+        {showRowClickModal && rowClickModalData && createPortal(
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: childModalZIndex, pointerEvents: 'none' }}>
+            <PositionDetailModal
+              isOpen={showRowClickModal}
+              data={rowClickModalData}
+              selectedPosition={selectedViewPosition}
+              loading={loadingRowClickModal}
+              liveTicks={liveTicks}
+              depth={depth + 1}
+              onClose={() => {
+                setShowRowClickModal(false);
+                setRowClickModalData(null);
+                setSelectedViewPosition(null);
+              }}
+            />
+          </div>,
+          document.body
+        )}
+
+        {/* Trades Modal */}
+        {showTradesModal && createPortal(
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: childModalZIndex }}>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-[1500px] h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Trades - {tradesModalSymbol}</h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    View all trades for this symbol
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowTradesModal(false)}
+                  className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
+                  title="Close modal"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto">
+                <TradesPage symbol={tradesModalSymbol} token={tradesModalToken} exchange={tradesModalExchange} hideCheckboxes={true} />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+        
+        {/* Order Modals */}
         <OrderModal
           isOpen={orderModal.showBuyOrderModal}
           onClose={orderModal.closeBuyModal}
@@ -1008,6 +1403,22 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           onDragStart={(e) => handleDragSetup(e, 'SELL')}
           isDragging={orderModal.isDraggingSell}
         />
+        
+        {/* User Details Modal - for clicking on username/parent in Own User Positions */}
+        {selectedUser && (
+          <>
+            {console.log("🔄 Rendering UserDetailsModal with selectedUser:", selectedUser)}
+            <UserDetailsModal
+              user={selectedUser}
+              depth={depth + 1}
+              onClose={() => {
+                console.log("🔄 UserDetailsModal onClose called");
+                setSelectedUser(null);
+              }}
+              onToggle={() => { }}
+            />
+          </>
+        )}
       </div>
     </FilterLayout>
   );

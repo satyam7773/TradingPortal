@@ -53,148 +53,159 @@ class BalanceService {
     }
   }
 
+  // DISABLED: Balance API call commented out
+  // async getBalance(): Promise<BalanceData | null> {
+  //   try {
+  //     // Check cache first
+  //     const cached = this.getCachedBalance()
+  //     if (cached) {
+  //       console.log('💰 Balance loaded from cache:', cached)
+  //       return cached
+  //     }
+
+  //     const userData = localStorage.getItem('userData')
+  //     if (!userData) {
+  //       console.warn('⚠️ No user data found')
+  //       return null
+  //     }
+
+  //     const user = JSON.parse(userData)
+  //     const userId = user?.userId
+
+  //     if (!userId) {
+  //       console.warn('⚠️ No userId found')
+  //       return null
+  //     }
+
+  //     const token = TokenManager.getToken()
+  //     if (!token) {
+  //       console.warn('⚠️ No token found')
+  //       return null
+  //     }
+
+  //     const response = await axios.post<BalanceResponse>(
+  //       `${this.baseURL}/user/portal/getBalance`,
+  //       {
+  //         userId: userId,
+  //         requestTimestamp: new Date().getTime().toString(),
+  //         data: ''
+  //       },
+  //       {
+  //         headers: {
+  //           'Authorization': `Bearer ${token}`,
+  //           'Content-Type': 'application/json'
+  //         },
+  //         timeout: 10000
+  //       }
+  //     )
+
+  //     if (response.data?.responseCode === '0' && response.data?.data) {
+  //       const balanceData = response.data.data
+  //       this.setCachedBalance(balanceData)
+  //       console.log('💰 Balance fetched successfully:', balanceData)
+  //       return balanceData
+  //     } else {
+  //       console.warn('⚠️ Unexpected balance response:', response.data)
+  //       return null
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error fetching balance:', error)
+  //     // Return cached data as fallback even if request fails
+  //     return this.getCachedBalance()
+  //   }
+  // }
+  
   async getBalance(): Promise<BalanceData | null> {
-    try {
-      // Check cache first
-      const cached = this.getCachedBalance()
-      if (cached) {
-        console.log('💰 Balance loaded from cache:', cached)
-        return cached
-      }
-
-      const userData = localStorage.getItem('userData')
-      if (!userData) {
-        console.warn('⚠️ No user data found')
-        return null
-      }
-
-      const user = JSON.parse(userData)
-      const userId = user?.userId
-
-      if (!userId) {
-        console.warn('⚠️ No userId found')
-        return null
-      }
-
-      const token = TokenManager.getToken()
-      if (!token) {
-        console.warn('⚠️ No token found')
-        return null
-      }
-
-      const response = await axios.post<BalanceResponse>(
-        `${this.baseURL}/user/portal/getBalance`,
-        {
-          userId: userId,
-          requestTimestamp: new Date().getTime().toString(),
-          data: ''
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
-        }
-      )
-
-      if (response.data?.responseCode === '0' && response.data?.data) {
-        const balanceData = response.data.data
-        this.setCachedBalance(balanceData)
-        console.log('💰 Balance fetched successfully:', balanceData)
-        return balanceData
-      } else {
-        console.warn('⚠️ Unexpected balance response:', response.data)
-        return null
-      }
-    } catch (error) {
-      console.error('❌ Error fetching balance:', error)
-      // Return cached data as fallback even if request fails
-      return this.getCachedBalance()
-    }
+    return null
   }
 
   /**
-   * Force refresh balance - clears cache and fetches fresh data
-   * This is called when socket receives position updates
+   * DISABLED: Balance refresh API call commented out
    */
+  // async refreshBalance(): Promise<BalanceData | null> {
+  //   try {
+  //     // Prevent multiple simultaneous requests
+  //     if (this.isFetching) {
+  //       console.log('⏳ Balance refresh already in progress')
+  //       return this.getCachedBalance()
+  //     }
+
+  //     this.isFetching = true
+  //     
+  //     // Clear cache to force fresh fetch
+  //     this.clearCache()
+
+  //     const userData = localStorage.getItem('userData')
+  //     if (!userData) {
+  //       console.warn('⚠️ No user data found')
+  //       return null
+  //     }
+
+  //     const user = JSON.parse(userData)
+  //     const userId = user?.userId
+
+  //     if (!userId) {
+  //       console.warn('⚠️ No userId found')
+  //       return null
+  //     }
+
+  //     const token = TokenManager.getToken()
+  //     if (!token) {
+  //       console.warn('⚠️ No token found')
+  //       return null
+  //     }
+
+  //     const response = await axios.post<BalanceResponse>(
+  //       `${this.baseURL}/user/portal/getBalance`,
+  //       {
+  //         userId: userId,
+  //         requestTimestamp: new Date().getTime().toString(),
+  //         data: ''
+  //       },
+  //       {
+  //         headers: {
+  //           'Authorization': `Bearer ${token}`,
+  //           'Content-Type': 'application/json'
+  //         },
+  //         timeout: 10000
+  //       }
+  //     )
+
+  //     if (response.data?.responseCode === '0' && response.data?.data) {
+  //       const balanceData = response.data.data
+  //       this.setCachedBalance(balanceData)
+  //       console.log('🔄 Balance refreshed successfully:', balanceData)
+  //       
+  //       // Notify all subscribers
+  //       this.notifySubscribers(balanceData)
+  //       
+  //       return balanceData
+  //     } else {
+  //       console.warn('⚠️ Unexpected balance response:', response.data)
+  //       return this.getCachedBalance()
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error refreshing balance:', error)
+  //     return this.getCachedBalance()
+  //   } finally {
+  //     this.isFetching = false
+  //   }
+  // }
+  
   async refreshBalance(): Promise<BalanceData | null> {
-    try {
-      // Prevent multiple simultaneous requests
-      if (this.isFetching) {
-        console.log('⏳ Balance refresh already in progress')
-        return this.getCachedBalance()
-      }
-
-      this.isFetching = true
-      
-      // Clear cache to force fresh fetch
-      this.clearCache()
-
-      const userData = localStorage.getItem('userData')
-      if (!userData) {
-        console.warn('⚠️ No user data found')
-        return null
-      }
-
-      const user = JSON.parse(userData)
-      const userId = user?.userId
-
-      if (!userId) {
-        console.warn('⚠️ No userId found')
-        return null
-      }
-
-      const token = TokenManager.getToken()
-      if (!token) {
-        console.warn('⚠️ No token found')
-        return null
-      }
-
-      const response = await axios.post<BalanceResponse>(
-        `${this.baseURL}/user/portal/getBalance`,
-        {
-          userId: userId,
-          requestTimestamp: new Date().getTime().toString(),
-          data: ''
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000
-        }
-      )
-
-      if (response.data?.responseCode === '0' && response.data?.data) {
-        const balanceData = response.data.data
-        this.setCachedBalance(balanceData)
-        console.log('🔄 Balance refreshed successfully:', balanceData)
-        
-        // Notify all subscribers
-        this.notifySubscribers(balanceData)
-        
-        return balanceData
-      } else {
-        console.warn('⚠️ Unexpected balance response:', response.data)
-        return this.getCachedBalance()
-      }
-    } catch (error) {
-      console.error('❌ Error refreshing balance:', error)
-      return this.getCachedBalance()
-    } finally {
-      this.isFetching = false
-    }
+    return null
   }
 
   /**
-   * Subscribe to balance updates
-   * Returns unsubscribe function
+   * DISABLED: Balance update subscription commented out
    */
+  // onBalanceUpdate(callback: (balance: BalanceData | null) => void): () => void {
+  //   this.balanceCallbacks.add(callback)
+  //   return () => this.balanceCallbacks.delete(callback)
+  // }
+  
   onBalanceUpdate(callback: (balance: BalanceData | null) => void): () => void {
-    this.balanceCallbacks.add(callback)
-    return () => this.balanceCallbacks.delete(callback)
+    return () => {}
   }
 
   /**

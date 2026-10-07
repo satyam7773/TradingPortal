@@ -7,6 +7,8 @@ import orderService from '../../services/orderService'
 import FilterLayout from '../../components/FilterLayout'
 import { API_ENDPOINTS } from '../../config/apiConfig'
 import OrderModal from '../../components/modals/OrderModal'
+import ConfirmAlert from '../../components/modals/ConfirmAlert'
+import UserDetailsModal from '../../pages/user-management/UserDetailsModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import { useSorting } from '../../hooks/useSorting'
@@ -84,6 +86,20 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
   const [pageSize, setPageSize] = useState(10)
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set())
   const [selectedUser, setSelectedUser] = useState<any | null>(null)
+
+  // Alert states
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string
+    message: string | string[]
+    confirmText: string
+    onConfirm: () => void | Promise<void>
+  }>({
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    onConfirm: () => {},
+  })
 
   // Order Modal States - BUY
   const [showBuyModal, setShowBuyModal] = useState(false)
@@ -273,10 +289,6 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
   const handleExchangeChange = async (name: string) => {
     setSelectedExchange(name);
     setSelectedSymbol('');
-    if (name === 'All Exchanges') {
-      setSymbols([]);
-      return;
-    }
     try {
       const res = await userManagementService.fetchSymbols(name);
       if (res?.responseCode === '0') setSymbols(res.data);
@@ -302,61 +314,85 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
   // --- Cancel/Delete Handler ---
   const handleDeleteSelected = async () => {
     if (!ordersData || selectedOrders.size === 0) return;
-    if (!window.confirm(`Are you sure you want to cancel the ${selectedOrders.size} selected order(s)?`)) return;
-
-    try {
-      setLoading(true);
-      const res = await userManagementService.cancelMultipleOrders(loggedInUserId, Array.from(selectedOrders));
-      
-      if (res?.responseCode === '0' || res?.status === 'success') {
-        toast.success("Selected orders cancelled successfully");
-        setSelectedOrders(new Set());
-        handleFetchOrders(currentPage);
-      } else {
-        toast.error(res?.message || "Failed to cancel orders");
-      }
-    } catch (err) {
-      console.error("❌ Order cancellation failure:", err);
-      toast.error("An error occurred while deleting orders");
-    } finally {
-      setLoading(false);
-    }
+    
+    setAlertConfig({
+      title: '⚠️ Cancel Orders?',
+      message: [
+        `You are about to cancel ${selectedOrders.size} order${selectedOrders.size > 1 ? 's' : ''}.`,
+        '',
+        'This action cannot be undone.',
+      ],
+      confirmText: 'Yes, Cancel Orders',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const res = await userManagementService.cancelMultipleOrders(loggedInUserId, Array.from(selectedOrders));
+          
+          if (res?.responseCode === '0' || res?.status === 'success') {
+            toast.success(`✅ ${selectedOrders.size} order${selectedOrders.size > 1 ? 's' : ''} cancelled successfully`);
+            setSelectedOrders(new Set());
+            handleFetchOrders(currentPage);
+          } else {
+            toast.error(res?.message || "Failed to cancel orders");
+          }
+        } catch (err) {
+          console.error("❌ Order cancellation failure:", err);
+          toast.error("An error occurred while deleting orders");
+        } finally {
+          setLoading(false);
+          setAlertOpen(false);
+        }
+      },
+    })
+    setAlertOpen(true)
   };
 
   // --- Proceed to Success API Handler ---
   const handleProceedToSuccess = async () => {
     if (!ordersData || selectedOrders.size === 0) return;
-    if (!window.confirm(`Are you sure you want to proceed ${selectedOrders.size} order(s) to success?`)) return;
+    
+    setAlertConfig({
+      title: '✓ Proceed to Success?',
+      message: [
+        `You are about to proceed ${selectedOrders.size} order${selectedOrders.size > 1 ? 's' : ''} to success layout.`,
+        '',
+        'This will update the order status.',
+      ],
+      confirmText: 'Yes, Proceed',
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          const payload = {
+            userId: loggedInUserId,
+            requestTimestamp: new Date().toISOString(),
+            data: Array.from(selectedOrders)
+          };
 
-    try {
-      setLoading(true);
-      const payload = {
-        userId: loggedInUserId,
-        requestTimestamp: new Date().toISOString(),
-        data: Array.from(selectedOrders)
-      };
+          const response = await fetch(API_ENDPOINTS.OMS.PROCEED_TO_SUCCESS, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
 
-      const response = await fetch(API_ENDPOINTS.OMS.PROCEED_TO_SUCCESS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+          const result = await response.json();
 
-      const result = await response.json();
-
-      if (response.ok && (result?.responseCode === '0' || result?.status === 'success')) {
-        toast.success("Orders processed to success layout!");
-        setSelectedOrders(new Set());
-        handleFetchOrders(currentPage);
-      } else {
-        toast.error(result?.responseMessage || "Failed to process orders to success");
-      }
-    } catch (err) {
-      console.error("❌ Proceed to Success API failure:", err);
-      toast.error("An error occurred while upgrading order states");
-    } finally {
-      setLoading(false);
-    }
+          if (response.ok && (result?.responseCode === '0' || result?.status === 'success')) {
+            toast.success("✅ Orders processed to success layout!");
+            setSelectedOrders(new Set());
+            handleFetchOrders(currentPage);
+          } else {
+            toast.error(result?.responseMessage || "Failed to process orders to success");
+          }
+        } catch (err) {
+          console.error("❌ Proceed to Success API failure:", err);
+          toast.error("An error occurred while upgrading order states");
+        } finally {
+          setLoading(false);
+          setAlertOpen(false);
+        }
+      },
+    })
+    setAlertOpen(true)
   };
 
   const stats = {
@@ -687,7 +723,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                       }}
                       disabled={loading || selectedOrders.size !== 1}
                       className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
-                      title="Select one order to modify"
+                      title={selectedOrders.size !== 1 ? "Select exactly one order to modify" : "Modify selected order"}
                     >
                       Edit Modify
                     </button>
@@ -786,28 +822,16 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                           >
                             {hasMarketTradeRights && (
                               <td className="px-3 py-3.5 text-center">
-                                {loggedInUser?.roleId === 4 ? (
-                                  <input
-                                    type="radio"
-                                    name="selectedOrder"
-                                    checked={selectedOrders.has(order.orderId)}
-                                    onChange={() => {
-                                      setSelectedOrders(new Set([order.orderId]));
-                                    }}
-                                    className="w-4 h-4 cursor-pointer"
-                                  />
-                                ) : (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOrders.has(order.orderId)}
-                                    onChange={() => {
-                                      const next = new Set(selectedOrders);
-                                      next.has(order.orderId) ? next.delete(order.orderId) : next.add(order.orderId);
-                                      setSelectedOrders(next);
-                                    }}
-                                    className="w-4 h-4 cursor-pointer"
-                                  />
-                                )}
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrders.has(order.orderId)}
+                                  onChange={() => {
+                                    const next = new Set(selectedOrders);
+                                    next.has(order.orderId) ? next.delete(order.orderId) : next.add(order.orderId);
+                                    setSelectedOrders(next);
+                                  }}
+                                  className="w-4 h-4 cursor-pointer"
+                                />
                               </td>
                             )}
                             <td className="px-4 py-3.5 text-left text-sm font-semibold">
@@ -891,6 +915,16 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
         </div>,
         document.body
       )}
+
+      <ConfirmAlert
+        isOpen={alertOpen}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        confirmText={alertConfig.confirmText}
+        isLoading={loading}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setAlertOpen(false)}
+      />
 
       {/* Order Modal for Client Buy */}
       <OrderModal

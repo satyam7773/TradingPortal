@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { motion } from "framer-motion";
+import UserDetailsModal from "../pages/user-management/UserDetailsModal";
+import { useUserDetailsModal } from "../hooks/useUserDetailsModal";
+import { useModalDepth } from "../contexts/ModalContext";
 
 interface OwnUserPositionData {
   username: string;
@@ -41,22 +44,40 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
   title = "Own User Open Positions",
   liveTicks = {},
 }) => {
+  console.log("🎯 OwnUserPositionModal Rendered with:", { 
+    count: positions?.length, 
+    positions,
+    selectedSymbol,
+    selectedExchange,
+    selectedSymbolType: typeof selectedSymbol,
+    positionsIsArray: Array.isArray(positions),
+    firstPosition: positions?.[0]
+  });
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const { selectedUser, setSelectedUser, isLoadingUser, handleUserNameClick } = useUserDetailsModal();
+  const { getNextZIndex } = useModalDepth();
+  const modalZIndex = getNextZIndex();
+  const childModalZIndex = modalZIndex + 1000;
 
+  // Simple filter: just search by username/symbol if user types
   const filteredPositions = useMemo(() => {
-    return positions.filter((p) => {
-      const symbolMatch =
-        selectedSymbol === "" ||
-        selectedSymbol === "All Symbols" ||
-        p.tradeSymbol === selectedSymbol;
-      const searchMatch =
-        searchTerm === "" ||
-        p.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.tradeSymbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.name && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-      return symbolMatch && searchMatch;
-    });
-  }, [positions, selectedSymbol, searchTerm]);
+    if (!Array.isArray(positions) || positions.length === 0) {
+      return positions || [];
+    }
+    
+    if (searchTerm === "") {
+      // No search, return all positions from API
+      return positions;
+    }
+    
+    // If searching, filter by username/symbol
+    const searchLower = searchTerm.toLowerCase();
+    return positions.filter(p => 
+      p.username?.toLowerCase().includes(searchLower) ||
+      p.tradeSymbol?.toLowerCase().includes(searchLower) ||
+      (p.name && p.name.toLowerCase().includes(searchLower))
+    );
+  }, [positions, searchTerm]);
 
   const stats = useMemo(() => {
     let total = 0;
@@ -88,13 +109,20 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
     return { total, buy, sell, totalPnL };
   }, [filteredPositions, liveTicks]);
 
+  // If selectedUser is set, show UserDetailsModal instead
+  if (selectedUser) {
+    return (
+      <UserDetailsModal
+        user={selectedUser}
+        depth={1}
+        onClose={() => setSelectedUser(null)}
+        onToggle={() => { }}
+      />
+    );
+  }
+
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col"
-    >
+    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col">
       {/* HEADER */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-900 dark:to-blue-800 px-8 py-4 border-b border-blue-700 flex items-center justify-between">
         <div>
@@ -200,6 +228,7 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
           <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
             {filteredPositions.length > 0 ? (
               filteredPositions.map((p, idx) => {
+                console.log(`🎨 Rendering position row [${idx}]:`, p);
                 // Get live price from liveTicks, fallback to API price
                 const tick = p.token ? liveTicks[p.token] : null;
                 const livePrice = tick ? (p.netPosition === "BUY" ? tick.bid : tick.ask) : p.price;
@@ -222,14 +251,30 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
                     key={idx}
                     className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition"
                   >
-                    <td className="px-6 py-4 text-sm font-semibold text-blue-600 dark:text-blue-400">
-                      {p.username}
+                    <td className="px-6 py-4 text-sm font-semibold">
+                      <button
+                        onClick={(e) => handleUserNameClick(e, p.username, p.userId)}
+                        disabled={isLoadingUser}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoadingUser ? 'Loading...' : p.username}
+                      </button>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">
                       {p.name || "-"}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">
-                      {p.parentUsername || "-"}
+                      {p.parentUsername ? (
+                        <button
+                          onClick={(e) => handleUserNameClick(e, p.parentUsername!, p.parentUserId || undefined)}
+                          disabled={isLoadingUser}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isLoadingUser ? 'Loading...' : p.parentUsername}
+                        </button>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">
                       {p.tradeSymbol}
@@ -292,7 +337,7 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
           </tbody>
         </table>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

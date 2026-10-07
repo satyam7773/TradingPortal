@@ -43,7 +43,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   }, [items, selectedId]);
 
   const filteredItems = items.filter(item =>
-    item.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    String(item.name).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (

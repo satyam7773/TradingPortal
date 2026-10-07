@@ -247,7 +247,7 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [autoRefresh])
+  }, [autoRefresh, userFilterType, selectedUserId])
 
   useEffect(() => {
     // Only load metadata once per session
@@ -478,35 +478,35 @@ const TradeAccountTable = ({
         <th className="px-4 py-2 text-left cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('parentUser')}>
           <div className="flex items-center gap-2">Parent User {getSortIcon('parentUser')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('pl')}>
-          <div className="flex items-center justify-end gap-2">P/L {getSortIcon('pl')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('pl')}>
+          <div className="flex items-center justify-center gap-2">P/L {getSortIcon('pl')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('brokerage')}>
-          <div className="flex items-center justify-end gap-2">Brk {getSortIcon('brokerage')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('brokerage')}>
+          <div className="flex items-center justify-center gap-2">Brk {getSortIcon('brokerage')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('balance')}>
-          <div className="flex items-center justify-end gap-2">Balance {getSortIcon('balance')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('balance')}>
+          <div className="flex items-center justify-center gap-2">Balance {getSortIcon('balance')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('m2mPnl')}>
-          <div className="flex items-center justify-end gap-2">M2M P/L {getSortIcon('m2mPnl')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('m2mPnl')}>
+          <div className="flex items-center justify-center gap-2">M2M P/L {getSortIcon('m2mPnl')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('netPnl')}>
-          <div className="flex items-center justify-end gap-2">Net P/L {getSortIcon('netPnl')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('netPnl')}>
+          <div className="flex items-center justify-center gap-2">Net P/L {getSortIcon('netPnl')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('credit')}>
-          <div className="flex items-center justify-end gap-2">Credit {getSortIcon('credit')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('credit')}>
+          <div className="flex items-center justify-center gap-2">Credit {getSortIcon('credit')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('equity')}>
-          <div className="flex items-center justify-end gap-2">Equity {getSortIcon('equity')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('equity')}>
+          <div className="flex items-center justify-center gap-2">Equity {getSortIcon('equity')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('marginUsed')}>
-          <div className="flex items-center justify-end gap-2">Margin Used {getSortIcon('marginUsed')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('marginUsed')}>
+          <div className="flex items-center justify-center gap-2">Margin Used {getSortIcon('marginUsed')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('freeMargin')}>
-          <div className="flex items-center justify-end gap-2">Free Margin {getSortIcon('freeMargin')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('freeMargin')}>
+          <div className="flex items-center justify-center gap-2">Free Margin {getSortIcon('freeMargin')}</div>
         </th>
-        <th className="px-4 py-2 text-right cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('marginLevel')}>
-          <div className="flex items-center justify-end gap-2">Margin % {getSortIcon('marginLevel')}</div>
+        <th className="px-4 py-2 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('marginLevel')}>
+          <div className="flex items-center justify-center gap-2">Margin % {getSortIcon('marginLevel')}</div>
         </th>
       </tr>
     </thead>
@@ -548,37 +548,37 @@ const TradeAccountTable = ({
                 </span>
               )}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.pl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {(account.pl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.pl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(account.pl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.brokerage || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {(account.brokerage || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.brokerage || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(account.brokerage || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.balance || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {(account.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.balance || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(account.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.m2mPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {(account.m2mPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.m2mPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {(account.m2mPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.netPnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {(account.netPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.netPnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(account.netPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${isDark ? 'text-white' : 'text-black'}`}>
-              {(account.credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${isDark ? 'text-white' : 'text-black'}`}>
+              {(account.credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className="px-4 py-2.5 text-right">
+            <td className="px-4 py-2.5 text-center">
               <span className={`px-3 py-1 rounded-lg font-mono font-bold text-sm ${(account.equity || 0) >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                {(account.equity || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {(account.equity || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${isDark ? 'text-white' : 'text-black'}`}>
-              {(account.marginUsed || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${isDark ? 'text-white' : 'text-black'}`}>
+              {(account.marginUsed || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.freeMargin || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {(account.freeMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.freeMargin || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(account.freeMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold text-sm ${(account.marginLevel || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {(account.marginLevel || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}%
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.marginLevel || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(account.marginLevel || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
             </td>
           </tr>
         ))
