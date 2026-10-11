@@ -11,6 +11,9 @@ interface ScriptBuffer {
   exchange: string;
   parentBufferAmount: number;
   bufferAmount: number;
+  // CALLPUT-specific fields
+  callputParentBufferAmount?: number;
+  callputBufferAmount?: number;
   updatedDate: string;
 }
 
@@ -79,6 +82,20 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
     );
   }, [scripts, scriptSearch]);
 
+  // Helper function to get display buffer amounts based on exchange type
+  const getDisplayBufferAmounts = (script: ScriptBuffer) => {
+    if (script.exchange === 'CALLPUT') {
+      return {
+        parentBuffer: script.callputParentBufferAmount ?? '-',
+        ownBuffer: script.callputBufferAmount ?? '-'
+      };
+    }
+    return {
+      parentBuffer: script.parentBufferAmount ?? '-',
+      ownBuffer: script.bufferAmount ?? '-'
+    };
+  };
+
   const handleApply = () => {
     if (selectedIds.size === 0) return toast.error('Select at least one script');
     if (!bufferAmount) return toast.error('Please enter buffer amount');
@@ -86,6 +103,11 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
     const newBufferAmount = parseFloat(bufferAmount);
     setScripts(prev => prev.map(s => {
       if (selectedIds.has(s.instrumentId)) {
+        // For CALLPUT exchange, update callput-specific fields
+        if (s.exchange === 'CALLPUT') {
+          return { ...s, callputBufferAmount: newBufferAmount };
+        }
+        // For other exchanges, update regular fields
         return { ...s, bufferAmount: newBufferAmount };
       }
       return s;
@@ -109,10 +131,20 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
         }, {});
 
       for (const exchange of Object.keys(scriptsByExchange)) {
-        const scripBuffers = scriptsByExchange[exchange].map((s: any) => ({
-          ...s,
-          bufferAmount: parseFloat(bufferAmount)
-        }));
+        const scripBuffers = scriptsByExchange[exchange].map((s: any) => {
+          // For CALLPUT exchange, use callput-specific fields
+          if (exchange === 'CALLPUT') {
+            return {
+              ...s,
+              callputBufferAmount: parseFloat(bufferAmount)
+            };
+          }
+          // For other exchanges, use regular fields
+          return {
+            ...s,
+            bufferAmount: parseFloat(bufferAmount)
+          };
+        });
 
         const payload = {
           userId: adminUserId,
@@ -465,10 +497,16 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
                     <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{s.exchange}</td>
                     <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{s.scripName}</td>
                     <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">
-                      {s.parentBufferAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {typeof getDisplayBufferAmounts(s).parentBuffer === 'number'
+                        ? getDisplayBufferAmounts(s).parentBuffer.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : '-'
+                      }
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400">
-                      {s.bufferAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {typeof getDisplayBufferAmounts(s).ownBuffer === 'number'
+                        ? getDisplayBufferAmounts(s).ownBuffer.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : '-'
+                      }
                     </td>
                     <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400 text-xs">
                       {formatDate(s.updatedDate)}

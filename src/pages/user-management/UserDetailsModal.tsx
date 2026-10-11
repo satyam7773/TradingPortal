@@ -22,6 +22,7 @@ import { DeletedTrades } from '../reports';
 import RejectionLog from '../dashboard/RejectionLog';
 import IntradayHistory from '../dashboard/IntradayHistory';
 import AccountSummary from '../reports/AccountSummary';
+import Settlement from '../reports/Settlement';
 import { useModalDepth } from '../../contexts/ModalContext';
 
 interface UserData {
@@ -802,6 +803,15 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               Account Summary
             </button>
             <button
+              onClick={() => setActiveTab('settlement')}
+              className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'settlement'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
+            >
+              Settlement
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'settings'
                 ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
@@ -810,8 +820,10 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             >
               Settings
             </button>
-            {/* Dynamic menu tabs (promote quick actions to top-level tabs) */}
-            {userDetails?.userSettings?.menus?.map((menu) => (
+            {/* Dynamic menu tabs (promote quick actions to top-level tabs) - Filter out hardcoded tabs to prevent duplicates */}
+            {userDetails?.userSettings?.menus?.filter(menu => 
+              !['accountSummary', 'account-summary', 'settings', 'positions', 'details', 'userList', 'user-list', 'trades', 'deletedTrades', 'deleted-trades', 'rejectionLogs', 'rejectionLog', 'rejection-logs', 'intradayHistory', 'intraday-history', 'settlement', 'settlementReport'].includes(menu.name)
+            ).map((menu) => (
               <button
                 key={menu.name}
                 onClick={() => setActiveTab(menu.name)}
@@ -1216,6 +1228,11 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 {/* Account Summary Tab */}
                 {activeTab === 'accountSummary' && (
                   <AccountSummary username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )}
+
+                {/* Settlement Tab */}
+                {activeTab === 'settlement' && (
+                  <Settlement username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
                 )}
               </>
             );

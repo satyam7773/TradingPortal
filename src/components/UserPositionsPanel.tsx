@@ -32,7 +32,8 @@ interface UserPositionsPanelProps {
 
 const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId, user, depth = 0 }) => {
   console.log('user', user?.userSettings?.userInfo)
-  
+  console.log('user', user)
+
   // Guard: If user is null/undefined, show loading message
   if (!user) {
     return (
@@ -41,11 +42,11 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       </div>
     );
   }
-  
+
   // Calculate z-index based on depth prop (if provided) or modal context
   let modalZIndex: number;
   let childModalZIndex: number;
-  
+
   if (depth > 0) {
     // If depth is provided, calculate z-index from it
     modalZIndex = 10000 + (depth * 5000);
@@ -56,10 +57,10 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     modalZIndex = getNextZIndex();
     childModalZIndex = modalZIndex + 1000;
   }
-  
+
   // Get user details modal hook for opening UserDetailsModal
   const { selectedUser, setSelectedUser, isLoadingUser, handleUserNameClick } = useUserDetailsModal();
-  
+
   // Log when selectedUser changes
   useEffect(() => {
     console.log("📢 selectedUser state changed in UserPositionsPanel:", {
@@ -68,7 +69,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       userId: selectedUser?.id,
     });
   }, [selectedUser]);
-  
+
   // --- State (mostly copied from Positions.tsx) ---
   const [selectedExchange, setSelectedExchange] = useState<string>('All Exchanges');
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
@@ -81,7 +82,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
-  
+
   // Own positions modal state
   const [showOwnPositionDetailModal, setShowOwnPositionDetailModal] = useState(false);
   const [ownDetailModalData, setOwnDetailModalData] = useState<any[]>([]);
@@ -89,7 +90,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [ownDetailModalSymbol, setOwnDetailModalSymbol] = useState<string>('');
   const [loadingOwnPosition, setLoadingOwnPosition] = useState(false);
   const [selectedOwnPosition, setSelectedOwnPosition] = useState<any>(null);
-  
+
   // View position modal state
   const [showRowClickModal, setShowRowClickModal] = useState(false);
   const [rowClickModalData, setRowClickModalData] = useState<any>(null);
@@ -97,7 +98,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [selectedViewPosition, setSelectedViewPosition] = useState<any>(null);
   const [viewModalExchange, setViewModalExchange] = useState<string>('All Exchanges');
   const [viewModalSymbol, setViewModalSymbol] = useState<string>('');
-  
+
   // Trades modal state
   const [showTradesModal, setShowTradesModal] = useState(false);
   const [tradesModalSymbol, setTradesModalSymbol] = useState<string>('');
@@ -106,10 +107,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
 
 
-    const isManualOrderEnabled =
-  user?.userSettings?.userInfo?.find(
-    (item: any) => item.toggle === 'manualOrder'
-  )?.value ?? false;
+  const isManualOrderEnabled = user?.userInfo?.manualOrder ?? false;
+  // const isManualOrderEnabled = true
 
   const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>(
     isManualOrderEnabled ? 'addOrder' : 'cfMarginSquareOff'
@@ -142,13 +141,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     else orderModal.setIsDraggingSell(true);
   };
 
- useEffect(() => {
-  setTab(
-    isManualOrderEnabled
-      ? 'addOrder'
-      : 'cfMarginSquareOff'
-  );
-}, [isManualOrderEnabled]);
+  useEffect(() => {
+    setTab(
+      isManualOrderEnabled
+        ? 'addOrder'
+        : 'cfMarginSquareOff'
+    );
+  }, [isManualOrderEnabled]);
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -303,7 +302,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     });
   }, [unsubscribeCurrentFeed]);
 
-  
+
   const setupLivePositionFeed = useCallback(async (positionsList: any[]) => {
     if (!isManualOrderEnabled) return;
     if (!userId) return;
@@ -334,7 +333,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           exchange: p.exchange,
           tradeSymbol: p.tradeSymbol,
           position: p.positionSide === "BUY" ? "BUY" : "SELL",
-          quantity: p.netQuantity || 0,
+          quantity: p.lots || 0, // ✅ Use p.lots like Positions.tsx (NOT p.netQuantity)
           averagePrice: p.averagePrice || 0,
           ltp: null,
           pnl: p.unrealisedPnl || 0,
@@ -342,7 +341,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           totalPnl: p.realisedPnl || 0,
           token: p.token,
           userId: Number(userId),
-          netQuantity: p.netQuantity,
+          netQuantity: p.netQuantity, // ✅ Keep netQuantity for P&L calculations
           realisedPnl: p.realisedPnl || 0,
           marginUsed: p.marginUsed || 0,
         }));
@@ -364,9 +363,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   // --- View handler (copied from Positions.tsx, but always uses userId) ---
   const handleView = async (targetExchange?: string, targetUserIds?: number[], ignoreSelectedSymbol = false, targetToken?: number) => {
     if (!isManualOrderEnabled) {
-    setFilteredPositions([]);
-    return;
-  }
+      setFilteredPositions([]);
+      return;
+    }
 
     const exchange = targetExchange || selectedExchange;
     if (!exchange) return;
@@ -388,7 +387,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             // Get username from users array if available
             const userInfo = Array.isArray(p.users) && p.users.length > 0 ? p.users[0] : {};
             const positionIds = userInfo.positionId || [0];
-            
+
             return {
               // ✅ Include actual positionId from API to handle multiple positions at same token
               positionId: `${p.exchange}_${p.token}_${positionIds[0] || userInfo.userId || userId}`,
@@ -413,11 +412,11 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
               marginUsed: p.marginUsed || 0,
             };
           });
-          
+
           if (selectedSymbol && !ignoreSelectedSymbol) {
             positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
           }
-          
+
           setFilteredPositions(positions);
           if (positions.length > 0) setupLivePositionFeed(positions);
         } else {
@@ -682,22 +681,20 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   // --- Add Order filter panel UI (matches screenshot) ---
   const filters = (
     <div className="space-y-4 p-4">
-      <div className="flex gap-2 mb-2">
-        {user.manualOrderEnabled
-          && (
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        {/* Left Column: Add Order Button (conditional) */}
+        {isManualOrderEnabled && (
+          <button
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'addOrder' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+            onClick={() => setTab('addOrder')}
+          >
+            Add Order
+          </button>
+        )}
 
-            <button
-              className={`flex-1 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'addOrder' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
-              onClick={() => setTab('addOrder')}
-            >
-              Add Order
-            </button>
-          )
-        }
-
-
+        {/* Right Column: CF Margin Square Off Button (always visible) */}
         <button
-          className={`flex-1 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'cfMarginSquareOff' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'cfMarginSquareOff' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'} ${isManualOrderEnabled ? '' : 'col-span-2'}`}
           onClick={() => setTab('cfMarginSquareOff')}
         >
           CF Margin Square Off
@@ -705,7 +702,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       </div>
 
 
-      {isManualOrderEnabled && (
+      {isManualOrderEnabled && tab === 'addOrder' && (
 
         <>
 
@@ -833,23 +830,36 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- Buy/Sell modal and close selected logic from Positions page ---
   const handleOpenModifyModal = (p: any, targetType: 'BUY' | 'SELL') => {
+    // ✅ Transform users to format expected by OrderModal: { userId, username, name }
+    const transformedClients = users
+      .filter((u: any) => u.id !== 0 && u.id !== '0')
+      .map((u: any) => ({
+        userId: u.id || u.userId,
+        username: u.username || u.name || '',
+        name: u.name || u.username || ''
+      }));
+
     // ✅ If roleId = 4 (client), pass direct userId. Otherwise (cumulative), allow user selection
     if (Number(displayRoleId) === 4) {
       // Client mode: set the specific user as selected (disabled field)
-      const matchedProfile = users.find((u: any) => u.username === p.username);
-      const targetClientId = p.userId || matchedProfile?.id || userId;
-      orderModal.setSelectedClient({ userId: targetClientId, name: matchedProfile?.name || p.username, username: p.username });
-      orderModal.setClientSearchTerm(`${matchedProfile?.name || p.username} (${p.username})`);
+      const matchedProfile = transformedClients.find((u: any) => u.username === p.username);
+      const targetClientId = p.userId || matchedProfile?.userId || userId;
+      orderModal.setSelectedClient({
+        userId: targetClientId,
+        name: matchedProfile?.name || p.username,
+        username: matchedProfile?.username || p.username
+      });
+      orderModal.setClientSearchTerm(`${matchedProfile?.name || p.username} (${matchedProfile?.username || p.username})`);
       orderModal.setAvailableClients([]);
     } else {
-      // Cumulative mode: allow user selection
-      if (users.length > 0) {
-        orderModal.setAvailableClients(users);
-        orderModal.setSelectedClient(users[0]);
-        orderModal.setClientSearchTerm(users[0].username);
+      // Cumulative mode: allow user selection without pre-selecting the first one
+      if (transformedClients.length > 0) {
+        orderModal.setAvailableClients(transformedClients);
+        orderModal.setSelectedClient(null); // Don't pre-select - require user to choose
+        orderModal.setClientSearchTerm(''); // Clear search term
       }
     }
-    
+
     maxAvailableQuantityRef.current = p.exchange === 'CALLPUT' ? Math.abs(p.quantity) : 999999;
     const cachedConfig = p.token ? instrumentConfigRef.current[p.token] : null;
     const mergedConfig = { exchange: p.exchange, tradeSymbol: p.tradeSymbol, instrumentName: p.tradeSymbol, script: p.tradeSymbol, lotSize: cachedConfig?.lotSize || 100 };
@@ -877,12 +887,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         Number(userId),
         p.token || 0,
       );
-      
+
       console.log("📦 Own positions API response:", response);
 
       if (response?.responseCode === '0' && response.data) {
         console.log("🎯 Transforming API response data...", { responseDataLength: response.data.length, parentPosition: p });
-        
+
         // Transform API response data to match modal structure
         const userPositions: any[] = response.data.map((pos: any, idx: number) => {
           const transformed = {
@@ -909,9 +919,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           console.log(`📝 Transformed position [${idx}]:`, { raw: pos, transformed });
           return transformed;
         });
-        
+
         console.log("✅ Final transformed array:", userPositions);
-        
+
         // Set data for modal display
         setOwnDetailModalData(userPositions);
         console.log("✅ Called setOwnDetailModalData with:", userPositions.length, "items");
@@ -1054,13 +1064,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   };
 
   useEffect(() => {
-  if (!isManualOrderEnabled) {
-    unsubscribeCurrentFeed();
-    setFilteredPositions([]);
-    setPositionData(null);
-    setSelectedPositions(new Set());
-  }
-}, [isManualOrderEnabled, unsubscribeCurrentFeed]);
+    if (!isManualOrderEnabled) {
+      unsubscribeCurrentFeed();
+      setFilteredPositions([]);
+      setPositionData(null);
+      setSelectedPositions(new Set());
+    }
+  }, [isManualOrderEnabled, unsubscribeCurrentFeed]);
 
   // ✅ Debug logging for own modal state
   useEffect(() => {
@@ -1095,22 +1105,22 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       storageKey="userPositions:showFilters"
     >
       <div className="flex flex-col h-full bg-white/70 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg backdrop-blur-sm overflow-hidden">
-       
-       {isManualOrderEnabled && (
-       
-        <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-r from-white/80 via-blue-50/80 to-white/80 dark:from-slate-800/80 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><Briefcase className="w-7 h-7 text-blue-500" /> Positions</h1>
-            <div className="grid grid-cols-4 gap-6">
-              <div className="text-center"><div className="text-xl font-bold text-slate-900 dark:text-white">{stats.total}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
-              <div className="text-center"><div className="text-xl font-bold text-blue-600">{stats.buy}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
-              <div className="text-center"><div className="text-xl font-bold text-red-600">{stats.sell}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
-              <div className="text-center"><div className={`text-xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Net P&L</div></div>
+
+        {isManualOrderEnabled && tab === 'addOrder' && (
+
+          <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-r from-white/80 via-blue-50/80 to-white/80 dark:from-slate-800/80 backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><Briefcase className="w-7 h-7 text-blue-500" /> Positions</h1>
+              <div className="grid grid-cols-4 gap-6">
+                <div className="text-center"><div className="text-xl font-bold text-slate-900 dark:text-white">{stats.total}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
+                <div className="text-center"><div className="text-xl font-bold text-blue-600">{stats.buy}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
+                <div className="text-center"><div className="text-xl font-bold text-red-600">{stats.sell}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
+                <div className="text-center"><div className={`text-xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Net P&L</div></div>
+              </div>
             </div>
           </div>
-        </div>
-       )}
-        {isManualOrderEnabled && selectedPositions.size > 0 && (
+        )}
+        {isManualOrderEnabled && tab === 'addOrder' && selectedPositions.size > 0 && (
           <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
             <span className="text-sm font-bold text-red-700 dark:text-red-300">{selectedPositions.size} positions selected</span>
             <button onClick={handleCloseSelectedPositions} disabled={loading} className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow-sm">
@@ -1140,7 +1150,6 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                     )}
                     <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Buy</th>
                     <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Username</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Exchange</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Position</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Symbol</th>
@@ -1152,7 +1161,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {filteredPositions.length === 0 ? (
-                    <tr><td colSpan={Number(displayRoleId) !== 4 ? 13 : 11} className="text-center py-8 text-gray-400">No positions found.</td></tr>
+                    <tr><td colSpan={Number(displayRoleId) !== 4 ? 12 : 10} className="text-center py-8 text-gray-400">No positions found.</td></tr>
                   ) : filteredPositions.map((p, index) => (
                     <tr key={p.positionId || `pos_${index}`} className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors ${selectedPositions.has(p.positionId) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                       <td className="px-3 py-4 text-center">
@@ -1165,14 +1174,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                           <td className="px-4 py-4 text-center"><button onClick={() => { console.log("🖱️ Own User button clicked for position:", p); handleOpenOwnPositionModal(p); }} disabled={loadingOwnPosition} className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900 rounded-lg" title="View own positions"><Eye className="w-4 h-4 text-purple-600" /></button></td>
                         </>
                       )}
-                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'BUY')} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
-                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'SELL')} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
-                      <td className="px-6 py-4 text-left text-sm font-semibold text-blue-600">{p.username}</td>
+                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'BUY')} disabled={false} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
+                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'SELL')} disabled={false} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
                       <td className="px-6 py-4 text-left"><span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 uppercase">{p.exchange}</span></td>
                       <td className="px-6 py-4 text-left"><span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${p.position === 'BUY' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-red-600 border-red-200 bg-red-50'}`}>{p.position}</span></td>
-                      <td className={`px-6 py-4 text-left font-bold cursor-pointer hover:underline ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`} onClick={() => { console.log("📈 Opening trades modal for symbol:", p.tradeSymbol); setTradesModalSymbol(p.tradeSymbol); setTradesModalToken(p.token || null); setTradesModalExchange(p.exchange); setShowTradesModal(true); }}>{p.tradeSymbol}</td>
+                      <td className={`px-6 py-4 text-left font-bold cursor-pointer hover:underline ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`} onClick={() => { setTradesModalSymbol(p.tradeSymbol); setTradesModalToken(p.token || null); setTradesModalExchange(p.exchange); setShowTradesModal(true); }}>{p.tradeSymbol}</td>
                       <td className="px-6 py-4 text-center font-bold text-sm">{p.quantity}</td>
-                      <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="px-6 py-4 text-right font-mono text-sm">{p.averagePrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className={`px-6 py-4 text-right font-mono text-sm font-bold ${getCMPColor(p.ltp, p.averagePrice)}`}>{p.ltp?.toFixed(2) || '0.00'}</td>
                       <td className={`px-6 py-4 text-right font-mono text-sm font-bold rounded-lg ${getPnLColor(p.pnl)}`}>{p.pnl.toFixed(2)}</td>
                     </tr>
@@ -1190,12 +1198,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           )}
         </div>
-        
+
         {/* Own User Position Details Modal */}
         {showOwnPositionDetailModal && createPortal(
           <>
             {/* Backdrop - LOWER z-index */}
-            <div 
+            <div
               className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               style={{ zIndex: childModalZIndex }}
               onClick={() => {
@@ -1205,13 +1213,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                 setLoadingOwnPosition(false);
               }}
             />
-            
+
             {/* Modal Container - HIGHER z-index */}
-            <div 
+            <div
               className="fixed inset-0 flex items-center justify-center p-4"
               style={{ zIndex: childModalZIndex + 1, pointerEvents: 'auto' }}
             >
-              <div 
+              <div
                 className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col"
                 style={{ pointerEvents: 'auto' }}
                 onClick={(e) => e.stopPropagation()}
@@ -1272,11 +1280,10 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                             </td>
                             <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{pos.tradeSymbol}</td>
                             <td className="px-6 py-4 text-center">
-                              <span className={`text-xs font-bold px-3 py-1 rounded-lg ${
-                                pos.netPosition === "BUY"
+                              <span className={`text-xs font-bold px-3 py-1 rounded-lg ${pos.netPosition === "BUY"
                                   ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                                   : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                              }`}>
+                                }`}>
                                 {pos.netPosition}
                               </span>
                             </td>
@@ -1304,7 +1311,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           </>,
           document.body
         )}
-        
+
         {/* View Position Details Modal */}
         {showRowClickModal && rowClickModalData && createPortal(
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: childModalZIndex, pointerEvents: 'none' }}>
@@ -1353,7 +1360,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           </div>,
           document.body
         )}
-        
+
         {/* Order Modals */}
         <OrderModal
           isOpen={orderModal.showBuyOrderModal}
@@ -1369,9 +1376,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           onOrderMethodChange={orderModal.setBuyOrderType}
           orderRemark={orderModal.buyOrderRemark}
           onOrderRemarkChange={orderModal.setBuyOrderRemark}
-          isAdminUser={true}
+          isAdminUser={Number(displayRoleId) !== 4}
           clientSearchTerm={orderModal.clientSearchTerm}
           onClientSearchChange={orderModal.setClientSearchTerm}
+          availableClients={orderModal.availableClients}
+          selectedClient={orderModal.selectedClient}
+          onClientSelect={orderModal.setSelectedClient}
           isSubmitting={orderModal.isBuyOrderSubmitting}
           onSubmit={handleBuySubmitAction}
           onCancel={() => orderModal.resetBuyForm(true)}
@@ -1393,9 +1403,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           onOrderMethodChange={orderModal.setSellOrderType}
           orderRemark={orderModal.sellOrderRemark}
           onOrderRemarkChange={orderModal.setSellOrderRemark}
-          isAdminUser={true}
+          isAdminUser={Number(displayRoleId) !== 4}
           clientSearchTerm={orderModal.clientSearchTerm}
           onClientSearchChange={orderModal.setClientSearchTerm}
+          availableClients={orderModal.availableClients}
+          selectedClient={orderModal.selectedClient}
+          onClientSelect={orderModal.setSelectedClient}
           isSubmitting={orderModal.isSellOrderSubmitting}
           onSubmit={handleSellSubmitAction}
           onCancel={() => orderModal.resetSellForm(true)}
@@ -1403,7 +1416,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           onDragStart={(e) => handleDragSetup(e, 'SELL')}
           isDragging={orderModal.isDraggingSell}
         />
-        
+
         {/* User Details Modal - for clicking on username/parent in Own User Positions */}
         {selectedUser && (
           <>

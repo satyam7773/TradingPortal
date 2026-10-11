@@ -8,7 +8,21 @@ import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { useSorting } from '../../hooks/useSorting';
 import { API_ENDPOINTS } from '../../config/apiConfig';
 
-const Settlement: React.FC = () => {
+interface SettlementProps {
+  username?: string;
+  userId?: string | number;
+  roleId?: string;
+  user?: any;
+}
+
+const Settlement: React.FC<SettlementProps> = ({
+  username,
+  userId: propsUserId,
+  roleId,
+  user: userDetails
+}) => {
+  // Modal mode detection
+  const isModalMode = !!userDetails;
   const getMondayOfCurrentWeek = () => {
     const d = new Date();
     const day = d.getDay();
@@ -40,7 +54,7 @@ const Settlement: React.FC = () => {
   // Get logged in user ID
   const userDataStr = localStorage.getItem('userData');
   const userData = userDataStr ? JSON.parse(userDataStr) : null;
-  const loggedInUserId = userData?.userId || 31;
+  const loggedInUserId = isModalMode ? Number(propsUserId) || 0 : (userData?.userId || 31);
 
   // Initialize download hook
   const downloadReport = useDownloadReport({
@@ -78,10 +92,9 @@ const Settlement: React.FC = () => {
   const handleView = async () => {
     setLoading(true);
     try {
-      const userData = JSON.parse(localStorage.getItem('userData') || '{}');
       const response = await userManagementService.fetchSettlement({
-        from: dates.from, to: dates.to, opening, searchUserId: userData?.userId
-      }, userData?.userId);
+        from: dates.from, to: dates.to, opening, searchUserId: loggedInUserId
+      }, loggedInUserId);
       if (response?.responseCode === '0') setMainData(response.data);
       else toast.error("Failed to load settlement");
     } catch { toast.error("Error connecting to server"); }

@@ -100,7 +100,7 @@ const ExchangeSchedulePage: React.FC = () => {
   const fetchDefaultTimings = async (exchangeId: number) => {
     setLoadingDefaultTimings(true)
     try {
-      const response = await fetch(`https://api-staging.rivoplus.live/user/settings/getDefaultTiming?exchangeId=${exchangeId}`, {
+      const response = await fetch(`${API_ENDPOINTS.SETTINGS.GET_DEFAULT_TIMING}?exchangeId=${exchangeId}`, {
         method: 'GET'
       })
       const result = await response.json()
@@ -155,7 +155,7 @@ const ExchangeSchedulePage: React.FC = () => {
         }
       }
 
-      const response = await fetch('https://api-staging.rivoplus.live/user/settings/editDefaultTiming', {
+      const response = await fetch(API_ENDPOINTS.SETTINGS.EDIT_DEFAULT_TIMING, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
@@ -359,7 +359,7 @@ const ExchangeSchedulePage: React.FC = () => {
             requestBody.data.particulars = change.particulars || ''
           }
 
-          const response = await fetch('https://api-staging.rivoplus.live/user/settings/editHolidays', {
+          const response = await fetch(API_ENDPOINTS.SETTINGS.EDIT_HOLIDAYS, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)

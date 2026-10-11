@@ -18,6 +18,12 @@ interface ScriptMaster {
   allowTradeDisplay: string;
   allowTrade: string;
   reverseDelay: number;
+  // CALLPUT-specific fields
+  callputTradeAttribute?: string;
+  callputTradeAttributeDisplay?: string;
+  callputAllowTrade?: string;
+  callputAllowTradeDisplay?: string;
+  callputReverseDelay?: number;
   updatedDate: string;
   exchange?: string;
 }
@@ -118,6 +124,16 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
 
     setScripts(prev => prev.map(s => {
       if (selectedIds.has(s.instrumentId)) {
+        // For CALLPUT exchange, update callput-specific fields
+        if (s.exchange === 'CALLPUT') {
+          return {
+            ...s,
+            ...(tradeAttribute && { callputTradeAttribute: tradeAttribute, callputTradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
+            ...(allowTrade && { callputAllowTrade: allowTrade, callputAllowTradeDisplay: allowTradeOptions[allowTrade] }),
+            ...(reverseDelay && { callputReverseDelay: parseInt(reverseDelay) })
+          };
+        }
+        // For other exchanges, update regular fields
         return {
           ...s,
           ...(tradeAttribute && { tradeAttribute, tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
@@ -153,12 +169,24 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
         }, {});
 
       for (const exchange of Object.keys(scriptsByExchange)) {
-        const scripMasters = scriptsByExchange[exchange].map((s: any) => ({
-          ...s,
-          ...(tradeAttribute && { tradeAttribute, tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
-          ...(allowTrade && { allowTrade, allowTradeDisplay: allowTradeOptions[allowTrade] }),
-          ...(reverseDelay && { reverseDelay: parseInt(reverseDelay) })
-        }));
+        const scripMasters = scriptsByExchange[exchange].map((s: any) => {
+          // For CALLPUT exchange, use callput-specific fields
+          if (exchange === 'CALLPUT') {
+            return {
+              ...s,
+              ...(tradeAttribute && { callputTradeAttribute: tradeAttribute, callputTradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
+              ...(allowTrade && { callputAllowTrade: allowTrade, callputAllowTradeDisplay: allowTradeOptions[allowTrade] }),
+              ...(reverseDelay && { callputReverseDelay: parseInt(reverseDelay) })
+            };
+          }
+          // For other exchanges, use regular fields
+          return {
+            ...s,
+            ...(tradeAttribute && { tradeAttribute, tradeAttributeDisplay: tradeAttributeOptions[tradeAttribute] }),
+            ...(allowTrade && { allowTrade, allowTradeDisplay: allowTradeOptions[allowTrade] }),
+            ...(reverseDelay && { reverseDelay: parseInt(reverseDelay) })
+          };
+        });
 
         const payload = {
           userId: adminUserId,
@@ -207,6 +235,32 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
 
   // Ref to track if we've already loaded exchanges
   const exchangesLoadedRef = React.useRef(false);
+
+  // Helper function to get display values based on exchange type
+  const getDisplayValue = (script: ScriptMaster, field: 'tradeAttribute' | 'allowTrade' | 'reverseDelay') => {
+    if (script.exchange === 'CALLPUT') {
+      switch (field) {
+        case 'tradeAttribute':
+          return script.callputTradeAttributeDisplay || '-';
+        case 'allowTrade':
+          return script.callputAllowTradeDisplay || '-';
+        case 'reverseDelay':
+          return script.callputReverseDelay ?? '-';
+        default:
+          return '-';
+      }
+    }
+    switch (field) {
+      case 'tradeAttribute':
+        return script.tradeAttributeDisplay || '-';
+      case 'allowTrade':
+        return script.allowTradeDisplay || '-';
+      case 'reverseDelay':
+        return script.reverseDelay ?? '-';
+      default:
+        return '-';
+    }
+  };
 
   // Helper to format Date
   const formatDate = (dateString: string) => {
@@ -634,9 +688,9 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
                         <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">
                           {s.lotSize.toLocaleString('en-IN')}
                         </td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{s.tradeAttributeDisplay}</td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{s.allowTradeDisplay}</td>
-                        <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{s.reverseDelay}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{getDisplayValue(s, 'tradeAttribute')}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{getDisplayValue(s, 'allowTrade')}</td>
+                        <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{getDisplayValue(s, 'reverseDelay')}</td>
                       </tr>
                     ))
                 )}

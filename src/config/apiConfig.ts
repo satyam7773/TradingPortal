@@ -1,13 +1,15 @@
 /**
  * Centralized API Configuration
  * 
- * Change BASE_URL and WEBSOCKET_URL here to update all API endpoints across the application
- * Uses VITE_API_BASE_URL and VITE_WEBSOCKET_URL environment variables with fallback to staging
+ * Change BASE_URL and WEBSOCKET_URL by setting environment variables:
+ * - VITE_API_BASE_URL (required, set in .env.production and .env.staging)
+ * - VITE_WEBSOCKET_URL (optional)
+ * - VITE_ENVIRONMENT (optional, defaults to 'production' or 'staging' based on build mode)
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || 'wss://quotes.rivoplus.live/ws/market'
-const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || 'staging'
+const ENVIRONMENT = import.meta.env.VITE_ENVIRONMENT || (import.meta.env.PROD ? 'production' : 'development')
 
 export const API_ENDPOINTS = {
   // Reports
@@ -37,6 +39,7 @@ export const API_ENDPOINTS = {
   // OMS (Order Management System)
   OMS: {
     POSITIONS: `${BASE_URL}/oms/positions`,
+    POSITIONSV2: `${BASE_URL}/oms/positions/userWise`,
     POSITIONS_PORTAL: `${BASE_URL}/oms/positions/portal`,
     CLOSE_MULTIPLE_POSITIONS: `${BASE_URL}/oms/closeMultiplePositions`,
     POSITIONS_PORTAL_CLIENT: `${BASE_URL}/oms/positions/portal/ClientPositions`,
@@ -84,6 +87,9 @@ export const API_ENDPOINTS = {
   SETTINGS: {
     EXCHANGE_HOLIDAYS: `${BASE_URL}/user/settings/exchangeHolidays`,
     EXCHANGE_HOLIDAYS_UPDATE: `${BASE_URL}/user/settings/exchangeHolidays/update`,
+    EDIT_HOLIDAYS: `${BASE_URL}/user/settings/editHolidays`,
+    GET_DEFAULT_TIMING: `${BASE_URL}/user/settings/getDefaultTiming`,
+    EDIT_DEFAULT_TIMING: `${BASE_URL}/user/settings/editDefaultTiming`,
     UPDATE_SCRIP_BUFFER_SETTINGS: `${BASE_URL}/user/portal/updateScripBufferSettings`,
     FETCH_SCRIP_BUFFER_SETTINGS: `${BASE_URL}/user/portal/fetchScripBufferSettings`,
     VIEW_SCRIP_BUFFER_UPDATED_USER: `${BASE_URL}/user/portal/viewScripBufferUpdatedUser`,
@@ -95,6 +101,8 @@ export const API_ENDPOINTS = {
     ALLOW_TRADE: `${BASE_URL}/user/portal/allowTrade`,
     EXCHANGE_LOT_LIMIT: `${BASE_URL}/user/portal/exchangeLotLimit`,
     UPDATE_EXCHANGE_LOT_LIMIT: `${BASE_URL}/user/portal/updateExchangeLotLimit`,
+    ADMIN_MESSAGES: `${BASE_URL}/user/settings/adminMessages`,
+    SAVE_ADMIN_MESSAGE: `${BASE_URL}/user/settings/saveAdminMessage`,
   },
 
   // Portal

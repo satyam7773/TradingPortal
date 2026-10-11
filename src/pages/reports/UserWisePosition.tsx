@@ -176,19 +176,51 @@ const UserWisePosition: React.FC = () => {
       if (response?.responseCode === '0') {
         const posData = response.data;
         
-        // Initialize bid/ask from ltp for all positions (will be overridden by market data)
-        if (posData?.positions) {
-          posData.positions = posData.positions.map((pos: PositionData) => ({
-            ...pos,
-            bid: pos.bid || pos.ltp || 0,
-            ask: pos.ask || pos.ltp || 0
-          }));
+        // Transform positionsData from /oms/positions endpoint to match component structure
+        if (posData?.positionsData) {
+          const now = Date.now();
+          posData.positions = posData.positionsData.map((pos: any) => {
+            // Calculate positionDays from updatedAt timestamp
+            const updatedTime = new Date(pos.updatedAt).getTime();
+            const positionDays = Math.floor((now - updatedTime) / (1000 * 60 * 60 * 24));
+            
+            // Calculate pnlPercentage: (unrealisedPnl / (averagePrice * netQuantity)) * 100
+            const totalInvested = pos.averagePrice * pos.netQuantity;
+            const pnlPercentage = totalInvested !== 0 
+              ? (pos.unrealisedPnl / totalInvested) * 100 
+              : 0;
+            
+            return {
+              positionId: pos.positionId,
+              positionDate: new Date(pos.updatedAt).getTime(),
+              positionDays: pos.positionDays,
+              username: pos.username || '',
+              parentUsername: pos.parentUsername || '',
+              exchange: pos.exchange,
+              tradeSymbol: pos.tradeSymbol,
+              position: pos.positionSide as 'BUY' | 'SELL',
+              quantity: pos.netQuantity,
+              netQuantity: pos.netQuantity,
+              averagePrice: pos.averagePrice,
+              ltp: pos.bidAsk || 0,
+              bid: pos.bidAsk || 0,
+              ask: pos.bidAsk || 0,
+              buyQty: pos.buyQuantity,
+              sellQty: pos.sellQuantity,
+              pnl: pos.unrealisedPnl,
+              pnlPercentage: pnlPercentage,
+              realisedPnl: pos.realisedPnl,
+              totalPnl: pos.unrealisedPnl + pos.realisedPnl,
+              marginUsed: pos.marginUsed,
+              token: pos.token
+            };
+          });
         }
         
         setPositionData(posData);
         setFilteredPositions(posData?.positions || []);
 
-        if (posData?.positions?.length > 0) {
+        if (posData?.positions && posData.positions.length > 0) {
           const currentUser = JSON.parse(localStorage.getItem('userData') || '{}');
           setupSocketSubscriptions(currentUser.userId, posData.positions);
         }

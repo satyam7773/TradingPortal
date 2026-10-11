@@ -864,7 +864,9 @@ class UserManagementService {
     const storedUserData = userDataStr ? JSON.parse(userDataStr) : null;
     const loggedInUserId = storedUserData?.userId || 31;
 
-    const data: any = {};
+    const data: any = {
+      userId: userId || loggedInUserId
+    };
 
     // Only add exchange if not empty (not "All Exchanges)
     if (exchange && exchange !== "All Exchanges") {
@@ -878,13 +880,15 @@ class UserManagementService {
 
     const request = {
       requestTimestamp: Date.now().toString(),
-      userId: loggedInUserId,
+      userId: userId || loggedInUserId,
       data,
     };
 
     try {
+      // Use /oms/positions endpoint instead of /reports/userWisePositions
+      // This endpoint returns positionsData array with username, parentUsername, and all required fields
       const response = await apiClient.post<any>(
-        API_ENDPOINTS.REPORTS.USER_WISE_POSITIONS,
+        API_ENDPOINTS.OMS.POSITIONSV2,
         request,
       );
       return response;

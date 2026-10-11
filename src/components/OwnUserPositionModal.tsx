@@ -23,6 +23,7 @@ interface OwnUserPositionData {
   netBuyAveragePrice: number;
   netSellQuantity: number;
   netSellAveragePrice: number;
+  lotSize?: number; // Lot size for calculating actual P&L
 }
 
 interface OwnUserPositionModalProps {
@@ -101,7 +102,7 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
         p.netPosition === "BUY"
           ? livePrice - p.netAvgPrice
           : p.netAvgPrice - livePrice;
-      const livePnl = priceChange * Math.abs(p.netQuantity);
+      const livePnl = priceChange * Math.abs(p.netQuantity) * (p.lotSize || 1);
       
       totalPnL += livePnl;
     });
@@ -233,16 +234,16 @@ const OwnUserPositionModal: React.FC<OwnUserPositionModalProps> = ({
                 const tick = p.token ? liveTicks[p.token] : null;
                 const livePrice = tick ? (p.netPosition === "BUY" ? tick.bid : tick.ask) : p.price;
                 
-                // Calculate live P&L based on current price
+                // Calculate live P&L based on current price (multiply by lotSize)
                 const priceChange =
                   p.netPosition === "BUY"
                     ? livePrice - p.netAvgPrice
                     : p.netAvgPrice - livePrice;
                 const livePnl =
-                  priceChange * Math.abs(p.netQuantity);
+                  priceChange * Math.abs(p.netQuantity) * (p.lotSize || 1);
                 
                 const amount =
-                  p.netAvgPrice * Math.abs(p.netQuantity);
+                  p.netAvgPrice * Math.abs(p.netQuantity) * (p.lotSize || 1);
                 const livePnlPercentage =
                   amount !== 0 ? (livePnl * 100) / amount : 0;
 

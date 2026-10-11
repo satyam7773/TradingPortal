@@ -228,9 +228,11 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
 
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">P/L % :</label>
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">P/L % (Min) :</label>
                       <input
                         type="number"
+                        step="0.01"
+                        min="0"
                         placeholder="2.00"
                         value={filterPnlMin}
                         onChange={(e) => setFilterPnlMin(e.target.value)}
@@ -239,9 +241,11 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Position Days :</label>
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Position Days (Min) :</label>
                       <input
                         type="number"
+                        step="1"
+                        min="0"
                         placeholder="10"
                         value={filterDaysMin}
                         onChange={(e) => setFilterDaysMin(e.target.value)}

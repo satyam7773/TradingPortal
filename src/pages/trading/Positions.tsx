@@ -693,11 +693,11 @@ const Positions: React.FC = () => {
     p: PositionData,
     targetType: "BUY" | "SELL",
   ) => {
-    // ✅ Use pre-loaded clients from state
+    // ✅ Use pre-loaded clients from state without pre-selecting the first one
     if (isAdminUser && availableClients.length > 0) {
       orderModal.setAvailableClients(availableClients);
-      orderModal.setSelectedClient(availableClients[0]);
-      orderModal.setClientSearchTerm(availableClients[0].username);
+      orderModal.setSelectedClient(null); // Don't pre-select - require user to choose
+      orderModal.setClientSearchTerm(''); // Clear search term
     }
 
     maxAvailableQuantityRef.current =
@@ -754,6 +754,7 @@ const Positions: React.FC = () => {
           netBuyAveragePrice: pos.netBuyAveragePrice,
           netSellQuantity: pos.netSellQuantity,
           netSellAveragePrice: pos.netSellAveragePrice,
+          lotSize: pos.lotSize, // Lot size for P&L calculation with multiplier
           exchange: pos.exchange || p.exchange,
           positionDays: pos.positionDays,
         }));
@@ -922,13 +923,17 @@ const Positions: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
+                    // Reset all filters to initial values (fresh page)
+                    setSelectedUserId(loggedInUserId);
                     const allExchangesValue = 'All Exchanges';
                     setSelectedExchange(allExchangesValue);
                     setSelectedSymbol("");
                     setSelectedToken(null);
+                    setSelectedPositions(new Set());
                     
-                    // Fetch symbols for All Exchanges
+                    // Fetch symbols for All Exchanges and trigger view
                     fetchSymbolsForExchange(allExchangesValue);
+                    handleView(allExchangesValue, [loggedInUserId]);
                   }}
                   className="flex-1 px-4 py-2 bg-slate-700 text-white rounded font-semibold text-sm transition"
                 >

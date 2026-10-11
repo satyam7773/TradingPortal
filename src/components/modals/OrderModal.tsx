@@ -100,6 +100,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
   const [clientSearchOpen, setClientSearchOpen] = useState(false)
   const [clientSearch, setClientSearch] = useState('')
   const clientDropdownRef = useRef<HTMLDivElement>(null)
+  const dropdownPortalRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
 
   // When modal opens or selected client changes, show the selected client's display name
   useEffect(() => {
@@ -107,13 +109,32 @@ const OrderModal: React.FC<OrderModalProps> = ({
       setClientSearch(`${selectedClient.username}`)
     } else if (!isOpen) {
       setClientSearch('')
+      setClientSearchOpen(false)
     }
   }, [selectedClient, isOpen])
+
+  // Update dropdown position when it opens
+  useEffect(() => {
+    if (clientSearchOpen && clientDropdownRef.current) {
+      const rect = clientDropdownRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width
+      })
+    }
+  }, [clientSearchOpen])
 
   // Handle click outside for dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (
+        clientDropdownRef.current && 
+        !clientDropdownRef.current.contains(target) &&
+        dropdownPortalRef.current &&
+        !dropdownPortalRef.current.contains(target)
+      ) {
         setClientSearchOpen(false)
       }
     }
@@ -139,8 +160,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
 
   // Filter clients based on search term
   const filteredClients = availableClients?.filter(client =>
-    client.username.toLowerCase().includes(clientSearch.toLowerCase()) ||
-    client.name.toLowerCase().includes(clientSearch.toLowerCase())
+    (client?.username?.toLowerCase()?.includes(clientSearch.toLowerCase()) || false) ||
+    (client?.name?.toLowerCase()?.includes(clientSearch.toLowerCase()) || false)
   ) || []
 
   // Fallback coordinates matching implementation mechanics
@@ -202,26 +223,42 @@ const OrderModal: React.FC<OrderModalProps> = ({
                           setClientSearchOpen(true)
                         }}
                         placeholder="Search client..."
-                        className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500"
+                        className="w-full px-3 py-3 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white font-medium focus:outline-none focus:border-blue-500 cursor-pointer"
                       />
 
-                      {/* Dropdown List */}
-                      {clientSearchOpen && (
-                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {/* Dropdown List - Using Portal for better z-index and positioning */}
+                      {clientSearchOpen && createPortal(
+                        <div 
+                          ref={dropdownPortalRef}
+                          className="z-[100002] bg-white dark:bg-slate-800 border-2 border-gray-300 dark:border-slate-600 rounded-lg shadow-2xl max-h-64 overflow-y-auto"
+                          style={{
+                            position: 'fixed',
+                            top: `${dropdownPosition.top}px`,
+                            left: `${dropdownPosition.left}px`,
+                            width: `${dropdownPosition.width}px`,
+                            pointerEvents: 'auto'
+                          }}
+                        >
                           {filteredClients.length > 0 ? (
-                            filteredClients.map((client) => (
+                            filteredClients.map((client, index) => (
                               <button
-                                key={client.userId}
+                                key={`${client.userId}-${index}`}
                                 type="button"
-                                onClick={() => {
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                }}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
                                   onClientSelect?.(client)
                                   setClientSearch(`${client.username}`)
                                   setClientSearchOpen(false)
                                 }}
-                                className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-gray-200 dark:border-slate-700 last:border-b-0"
+                                className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 active:bg-blue-100 dark:active:bg-blue-900/40 border-b border-gray-200 dark:border-slate-700 last:border-b-0 text-gray-900 dark:text-white transition-colors cursor-pointer"
                               >
-                                <div className="text-xs text-gray-600 dark:text-gray-400">
-                                  {client.username}
+                                <div className="text-xs font-medium">
+                                  {client.username} {client.name && `(${client.name})`}
                                 </div>
                               </button>
                             ))
@@ -230,7 +267,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
                               No clients found
                             </div>
                           )}
-                        </div>
+                        </div>,
+                        document.body
                       )}
                     </div>
                   ) : (

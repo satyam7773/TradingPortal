@@ -830,7 +830,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                         </td>
 
                         {/* REFERENCE PRICE - Repositioned next to main price */}
-                        <td className="px-6 py-4 text-right text-xs text-slate-500 font-mono">
+                        <td className="px-6 py-4 text-right text-xs text-slate-600 dark:text-slate-300 font-mono">
                           {trade.referencePrice ? trade.referencePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}
                         </td>
 

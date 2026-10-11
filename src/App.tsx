@@ -18,7 +18,8 @@ import {
   RunSettlement,
   ScriptBufferLimit,
   ScriptMaster,
-  TradeMarginPage
+  TradeMarginPage,
+  AdminMessages
 } from './pages'
 import CreateNewUser from './pages/user-management/CreateNewUser'
 import MarketWatch from './pages/dashboard/MarketWatch'
@@ -83,6 +84,7 @@ const App: React.FC = () => {
           <Route path="script-buffer-limit" element={<ScriptBufferLimit />} />
           <Route path="script-master" element={<ScriptMaster />} />
           <Route path="trade-margin" element={<TradeMarginPage />} />
+          <Route path="messages" element={<AdminMessages />} />
           <Route path="*" element={<ComingSoon />} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />

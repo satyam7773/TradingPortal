@@ -264,7 +264,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         }
       };
 
-      const response = await fetch('https://api-staging.rivoplus.live/oms/undoTrade', {
+      const response = await fetch(API_ENDPOINTS.OMS.UNDO_TRADE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
