@@ -114,6 +114,7 @@ class OrderService {
     lotValue: number,
     orderType: "MARKET" | "LIMIT" | "SL" = "MARKET",
     tradeOrderMethod?: string,
+    brokerage?: boolean,
     deviceId: string = getDeviceId(),
   ): Promise<PlaceOrderResponse> {
     // Determine tradeOrderMethod dynamically based on current user
@@ -135,6 +136,7 @@ class OrderService {
         price,
         token,
         lotValue,
+        ...(brokerage !== undefined && { brokerage }),  // ✅ Only include if passed
       },
     };
 
@@ -158,6 +160,7 @@ class OrderService {
     lotValue: number,
     orderType: "MARKET" | "LIMIT" | "SL" = "MARKET",
     tradeOrderMethod?: string,
+    brokerage?: boolean,
     deviceId: string = getDeviceId(),
   ): Promise<PlaceOrderResponse> {
     // Determine tradeOrderMethod dynamically based on current user
@@ -179,6 +182,7 @@ class OrderService {
         price,
         token,
         lotValue,
+        ...(brokerage !== undefined && { brokerage }),  // ✅ Only include if passed
       },
     };
 

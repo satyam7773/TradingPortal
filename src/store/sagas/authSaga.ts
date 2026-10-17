@@ -27,7 +27,7 @@ function* handleLogin(action: any): any {
     // Store the token
     TokenManager.setToken(loginResponse.token)
     
-    // Save complete user data to localStorage, including role, marketTradeRight, and changePasswordFlag if present
+    // Save complete user data to localStorage, including role, permissions, and changePasswordFlag if present
     const userData = {
       userId: loginResponse.userId,
       username: loginResponse.username,
@@ -37,7 +37,10 @@ function* handleLogin(action: any): any {
       token: loginResponse.token,
       changePasswordFlag: loginResponse.changePasswordFlag || false,
       firstLogin: loginResponse.firstLogin || false,
-      marketTradeRight: loginResponse.marketTradeRight || false // Permission to buy/sell
+      marketTradeRight: loginResponse.marketTradeRight || false, // Permission to buy/sell
+      manualOrder: loginResponse.manualOrder || false, // Permission to create manual orders
+      deleteTrade: loginResponse.deleteTrade || false, // Permission to delete trades
+      pendingToSuccess: loginResponse.pendingToSuccess || false // Permission to mark pending as success
     }
     localStorage.setItem('userData', JSON.stringify(userData))
 
@@ -139,7 +142,7 @@ function* handleLogin(action: any): any {
       // Don't fail login if config fetch fails
     }
 
-    // Dispatch success action, including role, marketTradeRight, and changePasswordFlag
+    // Dispatch success action, including role, permissions, and changePasswordFlag
     yield put(loginSuccess({ 
       token: loginResponse.token, 
       user: { 
@@ -151,7 +154,10 @@ function* handleLogin(action: any): any {
         role: loginResponse.role, // Add role to Redux user
         changePasswordFlag: loginResponse.changePasswordFlag || false,
         firstLogin: loginResponse.firstLogin || false,
-        marketTradeRight: loginResponse.marketTradeRight || false // Add market trade right permission
+        marketTradeRight: loginResponse.marketTradeRight || false, // Permission to buy/sell
+        manualOrder: loginResponse.manualOrder || false, // Permission to create manual orders
+        deleteTrade: loginResponse.deleteTrade || false, // Permission to delete trades
+        pendingToSuccess: loginResponse.pendingToSuccess || false // Permission to mark pending as success
       } 
     }))
     

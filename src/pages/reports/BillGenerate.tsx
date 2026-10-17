@@ -55,8 +55,8 @@ const BillGenerate: React.FC = () => {
     );
 
     const handleDownload = async (isPreview: boolean = false) => {
-        // 1. Validation
-        if (!userId || userId === 0) {
+        // 1. Validation - allow userId 0 (represents "All" users)
+        if (userId === null || userId === undefined) {
             toast.error('Please select a user before generating the report.');
             return;
         }

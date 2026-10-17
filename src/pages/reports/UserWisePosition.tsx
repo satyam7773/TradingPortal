@@ -23,6 +23,7 @@ interface PositionData {
   position: 'BUY' | 'SELL';
   quantity: number;
   netQuantity:number;
+  lots: number;
   averagePrice: number;
   ltp: number | null;
   bid?: number;
@@ -201,6 +202,7 @@ const UserWisePosition: React.FC = () => {
               position: pos.positionSide as 'BUY' | 'SELL',
               quantity: pos.netQuantity,
               netQuantity: pos.netQuantity,
+              lots: pos.lots || 0,
               averagePrice: pos.averagePrice,
               ltp: pos.bidAsk || 0,
               bid: pos.bidAsk || 0,
@@ -468,11 +470,13 @@ const UserWisePosition: React.FC = () => {
               if (newPrice && (newPrice.bid !== undefined || newPrice.ask !== undefined)) {
                 // Use directional pricing: bid for BUY, ask for SELL (actual exit price)
                 const price = position.position === 'BUY' ? newPrice.bid : newPrice.ask
-                // Recalculate P&L with price (handle SELL positions correctly)
-                const pnlValue = position.position === 'SELL'
-                  ? (position.averagePrice - price) * position.netQuantity
-                  : (price - position.averagePrice) * position.netQuantity
-                const pnlPercentage = ((pnlValue / (position.averagePrice * position.netQuantity)) * 100)
+                // ✅ Match Positions.tsx: priceChange * Math.abs(netQuantity || quantity)
+                const priceChange = position.position === 'BUY'
+                  ? price - position.averagePrice
+                  : position.averagePrice - price
+                const pnlValue = priceChange * Math.abs(position.netQuantity || position.quantity);
+                const amount = position.averagePrice * Math.abs(position.netQuantity || position.quantity);
+                const pnlPercentage = amount !== 0 ? (pnlValue * 100) / amount : 0;
 
                 // Track changes for animation
                 const prevPrices = previousPricesRef.current[position.token]
@@ -538,9 +542,15 @@ const UserWisePosition: React.FC = () => {
               setPriceChanges(prev => ({ ...prev, ...changes }))
             }
 
+            // ✅ Recalculate total P&L from all positions
+            const totalUnrealisedPnl = updatedPositions.reduce((sum, pos) => sum + (pos.pnl || 0), 0);
+            const totalPnl = updatedPositions.reduce((sum, pos) => sum + ((pos.pnl || 0) + (pos.realisedPnl || 0)), 0);
+
             return {
               ...prevData,
-              positions: updatedPositions
+              positions: updatedPositions,
+              unrealisedPnl: totalUnrealisedPnl,  // ✅ Update live
+              totalPnl: totalPnl  // ✅ Update live
             }
           })
 
@@ -551,10 +561,13 @@ const UserWisePosition: React.FC = () => {
               if (newPrice && (newPrice.bid !== undefined || newPrice.ask !== undefined)) {
                 // Use directional pricing: bid for BUY, ask for SELL (actual exit price)
                 const price = position.position === 'BUY' ? newPrice.bid : newPrice.ask
-                const pnlValue = position.position === 'SELL'
-                  ? (position.averagePrice - price) * position.netQuantity
-                  : (price - position.averagePrice) * position.netQuantity
-                const pnlPercentage = ((pnlValue / (position.averagePrice * position.netQuantity)) * 100)
+                // ✅ Match Positions.tsx: priceChange * Math.abs(netQuantity || quantity)
+                const priceChange = position.position === 'BUY'
+                  ? price - position.averagePrice
+                  : position.averagePrice - price
+                const pnlValue = priceChange * Math.abs(position.netQuantity || position.quantity);
+                const amount = position.averagePrice * Math.abs(position.netQuantity || position.quantity);
+                const pnlPercentage = amount !== 0 ? (pnlValue * 100) / amount : 0
 
                 return {
                   ...position,
@@ -869,43 +882,31 @@ const UserWisePosition: React.FC = () => {
           </div>
         ) : (
           <div className="flex flex-col gap-4 flex-1 overflow-hidden">
-            {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            {/* Summary Stats - Only 4 cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <StatCard
                 label="M2M P&L"
-                value={`${positionData.balance?.toFixed(2) || '0'}`}
-                icon={AlertCircle}
-                color={positionData.balance >= 0 ? 'bg-green-500' : 'bg-red-500'}
+                value={`₹${positionData?.totalPnl?.toFixed(2) || '0'}`}
+                icon={TrendingUp}
+                color={positionData?.totalPnl >= 0 ? 'bg-green-500' : 'bg-red-500'}
               />
               <StatCard
                 label="Total Buy"
-                value={`${positionData.totalBuy?.toFixed(2) || '0'}`}
-                icon={TrendingUp}
-                color="bg-green-500"
+                value={`${(positionData?.positions || []).filter((pos: any) => pos.position === 'BUY').length}`}
+                icon={ArrowUp}
+                color="bg-blue-500"
               />
               <StatCard
                 label="Total Sell"
-                value={`${positionData.totalSell?.toFixed(2) || '0'}`}
-                icon={TrendingDown}
-                color="bg-red-500"
-              />
-              {/* <StatCard
-                label="Other"
-                value={`${positionData.other?.toFixed(2) || '0'}`}
-                icon={AlertCircle}
-                color="bg-blue-500"
-              /> */}
-              {/* <StatCard
-                label="Brokerage"
-                value={`${positionData.brokerage?.toFixed(2) || '0'}`}
-                icon={AlertCircle}
+                value={`${(positionData?.positions || []).filter((pos: any) => pos.position === 'SELL').length}`}
+                icon={ArrowDown}
                 color="bg-orange-500"
-              /> */}
+              />
               <StatCard
                 label="Positions"
-                value={`${positionData.positions?.length || '0'}`}
+                value={`${positionData?.positions?.length || '0'}`}
                 icon={BarChart3}
-                color="bg-purple-500"
+                color="bg-indigo-500"
               />
             </div>
 
@@ -1027,7 +1028,7 @@ const UserWisePosition: React.FC = () => {
                                 {position.position}
                               </span>
                             </td>
-                            <td className="px-1.5 py-1.5 text-xs text-right font-bold\">{position.quantity}</td>
+                            <td className="px-1.5 py-1.5 text-xs text-right font-bold\">{position.lots}</td>
                             <td className="px-3 py-1.5 text-xs text-right">{position.averagePrice?.toFixed(2)}</td>
                             <td className="px-3 py-1.5 text-xs text-right font-bold">
                               {(() => {

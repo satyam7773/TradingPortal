@@ -7,7 +7,7 @@ import userManagementService from '../../services/userManagementService';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useSorting } from '../../hooks/useSorting';
 import { API_ENDPOINTS } from '../../config/apiConfig';
-import { selectMarketTradeRight } from '../../store/selectors/authSelectors';
+import { selectMarketTradeRight, selectDeleteTrade } from '../../store/selectors/authSelectors';
 import { useAppSelector } from '../../hooks/reduxHooks';
 
 interface DeletedTradeData {
@@ -88,6 +88,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
 
   // Get hasMarketTradeRights from Redux
   const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
+  const deleteTradeRight = useAppSelector(selectDeleteTrade);
 
   // In modal mode, use propsUserId; in dashboard mode, use selectedUserId
   const targetUserId = isModalMode && propsUserId ? parseInt(propsUserId) : loggedInUserId;
@@ -401,7 +402,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
-            {isAdminUser && hasMarketTradeRights && selectedTradeIds.size > 0 && (
+            {isAdminUser && deleteTradeRight && selectedTradeIds.size > 0 && (
               <button
                 onClick={handleRestoreTrades}
                 disabled={isRestoring}
@@ -513,7 +514,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
               <table className="w-full border-collapse min-w-max">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-red-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
-                    {isAdminUser && (
+                    {isAdminUser && deleteTradeRight && (
                       <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -583,8 +584,8 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                         key={index}
                         className="hover:bg-gradient-to-r hover:from-red-50 hover:to-pink-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
                       >
-                        {/* Checkbox - Only show for admin users */}
-                        {isAdminUser && (
+                        {/* Checkbox - Only show for admin users with deleteTrade permission */}
+                        {isAdminUser && deleteTradeRight && (
                           <td className="px-4 py-3 text-center">
                             {trade.undo ? (
                               <input

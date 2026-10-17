@@ -102,7 +102,7 @@ const UserSettingsChangePassword: React.FC = () => {
                   icon={Key}
                   name="oldPassword"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder=""
                   value={values.oldPassword}
                   onChange={handleChange}
                   onBlur={handleBlur}

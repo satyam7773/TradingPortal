@@ -12,6 +12,7 @@ import orderService from '../services/orderService';
 import FilterLayout from '../components/FilterLayout';
 import { useOrderModal } from '../hooks/useOrderModal';
 import { useUserDetailsModal } from '../hooks/useUserDetailsModal';
+import ConfirmAlert from '../components/modals/ConfirmAlert';
 import OrderModal from '../components/modals/OrderModal';
 import OwnUserPositionModal from './OwnUserPositionModal';
 import PositionDetailModal from './PositionDetailModal';
@@ -21,6 +22,8 @@ import ConfigManager from '../utils/configManager';
 import { API_ENDPOINTS } from '../config/apiConfig';
 import { BUY_SELL_DISABLED_MESSAGE } from '../utils/permissionUtils';
 import { Trades as TradesPage } from '../pages/trading/Trades';
+import { useAppSelector } from '../hooks/reduxHooks';
+import { selectMarketTradeRight, selectDeleteTrade } from '../store/selectors/authSelectors';
 
 interface UserPositionsPanelProps {
   username: string;
@@ -83,6 +86,20 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
 
+  // ✅ Alert modal state for close positions confirmation
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    message: string | string[];
+    confirmText: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    onConfirm: () => {},
+  });
+
   // Own positions modal state
   const [showOwnPositionDetailModal, setShowOwnPositionDetailModal] = useState(false);
   const [ownDetailModalData, setOwnDetailModalData] = useState<any[]>([]);
@@ -107,8 +124,20 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
 
 
-  const isManualOrderEnabled = user?.userInfo?.manualOrder ?? false;
-  // const isManualOrderEnabled = true
+  // ✅ Get logged-in user's roleId for admin bypass logic
+  const loggedInUserData = localStorage.getItem('userData');
+  const loggedInUser = loggedInUserData ? JSON.parse(loggedInUserData) : null;
+  const loggedInUserRoleId = loggedInUser?.roleId;
+
+  // ✅ For roleId 1 & 2 (Admin): Always allow manual orders (bypass client setting)
+  // ✅ For roleId 3 & 4 (Master/Client): Check client's manualOrder setting
+  const isManualOrderEnabled = (loggedInUserRoleId === 1 || loggedInUserRoleId === 2) 
+    ? true 
+    : (user?.userInfo?.manualOrder ?? false);
+
+  // Get permissions from Redux
+  const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
+  const deleteTradeRight = useAppSelector(selectDeleteTrade);
 
   const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>(
     isManualOrderEnabled ? 'addOrder' : 'cfMarginSquareOff'
@@ -226,13 +255,11 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           });
         }
 
-
-        if (isManualOrderEnabled) {
-          await handleView(
-            exchangesResponse?.[0]?.name || 'All Exchanges',
-            userId ? [Number(userId)] : []
-          );
-        }
+        // ✅ Always fetch positions regardless of isManualOrderEnabled
+        await handleView(
+          exchangesResponse?.[0]?.name || 'All Exchanges',
+          userId ? [Number(userId)] : []
+        );
       } finally {
         setLoading(false);
       }
@@ -293,6 +320,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           const tick = feedMap.get(currentToken)!;
           const price = pos.position === 'BUY' ? tick.bid : tick.ask;
           const priceChange = pos.position === 'BUY' ? (price - pos.averagePrice) : (pos.averagePrice - price);
+          // ✅ Match Positions.tsx: use netQuantity with fallback to quantity
           const unrealisedPnl = priceChange * Math.abs(pos.netQuantity || pos.quantity);
           const amount = pos.averagePrice * Math.abs(pos.netQuantity || pos.quantity);
           const unrealisedPnlPercentage = amount !== 0 ? (unrealisedPnl * 100) / amount : 0;
@@ -304,7 +332,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
 
   const setupLivePositionFeed = useCallback(async (positionsList: any[]) => {
-    if (!isManualOrderEnabled) return;
+    // ✅ Always setup live feed regardless of isManualOrderEnabled (needed for CMP updates in old API too)
     if (!userId) return;
     const userIdStr = String(userId);
     const tokens = positionsList.filter(p => p.token).map(p => p.token!.toString());
@@ -323,9 +351,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
       if (result?.responseCode === "0" && result?.data?.positionsData) {
         // Transform old API response to PositionData format
-        let positions = (result.data.positionsData || []).map((p: any, index: number) => ({
-          positionId: `${p.exchange}_${p.token}_${index}`, // ✅ Unique key combining exchange + token + index
-          positionIds: [0],
+        let positions = (result.data.positionsData || []).map((p: any) => ({
+          positionId: p.positionId || 0,  // ✅ Use API's positionId (like Positions.tsx)
+          positionIds: [p.positionId || 0],  // ✅ Array with API's positionId for closing
           positionDate: null,
           positionDays: 0,
           username: user?.username || "",
@@ -335,7 +363,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           position: p.positionSide === "BUY" ? "BUY" : "SELL",
           quantity: p.lots || 0, // ✅ Use p.lots like Positions.tsx (NOT p.netQuantity)
           averagePrice: p.averagePrice || 0,
-          ltp: null,
+          ltp: p.bidAsk || 0,  // ✅ Set initial CMP from API (for old API)
           pnl: p.unrealisedPnl || 0,
           pnlPercentage: 0,
           totalPnl: p.realisedPnl || 0,
@@ -362,11 +390,6 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
   // --- View handler (copied from Positions.tsx, but always uses userId) ---
   const handleView = async (targetExchange?: string, targetUserIds?: number[], ignoreSelectedSymbol = false, targetToken?: number) => {
-    if (!isManualOrderEnabled) {
-      setFilteredPositions([]);
-      return;
-    }
-
     const exchange = targetExchange || selectedExchange;
     if (!exchange) return;
     setLoading(true);
@@ -407,7 +430,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
               totalPnl: p.totalPnl || 0,
               token: p.token,
               userId: Number(userId),
-              netQuantity: p.quantity,
+              netQuantity: p.netQuantity,
               realisedPnl: p.realisedPnl || 0,
               marginUsed: p.marginUsed || 0,
             };
@@ -451,6 +474,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [qty, setQty] = useState('');
   const [rateBy, setRateBy] = useState('Market Price');
   const [price, setPrice] = useState('');
+  const [brokerage, setBrokerage] = useState(true);  // ✅ Brokerage checkbox state (default true)
 
   // --- Fetch current market price for selected script in filter panel ---
   useEffect(() => {
@@ -548,6 +572,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     setQty('');
     setRateBy('Market Price');
     setPrice('');
+    setBrokerage(true);  // ✅ Reset brokerage to true
   }, []);
 
   useEffect(() => {
@@ -651,7 +676,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           Number(finalPrice),
           finalLotValue,
           orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
-          'MANUAL_ORDER'
+          'MANUAL_ORDER',
+          brokerage  // ✅ Pass brokerage value
         )
         : await orderService.placeSellOrder(
           loggedInUserId,
@@ -663,7 +689,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           Number(finalPrice),
           finalLotValue,
           orderTypeCode as 'MARKET' | 'LIMIT' | 'SL',
-          'MANUAL_ORDER'
+          'MANUAL_ORDER',
+          brokerage  // ✅ Pass brokerage value
         );
 
       if (response?.responseCode === '0') {
@@ -806,6 +833,18 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
               className={`w-full px-2 py-1 rounded border border-gray-300 dark:border-slate-600 text-sm ${!isPriceEditable ? 'bg-gray-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-700'}`}
             />
           </div>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50">
+            <input
+              type="checkbox"
+              id="brokerage"
+              checked={brokerage}
+              onChange={e => setBrokerage(e.target.checked)}
+              className="w-4 h-4 cursor-pointer accent-blue-600"
+            />
+            <label htmlFor="brokerage" className="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex-1">
+              Include Brokerage
+            </label>
+          </div>
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleManualOrderSubmit}
@@ -895,6 +934,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
         // Transform API response data to match modal structure
         const userPositions: any[] = response.data.map((pos: any, idx: number) => {
+          // Don't precalculate P&L here - let modal tbody recalculate with liveTicks (bid/ask)
+          // This ensures consistency with socket updates using directional pricing
+          
           const transformed = {
             username: pos.username,
             userId: pos.userId,
@@ -904,11 +946,13 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             tradeSymbol: pos.tradeSymbol,
             price: pos.price,
             token: pos.token || p.token || 0,
-            netPosition: pos.netPosition,
+            position: pos.netPosition,
             netQuantity: pos.netQuantity,
-            netAvgPrice: pos.netAvgPrice,
-            pnl: pos.pnl,
-            pnlPercentage: pos.pnlPercentage,
+            quantity: pos.quantity || pos.netQuantity || 0,
+            averagePrice: pos.netAvgPrice,
+            lotSize: pos.lotSize || 1,  // ✅ Include lotSize for P&L multiplication
+            pnl: 0,  // Will be recalculated in modal tbody
+            pnlPercentage: 0,  // Will be recalculated in modal tbody
             netBuyQuantity: pos.netBuyQuantity,
             netBuyAveragePrice: pos.netBuyAveragePrice,
             netSellQuantity: pos.netSellQuantity,
@@ -1026,41 +1070,69 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   };
 
   const handleCloseSelectedPositions = async () => {
-
     const userData = localStorage.getItem('userData')
     const user = userData ? JSON.parse(userData) : null
     const loggedInUserId = user?.userId
 
-
     if (selectedPositions.size === 0) return;
-    if (!window.confirm(`Are you sure you want to close the ${selectedPositions.size} selected position(s)?`)) return;
-    try {
-      setLoading(true);
-      const payload = {
-        userId: loggedInUserId,
-        requestTimestamp: new Date().getTime().toString(),
-        deviceId: "WEB",
-        tradeOrderMethod: "WEB",
-        data: Array.from(selectedPositions)
-      };
-      const response = await fetch(API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const result = await response.json();
-      if (result?.responseCode === '0' || result?.status === 'success') {
-        // toast.success("Selected positions closed successfully");
-        setSelectedPositions(new Set());
-        handleView();
-      } else {
-        toast.error(result?.message || "Failed to close positions");
-      }
-    } catch (err) {
-      toast.error("Error closing positions");
-    } finally {
-      setLoading(false);
-    }
+
+    // ✅ Use modal confirmation instead of window.confirm
+    setAlertConfig({
+      title: "⚠️ Close Positions?",
+      message: [
+        `Are you sure you want to close the ${selectedPositions.size} selected position${selectedPositions.size > 1 ? "(s)" : ""}?`,
+        "",
+        "This action cannot be undone.",
+      ],
+      confirmText: "Yes, Close Positions",
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          
+          // ✅ Extract all positionIds from selected positions (like Positions.tsx)
+          const allPositionIds: number[] = [];
+          filteredPositions.forEach((p) => {
+            if (selectedPositions.has(p.positionId)) {
+              // If we have multiple positionIds (from users array), add them all
+              if (p.positionIds && p.positionIds.length > 0) {
+                allPositionIds.push(...p.positionIds);
+              } else {
+                allPositionIds.push(p.positionId);
+              }
+            }
+          });
+
+          const payload = {
+            userId: loggedInUserId,
+            requestTimestamp: new Date().getTime().toString(),
+            deviceId: "WEB",
+            tradeOrderMethod: "WEB",
+            data: allPositionIds  // ✅ Send all extracted positionIds with userIds
+          };
+          
+          const response = await fetch(API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          
+          const result = await response.json();
+          if (result?.responseCode === '0' || result?.status === 'success') {
+            toast.success('Selected positions closed successfully');
+            setSelectedPositions(new Set());
+            handleView();
+          } else {
+            toast.error(result?.message || "Failed to close positions");
+          }
+        } catch (err) {
+          toast.error("Error closing positions");
+        } finally {
+          setLoading(false);
+          setAlertOpen(false);
+        }
+      },
+    });
+    setAlertOpen(true);
   };
 
   useEffect(() => {
@@ -1120,7 +1192,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           </div>
         )}
-        {isManualOrderEnabled && tab === 'addOrder' && selectedPositions.size > 0 && (
+        {((isManualOrderEnabled && tab === 'addOrder') || (!isManualOrderEnabled && tab === 'cfMarginSquareOff')) && selectedPositions.size > 0 && (
           <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
             <span className="text-sm font-bold text-red-700 dark:text-red-300">{selectedPositions.size} positions selected</span>
             <button onClick={handleCloseSelectedPositions} disabled={loading} className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow-sm">
@@ -1129,7 +1201,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           </div>
         )}
         <div className="flex-1 overflow-auto scrollbar-thin">
-          {isManualOrderEnabled && tab === 'addOrder' && (
+          {/* ✅ Show table when: (1) manual order enabled AND on addOrder tab, OR (2) manual order disabled (master users) */}
+          {tab === 'addOrder' || !isManualOrderEnabled ? (
             loading ? (
               <div className="h-full flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
@@ -1148,8 +1221,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                         <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Own</th>
                       </>
                     )}
-                    <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Buy</th>
-                    <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
+                    {hasMarketTradeRights && (
+                      <>
+                        <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">Buy</th>
+                        <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-red-600">Sell</th>
+                      </>
+                    )}
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Exchange</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Position</th>
                     <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Symbol</th>
@@ -1161,7 +1238,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {filteredPositions.length === 0 ? (
-                    <tr><td colSpan={Number(displayRoleId) !== 4 ? 12 : 10} className="text-center py-8 text-gray-400">No positions found.</td></tr>
+                    <tr><td colSpan={7 + 1 + (Number(displayRoleId) !== 4 ? 2 : 0) + (hasMarketTradeRights ? 2 : 0)} className="text-center py-8 text-gray-400">No positions found.</td></tr>
                   ) : filteredPositions.map((p, index) => (
                     <tr key={p.positionId || `pos_${index}`} className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors ${selectedPositions.has(p.positionId) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                       <td className="px-3 py-4 text-center">
@@ -1174,8 +1251,12 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                           <td className="px-4 py-4 text-center"><button onClick={() => { console.log("🖱️ Own User button clicked for position:", p); handleOpenOwnPositionModal(p); }} disabled={loadingOwnPosition} className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900 rounded-lg" title="View own positions"><Eye className="w-4 h-4 text-purple-600" /></button></td>
                         </>
                       )}
-                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'BUY')} disabled={false} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
-                      <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'SELL')} disabled={false} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
+                      {hasMarketTradeRights && (
+                        <>
+                          <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'BUY')} disabled={!hasMarketTradeRights} title={!hasMarketTradeRights ? BUY_SELL_DISABLED_MESSAGE : "Buy"} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">B</button></td>
+                          <td className="px-4 py-4 text-center"><button onClick={() => handleOpenModifyModal(p, 'SELL')} disabled={!hasMarketTradeRights} title={!hasMarketTradeRights ? BUY_SELL_DISABLED_MESSAGE : "Sell"} className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-2.5 py-1 rounded transition-all shadow hover:scale-105">S</button></td>
+                        </>
+                      )}
                       <td className="px-6 py-4 text-left"><span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 uppercase">{p.exchange}</span></td>
                       <td className="px-6 py-4 text-left"><span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${p.position === 'BUY' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-red-600 border-red-200 bg-red-50'}`}>{p.position}</span></td>
                       <td className={`px-6 py-4 text-left font-bold cursor-pointer hover:underline ${p.position === 'BUY' ? 'text-blue-600' : 'text-red-600'}`} onClick={() => { setTradesModalSymbol(p.tradeSymbol); setTradesModalToken(p.token || null); setTradesModalExchange(p.exchange); setShowTradesModal(true); }}>{p.tradeSymbol}</td>
@@ -1188,7 +1269,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                 </tbody>
               </table>
             )
-          )}
+          ) : null}
           {tab === 'cfMarginSquareOff' && (
             <div className="h-40 flex items-center justify-center">
               <div className="text-center">
@@ -1259,45 +1340,60 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                        {ownDetailModalData.map((pos: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
-                            <td className="px-6 py-4 text-sm font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={(e) => handleUserNameClick(e, pos.username, pos.userId)}>
-                              {isLoadingUser ? 'Loading...' : pos.username}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{pos.name || "-"}</td>
-                            <td className="px-6 py-4 text-sm">
-                              {pos.parentUsername ? (
-                                <button
-                                  onClick={(e) => handleUserNameClick(e, pos.parentUsername, pos.parentUserId)}
-                                  disabled={isLoadingUser}
-                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
-                                >
-                                  {isLoadingUser ? 'Loading...' : pos.parentUsername}
-                                </button>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{pos.tradeSymbol}</td>
-                            <td className="px-6 py-4 text-center">
-                              <span className={`text-xs font-bold px-3 py-1 rounded-lg ${pos.netPosition === "BUY"
-                                  ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                                  : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                                }`}>
-                                {pos.netPosition}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right text-sm font-bold text-slate-900 dark:text-white">{pos.netQuantity}</td>
-                            <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 dark:text-white">₹{pos.netAvgPrice?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                            <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 dark:text-white">₹{pos.price?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                            <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${pos.pnl > 0 ? "text-emerald-600" : pos.pnl < 0 ? "text-red-600" : "text-slate-600"}`}>
-                              ₹{pos.pnl?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${pos.pnlPercentage > 0 ? "text-emerald-600" : pos.pnlPercentage < 0 ? "text-red-600" : "text-slate-600"}`}>
-                              {pos.pnlPercentage?.toFixed(2)}%
-                            </td>
-                          </tr>
-                        ))}
+                        {ownDetailModalData.map((pos: any, idx: number) => {
+                          // ✅ Match UserWisePosition.tsx socket calculation: use position field + lotSize
+                          const tickData = liveTicks[pos.token];
+                          const price = tickData 
+                            ? (pos.position === "BUY" ? tickData.bid : tickData.ask) 
+                            : pos.price;
+                          
+                          const priceChange = pos.position === 'BUY'
+                            ? price - pos.averagePrice
+                            : pos.averagePrice - price;
+                          const livePnl = priceChange * Math.abs(pos.netQuantity || pos.quantity) * (pos.lotSize || 1);
+                          const amount = pos.averagePrice * Math.abs(pos.netQuantity || pos.quantity) * (pos.lotSize || 1);
+                          const livePnlPercentage = amount !== 0 ? (livePnl * 100) / amount : 0;
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+                              <td className="px-6 py-4 text-sm font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={(e) => handleUserNameClick(e, pos.username, pos.userId)}>
+                                {isLoadingUser ? 'Loading...' : pos.username}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{pos.name || "-"}</td>
+                              <td className="px-6 py-4 text-sm">
+                                {pos.parentUsername ? (
+                                  <button
+                                    onClick={(e) => handleUserNameClick(e, pos.parentUsername, pos.parentUserId)}
+                                    disabled={isLoadingUser}
+                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                                  >
+                                    {isLoadingUser ? 'Loading...' : pos.parentUsername}
+                                  </button>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{pos.tradeSymbol}</td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`text-xs font-bold px-3 py-1 rounded-lg ${pos.position === "BUY"
+                                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                                  }`}>
+                                  {pos.position}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right text-sm font-bold text-slate-900 dark:text-white">{pos.netQuantity || pos.quantity}</td>
+                              <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 dark:text-white">₹{pos.averagePrice?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="px-6 py-4 text-right text-sm font-mono text-slate-900 dark:text-white font-bold">₹{price?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${livePnl > 0 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" : livePnl < 0 ? "text-red-600 bg-red-50 dark:bg-red-900/20" : "text-slate-600"}`}>
+                                ₹{livePnl?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className={`px-6 py-4 text-right text-sm font-mono font-bold ${livePnlPercentage > 0 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" : livePnlPercentage < 0 ? "text-red-600 bg-red-50 dark:bg-red-900/20" : "text-slate-600"}`}>
+                                {livePnlPercentage?.toFixed(2)}%
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   ) : (
@@ -1432,6 +1528,17 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             />
           </>
         )}
+
+        {/* ✅ Close Positions Confirmation Modal */}
+        <ConfirmAlert
+          isOpen={alertOpen}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          confirmText={alertConfig.confirmText}
+          isLoading={loading}
+          onConfirm={alertConfig.onConfirm}
+          onCancel={() => setAlertOpen(false)}
+        />
       </div>
     </FilterLayout>
   );

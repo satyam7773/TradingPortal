@@ -16,7 +16,7 @@ import DownloadReport from '../../components/DownloadReport'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
 import { useSorting } from '../../hooks/useSorting'
 import { API_ENDPOINTS } from '../../config/apiConfig'
-import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
+import { selectMarketTradeRight, selectDeleteTrade } from '../../store/selectors/authSelectors'
 import { useAppSelector } from '../../hooks/reduxHooks'
 
 interface TradeData {
@@ -411,10 +411,10 @@ const TradesPage: React.FC<TradesPageProps> = ({
     const userData = localStorage.getItem('userData')
     const user = userData ? JSON.parse(userData) : null
     const roleId = user?.roleId
-    const marketTradeRight = user?.marketTradeRight
+    const deleteTrade = user?.deleteTrade
     const isAdminUser = roleId === 1 || roleId === 2 || roleId === 3
 
-    if (!isAdminUser || !marketTradeRight) {
+    if (!isAdminUser || !deleteTrade) {
       toast.error('You do not have permission to delete trades')
       return
     }
@@ -439,7 +439,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
           const response = await userManagementService.deleteTrades(loggedInUserId, selectedUserId || loggedInUserId, tradeIdsArray)
 
           if (response?.responseCode === '0' || response?.success) {
-            toast.success(`✅ ${selectedTradeIds.size} trade${selectedTradeIds.size > 1 ? '(s)' : ''} deleted successfully`)
+            toast.success(`${selectedTradeIds.size} trade${selectedTradeIds.size > 1 ? '(s)' : ''} deleted successfully`)
             setSelectedTradeIds(new Set())
             // Refresh the current page
             handleView(currentPage)
@@ -597,6 +597,9 @@ const TradesPage: React.FC<TradesPageProps> = ({
   const user = userData ? JSON.parse(userData) : null
   const userRoleId = user?.roleId
   const isAdminUser = userRoleId === 1 || userRoleId === 2 || userRoleId === 3
+  
+  // Get delete trade permission from Redux
+  const deleteTradeRight = useAppSelector(selectDeleteTrade)
 
 
   // Sorting hook
@@ -687,7 +690,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
-                  {selectedTradeIds.size > 0 && isAdminUser  && (
+                  {selectedTradeIds.size > 0 && isAdminUser && deleteTradeRight && (
                     <button
                       onClick={handleDeleteTrades}
                       disabled={isDeleting}
@@ -709,7 +712,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
               <table className="w-full border-collapse min-w-max">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                   <tr>
-                    {isAdminUser && !hideCheckboxes  && (
+                    {isAdminUser && deleteTradeRight && !hideCheckboxes  && (
                       <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
                         <input
                           type="checkbox"
@@ -776,7 +779,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
 
                     return (
                       <tr key={trade.tradeId} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors">
-                        {isAdminUser && !hideCheckboxes  && (
+                        {isAdminUser && deleteTradeRight && !hideCheckboxes  && (
                           <td className="px-4 py-4 text-center">
                             <input
                               type="checkbox"

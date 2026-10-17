@@ -10,6 +10,9 @@ interface User {
   changePasswordFlag?: boolean
   firstLogin?: boolean
   marketTradeRight?: boolean // Permission to buy/sell
+  manualOrder?: boolean // Permission to create manual orders
+  deleteTrade?: boolean // Permission to delete trades
+  pendingToSuccess?: boolean // Permission to mark pending orders as success
 }
 
 interface AuthState {
@@ -36,7 +39,10 @@ const restoreAuthState = (): AuthState => {
           role: parsedData.role,
           changePasswordFlag: parsedData.changePasswordFlag,
           firstLogin: parsedData.firstLogin,
-          marketTradeRight: parsedData.marketTradeRight
+          marketTradeRight: parsedData.marketTradeRight,
+          manualOrder: parsedData.manualOrder,
+          deleteTrade: parsedData.deleteTrade,
+          pendingToSuccess: parsedData.pendingToSuccess
         },
         loading: false,
         error: null
@@ -60,7 +66,7 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    loginRequest(state, action: PayloadAction<{email:string;password:string;server?:string}>) {
+    loginRequest(state, action: PayloadAction<{email:string;password:string;server?:string;source?:string}>) {
       state.loading = true
       state.error = null
     },

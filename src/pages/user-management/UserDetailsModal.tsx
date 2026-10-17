@@ -445,6 +445,14 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
     };
   }, []);
 
+  // Close action menu when opening nested modal to prevent overlap
+  useEffect(() => {
+    if (selectedChildUser) {
+      setActionMenuPosition(null);
+      setActionMenuUserId(null);
+    }
+  }, [selectedChildUser]);
+
   // Fetch user details from API - extract to stable callback so child tabs can request refresh
   // const fetchUserDetails = useCallback(async (targetUser?: UserData) => {
   //   if (!user && !targetUser) return;
@@ -673,7 +681,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
   const mainModal = createPortal(
     <div
-      className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md animate-fadeIn pointer-events-none"
       style={{ zIndex: modalZIndex }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
@@ -682,7 +690,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       }}
     >
       <div
-        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp pointer-events-auto"
         style={{ width: '98vw', height: '96vh', maxWidth: '1800px' }}
       >
         {/* Modal Header - Compact */}
@@ -1080,18 +1088,23 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                           </td>
 
                                           {/* Credit */}
-                                          <td className="px-2 py-2 text-right">
+                                          <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                                             <span
                                               onClick={(e) => {
                                                 e.stopPropagation();
+                                                e.preventDefault();
+                                                // Pass the raw API user object, not transformed
                                                 setSelectedUserForAddCredits(childUser);
                                                 setShowAddCreditsModal(true);
                                                 setCreditTransType('Credit');
                                                 setCreditAmount('');
                                                 setCreditNote('');
                                                 setCreditError('');
+                                                // Close action menu if open to prevent overlap
+                                                setActionMenuPosition(null);
+                                                setActionMenuUserId(null);
                                               }}
-                                              className="font-semibold text-slate-800 dark:text-white text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                                              className="font-semibold text-slate-800 dark:text-white text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors inline-block"
                                             >
                                               {childUser.credits != null ? childUser.credits.toLocaleString() : '-'}
                                             </span>
@@ -1243,11 +1256,11 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
     document.body
   );
 
-  // Action Menu Portal
+  // Action Menu Portal - Render inside modal container with higher z-index for nested modals
   const actionMenuPortal = actionMenuPosition && actionMenuUserId && createPortal(
     <div
       ref={actionMenuRef}
-      className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl overflow-auto max-h-96"
+      className="fixed w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-2xl overflow-auto max-h-96 pointer-events-auto"
       style={{
         left: `${Math.min(actionMenuPosition.x, window.innerWidth - 240)}px`,
         top: (() => {
@@ -1273,7 +1286,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             return `${actionMenuPosition.y - Math.min(estimatedMenuHeight, spaceAbove) - 8}px`;
           }
         })(),
-        zIndex: 10000 + depth * 1000 + 50
+        zIndex: modalZIndex + 200,
+        pointerEvents: 'auto'
       }}
     >
       {(() => {
@@ -1283,7 +1297,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           <>
             <button
               className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                 if (selectedUser) {
                   setSelectedUserForPasswordChange(selectedUser);
@@ -1300,7 +1316,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             </button>
             <button
               className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                 if (selectedUser) {
                   setSelectedUserForSharingDetails(selectedUser);
@@ -1317,12 +1335,13 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             {isMaster && (
               <>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
                     const apiUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (apiUser) {
-                      const transformedUser = transformChildUser(apiUser);
-                      console.log('Selected user for add credits:', transformedUser);
-                      setSelectedUserForAddCredits(transformedUser);
+                      // Pass raw API user, not transformed
+                      setSelectedUserForAddCredits(apiUser);
                       setShowAddCreditsModal(true);
                       setCreditTransType('Credit');
                       setCreditAmount('');
@@ -1337,7 +1356,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   <span>💰</span> Add Credit
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
                     const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (selectedUser) {
                       setSelectedUserForAccountLimit(transformChildUser(selectedUser));
@@ -1358,6 +1379,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     const apiUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (apiUser) {
                       const transformedUser = transformChildUser(apiUser);
@@ -1373,6 +1395,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     if (selectedChildUser) {
                       const transformedUser = transformChildUser(selectedChildUser);
                       setSelectedUserForMarketTradeRights(transformedUser);
@@ -1392,7 +1415,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             {!isMaster && (
               <>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
                     const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (selectedUser) {
                       setSelectedUserForMargin(transformChildUser(selectedUser));
@@ -1405,7 +1430,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   <span>📊</span> % Margin Square off
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
                     const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (selectedUser) {
                       setSelectedUserForFreshStopLoss(transformChildUser(selectedUser));
@@ -1418,7 +1445,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   <span>🛑</span> Fresh StopLoss
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
                     const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (selectedUser) {
                       setSelectedUserForIntradaySquareOff(transformChildUser(selectedUser));
@@ -1432,7 +1461,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   <span>⏱️</span> Intraday SquareOff
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
                     const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
                     if (selectedUser) {
                       setSelectedUserForExchangewiseLotLimit(transformChildUser(selectedUser));
@@ -1470,8 +1501,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   // Change Password Modal Portal
   const changePasswordModal = showPasswordModal && selectedUserForPasswordChange && createPortal(
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
-      style={{ zIndex: 10000 + depth * 1000 + 100 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center pointer-events-none"
+      style={{ zIndex: modalZIndex + 100 }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           setShowPasswordModal(false);
@@ -1480,7 +1511,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       }}
     >
       <div
-        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto pointer-events-auto"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between z-10">
@@ -1522,8 +1553,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   // Sharing Details Modal Portal
   const sharingDetailsModal = showSharingModal && selectedUserForSharingDetails && createPortal(
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
-      style={{ zIndex: 10000 + depth * 1000 + 100 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center pointer-events-none"
+      style={{ zIndex: modalZIndex + 100 }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           setShowSharingModal(false);
@@ -1532,7 +1563,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       }}
     >
       <div
-        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto pointer-events-auto"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between z-10">
@@ -1573,8 +1604,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const addCreditsModal = showAddCreditsModal && selectedUserForAddCredits && createPortal(
 
     <div
-      className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md animate-fadeIn"
-      style={{ zIndex: 10000 + depth * 1000 + 100 }}
+      className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md animate-fadeIn pointer-events-none"
+      style={{ zIndex: modalZIndex + 100 }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           setShowAddCreditsModal(false);
@@ -1582,7 +1613,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       }}
     >
       <div
-        className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/50 dark:from-slate-800 dark:via-slate-800/95 dark:to-slate-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp"
+        className="bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/50 dark:from-slate-800 dark:via-slate-800/95 dark:to-slate-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-slideUp pointer-events-auto"
         style={{ width: '90vw', height: 'auto', maxWidth: '550px', maxHeight: '85vh' }}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -1836,6 +1867,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             setShowIntradaySquareOffModal(false);
             setSelectedUserForIntradaySquareOff(null);
           }}
+          modalZIndex={modalZIndex + 100}
         />
       )}
       {showMarketTradeRightsModal && selectedUserForMarketTradeRights && (
@@ -1849,6 +1881,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           onSave={async () => {
             // Optionally refetch user details if needed
           }}
+          modalZIndex={modalZIndex + 100}
         />
       )}
       {showAdminRightsModal && selectedUserForAdminRights && (
@@ -1862,6 +1895,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           onSave={async () => {
             // Optionally refetch user details if needed
           }}
+          modalZIndex={modalZIndex + 100}
         />
       )}
       {showExchangewiseLotLimitModal && selectedUserForExchangewiseLotLimit && (
@@ -1872,6 +1906,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             setShowExchangewiseLotLimitModal(false);
             setSelectedUserForExchangewiseLotLimit(null);
           }}
+          modalZIndex={modalZIndex + 100}
         />
       )}
       {showMarginModal && selectedUserForMargin && (
@@ -1882,12 +1917,13 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             setShowMarginModal(false);
             setSelectedUserForMargin(null);
           }}
+          modalZIndex={modalZIndex + 100}
         />
       )}
       {showFreshStopLossModal && selectedUserForFreshStopLoss && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
-          style={{ zIndex: 10000 + depth * 1000 + 100 }}
+          style={{ zIndex: modalZIndex + 100 }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setShowFreshStopLossModal(false);
@@ -1961,7 +1997,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       {showAccountLimitModal && selectedUserForAccountLimit && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-50 animate-fadeIn"
-          style={{ zIndex: 10000 + depth * 1000 + 100 }}
+          style={{ zIndex: modalZIndex + 100 }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               setShowAccountLimitModal(false);

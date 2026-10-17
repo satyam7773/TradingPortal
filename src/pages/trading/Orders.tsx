@@ -13,7 +13,7 @@ import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
 import { useSorting } from '../../hooks/useSorting'
 import { useAppSelector } from '../../hooks/reduxHooks'
-import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
+import { selectMarketTradeRight, selectDeleteTrade, selectPendingToSuccess } from '../../store/selectors/authSelectors'
 
 // --- Interfaces ---
 interface OrderData {
@@ -134,6 +134,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
 
   // Get hasMarketTradeRights from Redux
   const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
+  const deleteTradeRight = useAppSelector(selectDeleteTrade);
+  const pendingToSuccessRight = useAppSelector(selectPendingToSuccess);
 
   // --- Adapt users array to match DropdownItem interface [{ id, name }] ---
   const selectableUsers = useMemo(() => {
@@ -698,19 +700,21 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
             </div>
 
             {/* Selection Bulk Actions Menu */}
-            {selectedOrders.size > 0 && hasMarketTradeRights && (
+            {selectedOrders.size > 0 && (deleteTradeRight || pendingToSuccessRight) && (
               <div className="flex-shrink-0 px-6 py-3 bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-900/50 flex items-center justify-between transition-all duration-200 animate-in fade-in slide-in-from-top-1">
                 <div className="text-sm font-semibold text-orange-800 dark:text-orange-300">
                   {selectedOrders.size} row{selectedOrders.size > 1 ? 's' : ''} selected
                 </div>
                 <div className="flex gap-3">
-                  <button 
-                    onClick={handleDeleteSelected} 
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
-                  >
-                    <Trash2 className="w-4 h-4" /> Cancel Selected
-                  </button>
+                  {deleteTradeRight && (
+                    <button 
+                      onClick={handleDeleteSelected} 
+                      disabled={loading}
+                      className="flex items-center gap-2 px-4 py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white rounded font-semibold text-sm transition shadow-sm"
+                    >
+                      <Trash2 className="w-4 h-4" /> Cancel Selected
+                    </button>
+                  )}
                   {loggedInUser?.roleId === 4 && hasMarketTradeRights && (
                     <button 
                       onClick={() => {
@@ -728,7 +732,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                       Edit Modify
                     </button>
                   )}
-                  {loggedInUser?.roleId !== 4 && (
+                  {loggedInUser?.roleId !== 4 && pendingToSuccessRight && (
                     <button 
                       onClick={handleProceedToSuccess}
                       disabled={loading}
@@ -756,7 +760,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                   <table className="w-full border-collapse min-w-[2150px]">
                     <thead>
                       <tr className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b-2 border-blue-200 dark:border-blue-500/30">
-                        {hasMarketTradeRights && (
+                        {(deleteTradeRight || pendingToSuccessRight) && (
                           <th className="px-3 py-3.5 w-12">
                             <input 
                               type="checkbox" 
@@ -820,7 +824,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                                 : 'hover:bg-blue-50/80 dark:hover:bg-slate-700/50'
                               }`}
                           >
-                            {hasMarketTradeRights && (
+                            {(deleteTradeRight || pendingToSuccessRight) && (
                               <td className="px-3 py-3.5 text-center">
                                 <input
                                   type="checkbox"

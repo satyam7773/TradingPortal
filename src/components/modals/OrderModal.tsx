@@ -258,7 +258,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
                                 className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 active:bg-blue-100 dark:active:bg-blue-900/40 border-b border-gray-200 dark:border-slate-700 last:border-b-0 text-gray-900 dark:text-white transition-colors cursor-pointer"
                               >
                                 <div className="text-xs font-medium">
-                                  {client.username} {client.name && `(${client.name})`}
+                                  {client.username}
                                 </div>
                               </button>
                             ))

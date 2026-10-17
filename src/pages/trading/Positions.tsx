@@ -25,7 +25,7 @@ import SearchableSelect from "../../components/ui/SearchableSelect";
 import { useSorting } from "../../hooks/useSorting";
 import { BUY_SELL_DISABLED_MESSAGE } from "../../utils/permissionUtils";
 import { useAppSelector } from "../../hooks/reduxHooks";
-import { selectMarketTradeRight } from "../../store/selectors/authSelectors";
+import { selectMarketTradeRight, selectDeleteTrade } from "../../store/selectors/authSelectors";
 import { API_ENDPOINTS } from "../../config/apiConfig";
 import { Trades as TradesPage } from "./Trades";
 
@@ -67,6 +67,7 @@ const Positions: React.FC = () => {
   const isAdminUser =
     userData?.roleId === 1 || userData?.roleId === 2 || userData?.roleId === 3;
   const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
+  const deleteTradeRight = useAppSelector(selectDeleteTrade);
   const orderModal = useOrderModal(isAdminUser);
   
   // Get dynamic z-index based on modal nesting depth
@@ -314,9 +315,9 @@ const Positions: React.FC = () => {
                 ? price - pos.averagePrice
                 : pos.averagePrice - price;
             const unrealisedPnl =
-              priceChange * Math.abs(pos.netQuantity);
+              priceChange * Math.abs(pos.netQuantity || pos.quantity);
             const amount =
-              pos.averagePrice * Math.abs(pos.netQuantity );
+              pos.averagePrice * Math.abs(pos.netQuantity || pos.quantity);
             const unrealisedPnlPercentage =
               amount !== 0 ? (unrealisedPnl * 100) / amount : 0;
             return {
@@ -374,28 +375,40 @@ const Positions: React.FC = () => {
 
       if (result?.responseCode === "0" && result?.data?.positionsData) {
         // Transform old API response to PositionData format
-        let positions = (result.data.positionsData || []).map((p: any) => ({
-          positionId: p.positionId || 0, // Use API's unique positionId directly
-          positionIds: [p.positionId || 0],
-          positionDate: null,
-          positionDays: 0,
-          username: userData?.username || "",
-          parentUsername: "",
-          exchange: p.exchange,
-          tradeSymbol: p.tradeSymbol,
-          position: p.positionSide === "BUY" ? "BUY" : "SELL",
-          quantity: p.lots || 0, // Bind to lots instead of netQuantity
-          averagePrice: p.averagePrice || 0,
-          ltp: null,
-          pnl: p.unrealisedPnl || 0,
-          pnlPercentage: 0,
-          totalPnl: p.realisedPnl || 0,
-          token: p.token,
-          userId: loggedInUserId,
-          netQuantity: p.netQuantity,
-          realisedPnl: p.realisedPnl || 0,
-          marginUsed: p.marginUsed || 0,
-        }));
+        let positions = (result.data.positionsData || []).map((p: any) => {
+          // ✅ Recalculate P&L from price × quantity (directional pricing) - same as socket updates
+          const qty = p.netQuantity || 0;
+          const price = p.positionSide === "BUY" ? (p.bid || 0) : (p.ask || 0);
+          const priceChange = p.positionSide === "BUY"
+            ? price - p.averagePrice
+            : p.averagePrice - price;
+          const pnlValue = priceChange * Math.abs(qty);
+          const amount = p.averagePrice * Math.abs(qty);
+          const pnlPercentage = amount !== 0 ? (pnlValue * 100) / amount : 0;
+
+          return {
+            positionId: p.positionId || 0, // Use API's unique positionId directly
+            positionIds: [p.positionId || 0],
+            positionDate: null,
+            positionDays: 0,
+            username: userData?.username || "",
+            parentUsername: "",
+            exchange: p.exchange,
+            tradeSymbol: p.tradeSymbol,
+            position: p.positionSide === "BUY" ? "BUY" : "SELL",
+            quantity: p.lots || 0, // Bind to lots instead of netQuantity
+            averagePrice: p.averagePrice || 0,
+            ltp: price,
+            pnl: pnlValue,
+            pnlPercentage: pnlPercentage,
+            totalPnl: pnlValue + (p.realisedPnl || 0),
+            token: p.token,
+            userId: loggedInUserId,
+            netQuantity: p.netQuantity,
+            realisedPnl: p.realisedPnl || 0,
+            marginUsed: p.marginUsed || 0,
+          };
+        });
 
         // Filter by token instead of symbol string (since API uses different symbol formats)
         if (selectedToken && selectedToken > 0)
@@ -454,6 +467,16 @@ const Positions: React.FC = () => {
             const positionIdsArray = (p.users || []).flatMap((u: any) => u.positionId || []);
             const firstUser = p.users?.[0];
             
+            // ✅ Recalculate P&L from price × quantity (directional pricing) - same as socket updates
+            const qty = p.netQuantity || 0;
+            const price = p.position === "BUY" ? (p.bid || 0) : (p.ask || 0);
+            const priceChange = p.position === "BUY"
+              ? price - p.averagePrice
+              : p.averagePrice - price;
+            const pnlValue = priceChange * Math.abs(qty);
+            const amount = p.averagePrice * Math.abs(qty);
+            const pnlPercentage = amount !== 0 ? (pnlValue * 100) / amount : 0;
+            
             const transformed = {
               positionId: positionIdsArray[0] || 0, // First positionId as primary
               positionIds: positionIdsArray, // ✅ All positionIds for closing
@@ -466,10 +489,10 @@ const Positions: React.FC = () => {
               position: p.position,
               quantity: p.quantity,
               averagePrice: p.averagePrice,
-              ltp: p.ltp,
-              pnl: p.pnl,
-              pnlPercentage: p.pnlPercentage,
-              totalPnl: p.totalPnl,
+              ltp: price,
+              pnl: pnlValue,
+              pnlPercentage: pnlPercentage,
+              totalPnl: pnlValue + (p.realisedPnl || 0),
               token: p.token,
               userId: firstUser?.userId || p.userId || selectedUserId || undefined,
               netQuantity: p.netQuantity,
@@ -636,7 +659,7 @@ const Positions: React.FC = () => {
 
           const result = await response.json();
           if (result?.responseCode === "0" || result?.status === "success") {
-            toast.success("✅ Selected positions closed successfully");
+            toast.success("Selected positions closed successfully");
             setSelectedPositions(new Set());
             handleView();
           } else {
@@ -991,7 +1014,7 @@ const Positions: React.FC = () => {
               </div>
             </div>
 
-            {selectedPositions.size > 0 && hasMarketTradeRights && (
+            {selectedPositions.size > 0 && (
               <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
                 <span className="text-sm font-bold text-red-700 dark:text-red-300">
                   {selectedPositions.size} positions selected
@@ -1015,28 +1038,26 @@ const Positions: React.FC = () => {
                 <table className="w-full border-collapse min-w-max">
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                     <tr>
-                      {hasMarketTradeRights && (
-                        <th className="px-3 py-4 text-center">
-                          <input
-                            type="checkbox"
-                            checked={
-                              filteredPositions.length > 0 &&
-                              selectedPositions.size === filteredPositions.length
-                            }
-                            onChange={() =>
-                              setSelectedPositions(
-                                selectedPositions.size ===
-                                  filteredPositions.length
-                                  ? new Set()
-                                  : new Set(
-                                    filteredPositions.map((p) => p.positionId),
-                                  ),
-                              )
-                            }
-                            className="cursor-pointer"
-                          />
-                        </th>
-                      )}
+                      <th className="px-3 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            filteredPositions.length > 0 &&
+                            selectedPositions.size === filteredPositions.length
+                          }
+                          onChange={() =>
+                            setSelectedPositions(
+                              selectedPositions.size ===
+                                filteredPositions.length
+                                ? new Set()
+                                : new Set(
+                                  filteredPositions.map((p) => p.positionId),
+                                ),
+                            )
+                          }
+                          className="cursor-pointer"
+                        />
+                      </th>
                       {userData?.roleId !== 4 && (
                         <>
                           <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider">
@@ -1086,22 +1107,20 @@ const Positions: React.FC = () => {
                         key={p.positionId}
                         className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/50 transition-colors ${selectedPositions.has(p.positionId) ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
                       >
-                        {hasMarketTradeRights && (
-                          <td className="px-3 py-4 text-center">
-                            <input
-                              type="checkbox"
-                              checked={selectedPositions.has(p.positionId)}
-                              onChange={() => {
-                                const next = new Set(selectedPositions);
-                                next.has(p.positionId)
-                                  ? next.delete(p.positionId)
-                                  : next.add(p.positionId);
-                                setSelectedPositions(next);
-                              }}
-                              className="cursor-pointer"
-                            />
-                          </td>
-                        )}
+                        <td className="px-3 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedPositions.has(p.positionId)}
+                            onChange={() => {
+                              const next = new Set(selectedPositions);
+                              next.has(p.positionId)
+                                ? next.delete(p.positionId)
+                                : next.add(p.positionId);
+                              setSelectedPositions(next);
+                            }}
+                            className="cursor-pointer"
+                          />
+                        </td>
                         {userData?.roleId !== 4 && (
                           <>
                             <td className="px-4 py-4 text-center">

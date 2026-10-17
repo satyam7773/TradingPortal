@@ -5,7 +5,7 @@ import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
 import { useAppSelector } from '../../hooks/reduxHooks';
-import { selectMarketTradeRight } from '../../store/selectors/authSelectors';
+import { selectMarketTradeRight, selectDeleteTrade } from '../../store/selectors/authSelectors';
 
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DealBrkDetailsModal from './DealBrkDetailsModal';
@@ -99,6 +99,7 @@ const ManageTraders: React.FC = () => {
   
   // Get hasMarketTradeRights from Redux
   const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
+  const deleteTradeRight = useAppSelector(selectDeleteTrade);
 
   // Initialize download hook
   const downloadReport = useDownloadReport({
@@ -477,7 +478,7 @@ const ManageTraders: React.FC = () => {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{trades.length} trades found</p>
               </div>
             </div>
-            {selectedTradeIds.size > 0 && isAdminUser && hasMarketTradeRights && (
+            {selectedTradeIds.size > 0 && isAdminUser && deleteTradeRight && (
               <button
                 onClick={handleDeleteTrades}
                 disabled={isDeleting}
@@ -762,7 +763,7 @@ const ManageTraders: React.FC = () => {
             <table className="w-full border-collapse min-w-max">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-700 dark:to-slate-600 border-b border-gray-200/50 dark:border-slate-600/50">
-                    {isAdminUser && hasMarketTradeRights && (
+                    {isAdminUser && deleteTradeRight && (
                       <th className="text-center px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -846,7 +847,7 @@ const ManageTraders: React.FC = () => {
                         className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700/50 dark:hover:to-slate-600/50 transition-all duration-200"
                       >
                         {/* Checkbox */}
-                        {isAdminUser && hasMarketTradeRights && (
+                        {isAdminUser && deleteTradeRight && (
                           <td className="px-4 py-3 text-center">
                             <input
                               type="checkbox"

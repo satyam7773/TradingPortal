@@ -22,21 +22,18 @@ const validationSchema = Yup.object({
   password: Yup.string().required('Password is required')
 })
 
-// Initial form values
-const initialValues = {
-  server: 'matrix',
+// Initial form values - use demo credentials for staging/dev, empty for production
+const initialValues = import.meta.env.MODE === 'production' ? {
+  server: '',
+  userId: '',
+  password: ''
+} : {
+  server: 'JBR',
   userId: 'admin',
   password: '123456'
 }
 
-// Server options with icons and descriptions
-const serverOptions = [
-  { value: 'matrix', label: 'Matrix', icon: Server, description: 'Primary trading server' },
-  { value: 'production', label: 'Production Server', icon: Globe, description: 'Live trading environment' },
-  { value: 'staging', label: 'Staging Server', icon: TestTube, description: 'Testing environment' },
-  { value: 'development', label: 'Development Server', icon: Code, description: 'Development environment' },
-  { value: 'demo', label: 'Demo Server', icon: Play, description: 'Practice trading' }
-]
+
 
 const Login: React.FC = () => {
   const dispatch = useAppDispatch()
@@ -96,7 +93,8 @@ const Login: React.FC = () => {
     dispatch(loginRequest({ 
       email: values.userId, 
       password: values.password,
-      server: values.server 
+      server: values.server,
+      source: 'WEB'
     }))
   }
 
@@ -261,15 +259,17 @@ const Login: React.FC = () => {
                           >
                             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                               <Server className="w-4 h-4 inline mr-2 text-purple-600 dark:text-purple-400" />
-                              Select Server
+                              Server
                             </label>
-                            <Select
-                              options={serverOptions}
+                            <Input
+                              icon={Server}
+                              placeholder="Enter server name"
                               value={field.value}
-                              onChange={(value) => setFieldValue('server', value)}
-                              error={meta.touched && meta.error ? meta.error : ''}
-                              name={field.name}
+                              onChange={field.onChange}
                               onBlur={field.onBlur}
+                              name={field.name}
+                              error={meta.touched && meta.error ? meta.error : ''}
+                              isValid={field.value && !meta.error}
                             />
                           </motion.div>
                         )}

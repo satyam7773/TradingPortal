@@ -53,3 +53,15 @@ export const selectFirstLogin = (state: RootState) =>
 // Check if change password flag is set
 export const selectChangePasswordFlag = (state: RootState) => 
   state.auth.user?.changePasswordFlag ?? false;
+
+// Get manual order permission
+export const selectManualOrder = (state: RootState) => 
+  state.auth.user?.manualOrder ?? false;
+
+// Get delete trade permission
+export const selectDeleteTrade = (state: RootState) => 
+  state.auth.user?.deleteTrade ?? false;
+
+// Get pending to success permission
+export const selectPendingToSuccess = (state: RootState) => 
+  state.auth.user?.pendingToSuccess ?? false;

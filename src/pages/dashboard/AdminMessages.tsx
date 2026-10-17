@@ -117,6 +117,8 @@ const AdminMessages: React.FC = () => {
         resetForm();
         setShowModal(false);
         await fetchMessages();
+        // ✅ Notify other components (like UserBalance) that messages changed
+        window.dispatchEvent(new Event('adminMessagesChanged'));
       } else {
         toast.error(res?.responseMessage || 'Failed to save message');
       }
@@ -166,6 +168,8 @@ const AdminMessages: React.FC = () => {
       if (res?.responseCode === '0') {
         toast.success('Message deleted successfully');
         await fetchMessages();
+        // ✅ Notify other components (like UserBalance) that messages changed
+        window.dispatchEvent(new Event('adminMessagesChanged'));
       } else {
         toast.error(res?.responseMessage || 'Failed to delete message');
       }
@@ -421,7 +425,7 @@ const AdminMessages: React.FC = () => {
                   <Bell className="w-5 h-5 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-white">
-                  {editingId ? '✏️ Edit Message' : '📝 Create Message'}
+                  {editingId ? '✏️ Edit Message' : 'Create Message'}
                 </h2>
               </div>
               <button
