@@ -74,7 +74,7 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
   const [exchanges, setExchanges] = useState<any[]>([])
   const [symbols, setSymbols] = useState<any[]>([])
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 10
+  const pageSize = 100  // ✅ Fetch 100 records per API call
 
   // Sorting
   const { sortColumn, sortDirection, handleSort, sortedData, getSortIcon } = useSorting({ data: rejectionLogs })
@@ -170,7 +170,7 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
       const targetUserId = isModalMode ? propsUserId : filters.selectedUserId || loggedInUserId
 
       const response = await userManagementService.fetchRejectionLogs({
-        userId: loggedInUserId,
+        userId: targetUserId,  // ✅ Use targetUserId (selected user) instead of loggedInUserId
         data: {
           userId: targetUserId,
           exchange: filters.selectedExchange || '',

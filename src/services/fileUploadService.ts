@@ -1,4 +1,5 @@
 import { apiClient, TokenManager } from './apiClient'
+import { authFetch, authFetchPost } from '../utils/authFetch'
 import { API_ENDPOINTS } from '../config/apiConfig'
 
 export type FileReaderType = 'OPTION' | 'FUTURE'
@@ -47,7 +48,7 @@ class FileUploadService {
         url = `${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/quotes/api/v1/bhaav-copy?fileReaderType=${fileReaderType}`
       }
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'POST',
         body: formData,
         headers: {
@@ -197,13 +198,7 @@ class FileUploadService {
         closing_price: closingPrice
       }
 
-        const response = await fetch(API_ENDPOINTS.QUOTES.UPDATE_CIRCUITS, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      })
+        const response = await authFetchPost(API_ENDPOINTS.QUOTES.UPDATE_CIRCUITS, payload)
 
       if (!response.ok) {
         const text = await response.text()
@@ -248,13 +243,7 @@ class FileUploadService {
         closing_price: closingPrice
       }
 
-        const response = await fetch(API_ENDPOINTS.QUOTES.UPDATE_CLOSING_PRICE, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      })
+        const response = await authFetchPost(API_ENDPOINTS.QUOTES.UPDATE_CLOSING_PRICE, payload)
 
       if (!response.ok) {
         const text = await response.text()

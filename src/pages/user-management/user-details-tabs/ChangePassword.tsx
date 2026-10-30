@@ -11,9 +11,10 @@ interface ChangePasswordProps {
   userDetails: any
   onClose?: () => void
   onRefresh?: (targetUser?: any) => Promise<any>
+  isInvestor?: boolean  // ✅ Add isInvestor flag for investor password changes
 }
 
-const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onClose, onRefresh }) => {
+const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onClose, onRefresh, isInvestor = false }) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -26,10 +27,10 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onCl
             <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
               <Lock className="w-5 h-5 text-white" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Change Password</h3>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white">{isInvestor ? 'Change Investor Password' : 'Change Password'}</h3>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300 ml-13">
-            Update the password for <span className="font-semibold">{userDetails?.name || user?.name}</span> ({userDetails?.username || user?.username})
+            Update the {isInvestor ? 'investor ' : ''}password for <span className="font-semibold">{userDetails?.name || user?.name}</span> ({userDetails?.username || user?.username})
           </p>
         </div>
 
@@ -57,41 +58,84 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onCl
                   return;
                 }
 
-                const payload = {
-                  requestTimestamp: '',
-                  userId: Number(actingUserId),
-                  data: {
-                    updateUserId: Number(targetUserId),
-                    masterPassword: values.masterPassword,
-                    newPassword: values.newPassword
-                  }
-                };
-
-                console.log('🔐 Forgot Password Request:', {
-                  endpoint: '/user/portal/forgotPassword',
-                  userId: payload.userId,
-                  updateUserId: payload.data.updateUserId
-                });
-
-                const response = await apiClient.post('/user/portal/forgotPassword', payload);
-
-                const code = String(response?.responseCode ?? response?.data?.responseCode ?? '');
-                const message = response?.responseMessage || response?.data?.responseMessage || 'Password updated successfully';
-
-                if (code === '0' || code === '1000') {
-                  toast.success(message);
-                  resetForm();
-                  setErrorMessage('');
-                  if (onRefresh) {
-                    try {
-                      await onRefresh(user);
-                    } catch (err) {
-                      console.warn('Failed to refresh after password change', err);
+                if (isInvestor) {
+                  // ✅ For Investor Password: Use /user/settings/changePassword with isInvestor flag
+                  const payload = {
+                    requestTimestamp: Date.now(),
+                    userId: Number(actingUserId),
+                    data: {
+                      oldPassword: values.masterPassword,
+                      newPassword: values.newPassword,
+                      confirmPassword: values.newPassword,
+                      isInvestor: true,
+                      userId: Number(targetUserId),
                     }
+                  };
+
+                  console.log('🔐 Investor Password Change Request:', {
+                    endpoint: '/user/settings/changePassword',
+                    userId: payload.userId,
+                    isInvestor: true
+                  });
+
+                  const response = await apiClient.post('/user/settings/changePassword', payload);
+
+                  const code = String(response?.responseCode ?? response?.data?.responseCode ?? '');
+                  const message = response?.responseMessage || response?.data?.responseMessage || 'Investor password updated successfully';
+
+                  if (code === '0' || code === '1000') {
+                    toast.success(message);
+                    resetForm();
+                    setErrorMessage('');
+                    if (onRefresh) {
+                      try {
+                        await onRefresh(user);
+                      } catch (err) {
+                        console.warn('Failed to refresh after investor password change', err);
+                      }
+                    }
+                  } else {
+                    setErrorMessage(message || 'Failed to change investor password');
+                    toast.error(message || 'Failed to change investor password');
                   }
                 } else {
-                  setErrorMessage(message || 'Failed to change password');
-                  toast.error(message || 'Failed to change password');
+                  // ✅ For User Password: Use /user/portal/forgotPassword with masterPassword
+                  const payload = {
+                    requestTimestamp: '',
+                    userId: Number(actingUserId),
+                    data: {
+                      updateUserId: Number(targetUserId),
+                      masterPassword: values.masterPassword,
+                      newPassword: values.newPassword
+                    }
+                  };
+
+                  console.log('🔐 User Password Change Request:', {
+                    endpoint: '/user/portal/forgotPassword',
+                    userId: payload.userId,
+                    updateUserId: payload.data.updateUserId
+                  });
+
+                  const response = await apiClient.post('/user/portal/forgotPassword', payload);
+
+                  const code = String(response?.responseCode ?? response?.data?.responseCode ?? '');
+                  const message = response?.responseMessage || response?.data?.responseMessage || 'Password updated successfully';
+
+                  if (code === '0' || code === '1000') {
+                    toast.success(message);
+                    resetForm();
+                    setErrorMessage('');
+                    if (onRefresh) {
+                      try {
+                        await onRefresh(user);
+                      } catch (err) {
+                        console.warn('Failed to refresh after password change', err);
+                      }
+                    }
+                  } else {
+                    setErrorMessage(message || 'Failed to change password');
+                    toast.error(message || 'Failed to change password');
+                  }
                 }
               } catch (error: any) {
                 console.error('Change password error:', error);
@@ -127,11 +171,11 @@ const ChangePassword: React.FC<ChangePasswordProps> = ({ user, userDetails, onCl
 
                  <div>
                   <Input
-                    label="Master Password*"
+                    label={"Master Password*"}
                     icon={Key}
                     name="masterPassword"
                     type="password"
-                    placeholder="Enter master password"
+                    placeholder={"Enter master password"}
                     value={values.masterPassword || ''}
                     onChange={handleChange}
                     onBlur={handleBlur}

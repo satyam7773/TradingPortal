@@ -10,6 +10,7 @@ import { useSorting } from '../../hooks/useSorting'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import { useTheme } from '../../contexts/ThemeContext'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetchPost } from '../../utils/authFetch'
 import { useDownloadReport } from '../../hooks/useDownloadReport'
 
 // --- Interfaces ---
@@ -193,15 +194,11 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
     try {
       const targetUserId = userFilterType === 'SINGLE' ? Number(selectedUserId) : loggedInUserId
       
-      const response = await fetch(API_ENDPOINTS.REPORTS.TRADE_ACCOUNT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: loggedInUserId,
-          data: {
-            userId: targetUserId
-          }
-        })
+      const response = await authFetchPost(API_ENDPOINTS.REPORTS.TRADE_ACCOUNT, {
+        userId: loggedInUserId,
+        data: {
+          userId: targetUserId
+        }
       })
 
       const result = await response.json()

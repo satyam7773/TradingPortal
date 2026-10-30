@@ -116,7 +116,7 @@ export const UserBalance: React.FC<UserBalanceProps> = ({ className = '' }) => {
             {/* Original messages */}
             {messages.map((msg, idx) => (
               <span key={idx} className="inline-flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300 flex-shrink-0 leading-none">
-                <span className="text-blue-600 dark:text-blue-400 font-semibold truncate max-w-xs text-xs">{msg.message}</span>
+                <span className="text-blue-600 dark:text-blue-400 font-semibold text-xs whitespace-normal">{msg.message}</span>
                 <span className="text-slate-500 dark:text-slate-400 font-medium text-xs">({msg.start_date})</span>
                 <span className="text-blue-400 dark:text-blue-500 text-xs">•</span>
               </span>
@@ -125,7 +125,7 @@ export const UserBalance: React.FC<UserBalanceProps> = ({ className = '' }) => {
             {/* Duplicate for seamless loop */}
             {messages.map((msg, idx) => (
               <span key={`dup-${idx}`} className="inline-flex items-center gap-1 text-xs text-slate-700 dark:text-slate-300 flex-shrink-0 leading-none">
-                <span className="text-blue-600 dark:text-blue-400 font-semibold truncate max-w-xs text-xs">{msg.message}</span>
+                <span className="text-blue-600 dark:text-blue-400 font-semibold text-xs whitespace-normal">{msg.message}</span>
                 <span className="text-slate-500 dark:text-slate-400 font-medium text-xs">({msg.start_date})</span>
                 <span className="text-blue-400 dark:text-blue-500 text-xs">•</span>
               </span>

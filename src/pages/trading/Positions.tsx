@@ -27,6 +27,7 @@ import { BUY_SELL_DISABLED_MESSAGE } from "../../utils/permissionUtils";
 import { useAppSelector } from "../../hooks/reduxHooks";
 import { selectMarketTradeRight, selectDeleteTrade } from "../../store/selectors/authSelectors";
 import { API_ENDPOINTS } from "../../config/apiConfig";
+import { authFetchPost } from "../../utils/authFetch";
 import { Trades as TradesPage } from "./Trades";
 
 interface PositionData {
@@ -648,13 +649,9 @@ const Positions: React.FC = () => {
             data: allPositionIds, // ✅ Send all extracted positionIds
           };
 
-          const response = await fetch(
+          const response = await authFetchPost(
             API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            },
+            payload
           );
 
           const result = await response.json();
@@ -663,7 +660,7 @@ const Positions: React.FC = () => {
             setSelectedPositions(new Set());
             handleView();
           } else {
-            toast.error(result?.message || "Failed to close positions");
+            toast.error(result?.responseMessage || result?.message || "Failed to close positions");
           }
         } catch (err) {
           toast.error("Error closing positions");
@@ -753,7 +750,7 @@ const Positions: React.FC = () => {
 
       // Fetch own user positions from new API
       const response = await userManagementService.fetchOwnUserPositions(
-        loggedInUserId,
+        selectedUserId,
         p.token || 0,
       );
 
@@ -806,20 +803,16 @@ const Positions: React.FC = () => {
       // 🆕 Fetch from /oms/positions/portal API
       const payload = {
         requestTimestamp: Date.now().toString(),
-        userId: loggedInUserId,
+        userId: selectedUserId,
         data: {
-          userId: loggedInUserId,
+          userId: selectedUserId,
           token: p.token || 0,
         }
       };
 
-      const response = await fetch(
+      const response = await authFetchPost(
         API_ENDPOINTS.OMS.POSITIONS_PORTAL,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }
+        payload
       );
 
       const result = await response.json();

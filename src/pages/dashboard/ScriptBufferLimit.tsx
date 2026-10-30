@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Eye } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
+import { authFetchPost } from '../../utils/authFetch';
 import { API_ENDPOINTS } from '../../config/apiConfig';
 
 interface ScriptBuffer {
@@ -157,11 +158,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
           }
         };
 
-        const response = await fetch(API_ENDPOINTS.SETTINGS.UPDATE_SCRIP_BUFFER_SETTINGS, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const response = await authFetchPost(API_ENDPOINTS.SETTINGS.UPDATE_SCRIP_BUFFER_SETTINGS, payload);
 
         if (!response.ok) {
           toast.error('Update failed');
@@ -260,14 +257,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
           }
         };
 
-        const response = await fetch(API_ENDPOINTS.SETTINGS.FETCH_SCRIP_BUFFER_SETTINGS, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
+        const response = await authFetchPost(API_ENDPOINTS.SETTINGS.FETCH_SCRIP_BUFFER_SETTINGS, payload);
 
         if (!response.ok) continue;
 
@@ -335,14 +325,7 @@ const ScriptBufferLimit: React.FC<ScriptBufferLimitProps> = ({ username, userId:
         }
       };
       
-      const response = await fetch(API_ENDPOINTS.SETTINGS.VIEW_SCRIP_BUFFER_UPDATED_USER, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      const response = await authFetchPost(API_ENDPOINTS.SETTINGS.VIEW_SCRIP_BUFFER_UPDATED_USER, payload);
       
       if (!response.ok) throw new Error('Failed to fetch');
       

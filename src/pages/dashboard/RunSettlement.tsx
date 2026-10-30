@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { AlertCircle, CheckCircle, Loader } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetchPost } from '../../utils/authFetch'
 
 interface SettlementResponse {
   status: string
@@ -31,12 +32,7 @@ const RunSettlement: React.FC = () => {
     setStep('processing')
 
     try {
-      const response = await fetch(API_ENDPOINTS.OMS_V2.SETTLEMENT_POSITION, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await authFetchPost(API_ENDPOINTS.OMS_V2.SETTLEMENT_POSITION, {})
 
       const data: SettlementResponse = await response.json()
 
@@ -47,7 +43,7 @@ const RunSettlement: React.FC = () => {
       } else {
         setError(data.message || 'Settlement failed')
         setStep('error')
-        toast.error('Settlement failed')
+        toast.error(data.message || 'Settlement failed')
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to process settlement'

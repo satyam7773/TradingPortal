@@ -12,6 +12,7 @@ import orderService from '../services/orderService';
 import FilterLayout from '../components/FilterLayout';
 import { useOrderModal } from '../hooks/useOrderModal';
 import { useUserDetailsModal } from '../hooks/useUserDetailsModal';
+import { authFetchPost } from '../utils/authFetch';
 import ConfirmAlert from '../components/modals/ConfirmAlert';
 import OrderModal from '../components/modals/OrderModal';
 import OwnUserPositionModal from './OwnUserPositionModal';
@@ -24,6 +25,8 @@ import { BUY_SELL_DISABLED_MESSAGE } from '../utils/permissionUtils';
 import { Trades as TradesPage } from '../pages/trading/Trades';
 import { useAppSelector } from '../hooks/reduxHooks';
 import { selectMarketTradeRight, selectDeleteTrade } from '../store/selectors/authSelectors';
+import { orderUpdateService } from '../services/orderUpdateService';
+import CFMarginOnUsers from '../pages/dashboard/CFMarginOnUsers';
 
 interface UserPositionsPanelProps {
   username: string;
@@ -85,6 +88,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [liveTicks, setLiveTicks] = useState<Record<number, any>>({});
+  const [balanceData, setBalanceData] = useState<any>(null);
 
   // ✅ Alert modal state for close positions confirmation
   const [alertOpen, setAlertOpen] = useState(false);
@@ -281,6 +285,27 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     })();
   }, [selectedExchange, userId]);
 
+  // ✅ Fetch balance data function (can be called on demand)
+  const fetchBalanceData = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const response = await authFetchPost(
+        API_ENDPOINTS.USER.PORTAL_BALANCE,
+        {
+          userId: Number(userId),
+          requestTimestamp: "",
+          data: ""
+        }
+      );
+      const result = await response.json();
+      if (result?.responseCode === '0' && result?.data) {
+        setBalanceData(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+    }
+  }, [userId]);
+
   // --- Live socket logic (copied from Positions.tsx) ---
   const unsubscribeCurrentFeed = useCallback(() => {
     marketWatchService.stopPositionsPollingLoop();
@@ -328,7 +353,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         });
       });
     });
-  }, [unsubscribeCurrentFeed]);
+  }, [unsubscribeCurrentFeed, fetchBalanceData]);
 
 
   const setupLivePositionFeed = useCallback(async (positionsList: any[]) => {
@@ -345,7 +370,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   }, [establishStompSubscription, userId, isManualOrderEnabled]);
 
   // --- Fetch positions using old API for roleId 4 ---
-  const fetchOldPositionsAPI = async () => {
+  const fetchOldPositionsAPI = async (ignoreSelectedSymbol = false) => {
     try {
       const result = await userManagementService.getUserPositions(Number(userId));
 
@@ -374,7 +399,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           marginUsed: p.marginUsed || 0,
         }));
 
-        if (selectedSymbol)
+        if (selectedSymbol && !ignoreSelectedSymbol)
           positions = positions.filter((p: any) => p.tradeSymbol === selectedSymbol);
 
         setFilteredPositions(positions);
@@ -399,7 +424,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
       // Check roleId - for roleId 4, use old API; otherwise use cumulative API
       // ✅ Use displayRoleId which is extracted from user.userProfile (parent component already fetched it)
       if (Number(displayRoleId) === 4) {
-        await fetchOldPositionsAPI();
+        await fetchOldPositionsAPI(ignoreSelectedSymbol);
       } else {
         const tokenToFetch = targetToken !== undefined ? targetToken : (selectedToken || 0);
         console.log("Fetching positions for User ID:", userId, "Exchange:", exchange, "Token:", tokenToFetch);
@@ -461,12 +486,28 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const scriptItems = useMemo(() => symbols.map(s => ({ id: s.token, name: s.tradeSymbol })), [symbols]);
 
   // --- Stats ---
-  const stats = useMemo(() => ({
-    total: filteredPositions.length,
-    buy: filteredPositions.filter(p => p.position === 'BUY').length,
-    sell: filteredPositions.filter(p => p.position === 'SELL').length,
-    totalPnL: filteredPositions.reduce((sum, p) => sum + (p.pnl || 0), 0),
-  }), [filteredPositions]);
+  const stats = useMemo(() => {
+    const livePnL = filteredPositions.reduce((sum, p) => sum + (p.pnl || 0), 0);
+    const balance = balanceData?.balance || 0;
+    const brokerage = balanceData?.brokerage || 0;
+    const credits = balanceData?.credits || 0;
+    const pnl = balanceData?.pnl || 0;
+    // ✅ Include credits only for client users (roleId 4), not for master users
+    const equity = isClient 
+      ? (balanceData?.balance + balanceData?.credits + livePnL)
+      : (balanceData?.balance + livePnL);
+    return {
+      total: filteredPositions.length,
+      buy: filteredPositions.filter(p => p.position === 'BUY').length,
+      sell: filteredPositions.filter(p => p.position === 'SELL').length,
+      totalPnL: livePnL,
+      pnl,
+      brokerage,
+      balance,
+      credits,
+      equity,
+    };
+  }, [filteredPositions, balanceData, isClient]);
 
   // --- Add Order filter fields state ---
   const [buySell, setBuySell] = useState<'Buy' | 'Sell'>('Buy');
@@ -549,6 +590,24 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     };
 
   }, [selectedToken, userId, isManualOrderEnabled]);
+
+  // --- Fetch balance data for the selected user (initial load) ---
+  useEffect(() => {
+    fetchBalanceData();
+  }, [userId, fetchBalanceData]);
+
+  // ✅ Refresh balance ONLY when an order is executed (not on every socket update)
+  useEffect(() => {
+    const unsubscribeOrderUpdates = orderUpdateService.onOrderUpdate((order) => {
+      console.log('📊 Order executed, refreshing balance...', order);
+      fetchBalanceData();
+    });
+
+    return () => {
+      unsubscribeOrderUpdates();
+    };
+  }, [fetchBalanceData]);
+
   const selectedTick = selectedToken ? liveTicks[selectedToken] : null;
   const buyPriceDisplay = selectedTick?.ask ? Number(selectedTick.ask).toFixed(2) : '--';
   const sellPriceDisplay = selectedTick?.bid ? Number(selectedTick.bid).toFixed(2) : '--';
@@ -1001,13 +1060,9 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
         }
       };
 
-      const response = await fetch(
+      const response = await authFetchPost(
         API_ENDPOINTS.OMS.POSITIONS_PORTAL,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }
+        payload
       );
 
       const result = await response.json();
@@ -1110,11 +1165,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             data: allPositionIds  // ✅ Send all extracted positionIds with userIds
           };
           
-          const response = await fetch(API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+          const response = await authFetchPost(API_ENDPOINTS.OMS.CLOSE_MULTIPLE_POSITIONS, payload);
           
           const result = await response.json();
           if (result?.responseCode === '0' || result?.status === 'success') {
@@ -1122,7 +1173,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             setSelectedPositions(new Set());
             handleView();
           } else {
-            toast.error(result?.message || "Failed to close positions");
+            toast.error(result?.responseMessage || result?.message || "Failed to close positions");
           }
         } catch (err) {
           toast.error("Error closing positions");
@@ -1183,11 +1234,16 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-r from-white/80 via-blue-50/80 to-white/80 dark:from-slate-800/80 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><Briefcase className="w-7 h-7 text-blue-500" /> Positions</h1>
-              <div className="grid grid-cols-4 gap-6">
-                <div className="text-center"><div className="text-xl font-bold text-slate-900 dark:text-white">{stats.total}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
-                <div className="text-center"><div className="text-xl font-bold text-blue-600">{stats.buy}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
-                <div className="text-center"><div className="text-xl font-bold text-red-600">{stats.sell}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
-                <div className="text-center"><div className={`text-xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Net P&L</div></div>
+              <div className={`grid gap-4 ${isClient ? 'grid-cols-9' : 'grid-cols-8'}`}>
+                <div className="w-20 text-center"><div className="text-xl font-bold text-slate-900 dark:text-white">{stats.total}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total</div></div>
+                <div className="w-20 text-center"><div className="text-xl font-bold text-blue-600">{stats.buy}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Buy</div></div>
+                <div className="w-20 text-center"><div className="text-xl font-bold text-red-600">{stats.sell}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Sell</div></div>
+                <div className="w-36 text-center"><div className={`text-xl font-bold ${stats.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.pnl.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">PnL</div></div>
+                <div className="w-36 text-center"><div className="text-xl font-bold text-orange-600">₹{stats.brokerage.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Bk</div></div>
+                <div className="w-36 text-center"><div className="text-xl font-bold text-blue-600">₹{stats.balance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Bal</div></div>
+                {isClient && (<div className="w-36 text-center"><div className="text-xl font-bold text-purple-600">₹{stats.credits.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">CRD</div></div>)}
+                <div className="w-36 text-center"><div className={`text-xl font-bold ${stats.equity >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.equity.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Equity</div></div>
+                <div className="w-36 text-center"><div className={`text-xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>₹{stats.totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div><div className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total P&L</div></div>
               </div>
             </div>
           </div>
@@ -1271,12 +1327,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             )
           ) : null}
           {tab === 'cfMarginSquareOff' && (
-            <div className="h-40 flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">CF Margin Square Off</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Coming soon...</p>
-              </div>
-            </div>
+            <CFMarginOnUsers username={username} userId={userId} roleId={roleId} user={user} />
           )}
         </div>
 

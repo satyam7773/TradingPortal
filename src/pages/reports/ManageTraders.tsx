@@ -13,6 +13,7 @@ import DurationDetailsModal from './DurationDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { API_ENDPOINTS } from '../../config/apiConfig';
+import { authFetchPost } from '../../utils/authFetch';
 
 interface TradeData {
   id?: number;
@@ -173,11 +174,7 @@ const ManageTraders: React.FC = () => {
       if (filtersToUse.duration) payload.data.duration = filtersToUse.duration;
       if (filtersToUse.pnl) payload.data.pnl = filtersToUse.pnl;
 
-      const response = await fetch(API_ENDPOINTS.REPORTS.TRADES, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await authFetchPost(API_ENDPOINTS.REPORTS.TRADES, payload);
 
       const result = await response.json();
       if (result?.responseCode === '0') {
@@ -388,6 +385,17 @@ const ManageTraders: React.FC = () => {
     }
   }, [filters.exchange]);
 
+  // Auto-refresh when live toggle is on (every 5 seconds)
+  useEffect(() => {
+    if (!filters.live) return;
+
+    const interval = setInterval(() => {
+      handleFetchTrades(currentPage, filters);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [filters, currentPage]);
+
   const handleFilterChange = (field: string, value: any) => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
@@ -493,18 +501,20 @@ const ManageTraders: React.FC = () => {
           <>
             <div className="space-y-4">
               {/* Live Toggle */}
-              <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Live</label>
-                <button
-                  onClick={() => handleFilterChange('live', !filters.live)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${filters.live ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'
-                    }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${filters.live ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                  />
-                </button>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-tight">Auto Refresh</label>
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] text-slate-500 italic">{filters.live ? '🔴 Live - Every 5s' : 'Off'}</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={filters.live} 
+                      onChange={() => handleFilterChange('live', !filters.live)} 
+                    />
+                    <div className="w-9 h-5 bg-slate-300 dark:bg-slate-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                  </label>
+                </div>
               </div>
 
               {/* From Date */}

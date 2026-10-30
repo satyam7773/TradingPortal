@@ -7,6 +7,7 @@ import userManagementService from '../../services/userManagementService'
 import UserDetailsModal from '../user-management/UserDetailsModal'
 import { useSorting } from '../../hooks/useSorting'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetchPost } from '../../utils/authFetch'
 
 interface WeeklyAdminData {
   userId: number
@@ -91,11 +92,7 @@ const WeeklyAdmin: React.FC = () => {
         }
       }
 
-      const response = await fetch(API_ENDPOINTS.REPORTS.WEEKLY_ADMIN, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
+      const response = await authFetchPost(API_ENDPOINTS.REPORTS.WEEKLY_ADMIN, payload)
 
       const result = await response.json()
       if (result?.responseCode === '0') {

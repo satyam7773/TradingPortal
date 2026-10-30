@@ -269,7 +269,8 @@ const TradesPage: React.FC<TradesPageProps> = ({
       try {
         setInitialLoading(true)
         // Fetch users in both dashboard and modal modes
-        const usersResponse = await userManagementService.fetchOwnUsers(loggedInUserId)
+        // Use targetUserId to get the correct user context (either modal user or logged-in user)
+        const usersResponse = await userManagementService.fetchOwnUsers(targetUserId)
         if (usersResponse?.responseCode === '0' && Array.isArray(usersResponse.data)) {
           setUsers(usersResponse.data)
         }

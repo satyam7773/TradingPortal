@@ -6,6 +6,8 @@ import MarketTradeRightsModal from './MarketTradeRightsModal';
 import AdminRightsModal from './AdminRightsModal';
 import ExchangewiseLotLimitModal from './ExchangewiseLotLimitModal';
 import MarginSquareOffModal from './MarginSquareOffModal';
+import CarryForwardMarginModal from './CarryForwardMarginModal';
+import TradeDurationRankModal from './TradeDurationRankModal';
 import { createPortal } from 'react-dom';
 import { User, Edit, X, Shield, Settings, Clock, MoreHorizontal, Lock, Share2, AlertCircle } from 'lucide-react';
 import { userManagementService } from '../../services';
@@ -223,6 +225,8 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const [showIntradaySquareOffModal, setShowIntradaySquareOffModal] = useState(false);
   const [selectedUserForPasswordChange, setSelectedUserForPasswordChange] = useState<any>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedUserForInvestorPassword, setSelectedUserForInvestorPassword] = useState<any>(null);
+  const [showInvestorPasswordModal, setShowInvestorPasswordModal] = useState(false);
   const [selectedUserForSharingDetails, setSelectedUserForSharingDetails] = useState<any>(null);
   const [showSharingModal, setShowSharingModal] = useState(false);
   const [selectedUserForAddCredits, setSelectedUserForAddCredits] = useState<any>(null);
@@ -244,6 +248,10 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
   const [selectedUserForFreshStopLoss, setSelectedUserForFreshStopLoss] = useState<any>(null);
   const [showAccountLimitModal, setShowAccountLimitModal] = useState(false);
   const [selectedUserForAccountLimit, setSelectedUserForAccountLimit] = useState<any>(null);
+  const [showCarryForwardMarginModal, setShowCarryForwardMarginModal] = useState(false);
+  const [selectedUserForCarryForwardMargin, setSelectedUserForCarryForwardMargin] = useState<any>(null);
+  const [showDurationModal, setShowDurationModal] = useState(false);
+  const [selectedUserForDuration, setSelectedUserForDuration] = useState<any>(null);
   const actionMenuRef = React.useRef<HTMLDivElement>(null);
   const actionMenuButtonRefs = React.useRef<{ [key: string]: HTMLButtonElement | null }>({});
   // removed activeMenuName; we use activeTab for dynamic menu tabs
@@ -571,6 +579,9 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         } else if (showPasswordModal) {
           setShowPasswordModal(false);
           setSelectedUserForPasswordChange(null);
+        } else if (showInvestorPasswordModal) {
+          setShowInvestorPasswordModal(false);
+          setSelectedUserForInvestorPassword(null);
         } else if (showMarketTradeRightsModal) {
           setShowMarketTradeRightsModal(false);
           setSelectedUserForMarketTradeRights(null);
@@ -583,6 +594,12 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
         } else if (showAccountLimitModal) {
           setShowAccountLimitModal(false);
           setSelectedUserForAccountLimit(null);
+        } else if (showCarryForwardMarginModal) {
+          setShowCarryForwardMarginModal(false);
+          setSelectedUserForCarryForwardMargin(null);
+        } else if (showDurationModal) {
+          setShowDurationModal(false);
+          setSelectedUserForDuration(null);
         } else {
           onClose();
         }
@@ -591,7 +608,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
 
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
-  }, [showAddCreditsModal, showSharingModal, showPasswordModal, showMarketTradeRightsModal, showAdminRightsModal, showFreshStopLossModal, showAccountLimitModal, onClose]);
+  }, [showAddCreditsModal, showSharingModal, showPasswordModal, showInvestorPasswordModal, showMarketTradeRightsModal, showAdminRightsModal, showFreshStopLossModal, showAccountLimitModal, showCarryForwardMarginModal, showDurationModal, onClose]);
 
   if (!user) return null;
 
@@ -1311,7 +1328,20 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             >
               <span>📝</span> Change Password
             </button>
-            <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+            <button
+              className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                if (selectedUser) {
+                  setSelectedUserForInvestorPassword(selectedUser);
+                  setShowInvestorPasswordModal(true);
+                  setActionMenuPosition(null);
+                  setActionMenuUserId(null);
+                }
+              }}
+            >
               <span>📋</span> Investor Password
             </button>
             <button
@@ -1370,7 +1400,19 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                   <span>💰</span> Account Limit
                 </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                    if (selectedUser) {
+                      setSelectedUserForCarryForwardMargin(transformChildUser(selectedUser));
+                      setShowCarryForwardMarginModal(true);
+                    }
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                   <span>📈</span> Carry Forward Margin
                 </button>
                 <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
@@ -1479,10 +1521,34 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                   <span>📋</span> Carry Forward Option
                 </button>
 
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                    if (selectedUser) {
+                      setSelectedUserForCarryForwardMargin(transformChildUser(selectedUser));
+                      setShowCarryForwardMarginModal(true);
+                    }
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                   <span>📈</span> Carry Forward Margin
                 </button>
-                <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const selectedUser = userDetails?.userList?.find((u: any) => u.userId.toString() === actionMenuUserId);
+                    if (selectedUser) {
+                      setSelectedUserForDuration(transformChildUser(selectedUser));
+                      setShowDurationModal(true);
+                    }
+                    setActionMenuPosition(null);
+                    setActionMenuUserId(null);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                   <span>📊</span> Trading Duration Rank
                 </button>
                 <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
@@ -1526,9 +1592,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             <X className="w-5 h-5" />
           </button>
         </div>
-        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
-          <span>📋</span> Investor Password
-        </button>
         <div className="p-6">
           <ChangePassword
             user={selectedUserForPasswordChange}
@@ -1542,6 +1605,56 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               }
               setShowPasswordModal(false);
               setSelectedUserForPasswordChange(null);
+            }}
+          />
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+
+  // Investor Password Modal Portal
+  const investorPasswordModal = showInvestorPasswordModal && selectedUserForInvestorPassword && createPortal(
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center pointer-events-none"
+      style={{ zIndex: modalZIndex + 100 }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          setShowInvestorPasswordModal(false);
+          setSelectedUserForInvestorPassword(null);
+        }
+      }}
+    >
+      <div
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto pointer-events-auto"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between z-10">
+          <h2 className="text-xl font-bold text-white">Change Investor Password</h2>
+          <button
+            onClick={() => {
+              setShowInvestorPasswordModal(false);
+              setSelectedUserForInvestorPassword(null);
+            }}
+            className="text-white hover:bg-white/20 rounded-full p-1 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6">
+          <ChangePassword
+            user={selectedUserForInvestorPassword}
+            userDetails={userDetails}
+            isInvestor={true}
+            onRefresh={async () => {
+              const userDataStr = localStorage.getItem('userData');
+              const userData = userDataStr ? JSON.parse(userDataStr) : null;
+              const currentUserId = userData?.userId || 2;
+              if (userDetails?.userProfile?.userId && user) {
+                await fetchUserDetails(user);
+              }
+              setShowInvestorPasswordModal(false);
+              setSelectedUserForInvestorPassword(null);
             }}
           />
         </div>
@@ -1857,6 +1970,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
       {mainModal}
       {actionMenuPortal}
       {changePasswordModal}
+      {investorPasswordModal}
       {sharingDetailsModal}
       {addCreditsModal}
       {showIntradaySquareOffModal && selectedUserForIntradaySquareOff && (
@@ -1867,7 +1981,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             setShowIntradaySquareOffModal(false);
             setSelectedUserForIntradaySquareOff(null);
           }}
-          modalZIndex={modalZIndex + 100}
         />
       )}
       {showMarketTradeRightsModal && selectedUserForMarketTradeRights && (
@@ -1881,7 +1994,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           onSave={async () => {
             // Optionally refetch user details if needed
           }}
-          modalZIndex={modalZIndex + 100}
         />
       )}
       {showAdminRightsModal && selectedUserForAdminRights && (
@@ -1895,7 +2007,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           onSave={async () => {
             // Optionally refetch user details if needed
           }}
-          modalZIndex={modalZIndex + 100}
         />
       )}
       {showExchangewiseLotLimitModal && selectedUserForExchangewiseLotLimit && (
@@ -1906,7 +2017,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             setShowExchangewiseLotLimitModal(false);
             setSelectedUserForExchangewiseLotLimit(null);
           }}
-          modalZIndex={modalZIndex + 100}
         />
       )}
       {showMarginModal && selectedUserForMargin && (
@@ -1917,7 +2027,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             setShowMarginModal(false);
             setSelectedUserForMargin(null);
           }}
-          modalZIndex={modalZIndex + 100}
         />
       )}
       {showFreshStopLossModal && selectedUserForFreshStopLoss && createPortal(
@@ -2046,6 +2155,26 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
           </div>
         </div>,
         document.body
+      )}
+      {showCarryForwardMarginModal && selectedUserForCarryForwardMargin && (
+        <CarryForwardMarginModal
+          isOpen={showCarryForwardMarginModal}
+          user={selectedUserForCarryForwardMargin}
+          onClose={() => {
+            setShowCarryForwardMarginModal(false);
+            setSelectedUserForCarryForwardMargin(null);
+          }}
+        />
+      )}
+      {showDurationModal && selectedUserForDuration && (
+        <TradeDurationRankModal
+          isOpen={showDurationModal}
+          user={selectedUserForDuration}
+          onClose={() => {
+            setShowDurationModal(false);
+            setSelectedUserForDuration(null);
+          }}
+        />
       )}
       {selectedChildUser && (
         <UserDetailsModal

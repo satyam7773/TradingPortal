@@ -1,9 +1,7 @@
-import axios, { AxiosInstance } from "axios";
+import { AxiosInstance } from "axios";
+import { apiClient, TokenManager } from "./apiClient";
 import toast from "react-hot-toast";
 import { getDeviceId } from "../utils/device";
-
-const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://api-staging.rivoplus.live";
 
 export interface PlaceOrderRequest {
   requestTimestamp: string;
@@ -52,7 +50,6 @@ export interface PlaceOrderResponse {
 }
 
 class OrderService {
-  private baseURL = BASE_URL;
   private endpoint = "/oms/placeOrder";
 
   /**
@@ -65,26 +62,21 @@ class OrderService {
 
   /**
    * Place a new order (Buy or Sell)
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async placeOrder(orderData: PlaceOrderRequest): Promise<PlaceOrderResponse> {
     try {
-      const response = await axios.post<PlaceOrderResponse>(
-        `${this.baseURL}${this.endpoint}`,
-        orderData,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 30000,
-        },
+      const response = await apiClient.post<PlaceOrderResponse>(
+        this.endpoint,
+        orderData
       );
 
-      if (response.data?.responseCode === "0" || response.status === 200) {
-        console.log("✅ Order placed successfully:", response.data);
-        return response.data;
+      if (response.responseCode === "0" || response.status === 200) {
+        console.log("✅ Order placed successfully:", response);
+        return response;
       } else {
         throw new Error(
-          response.data?.responseMessage || "Failed to place order",
+          response.responseMessage || "Failed to place order",
         );
       }
     } catch (error: any) {
@@ -191,28 +183,23 @@ class OrderService {
 
   /**
    * Modify an existing order
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async modifyOrder(
     orderData: ModifyOrderRequest,
   ): Promise<PlaceOrderResponse> {
     try {
-      const response = await axios.post<PlaceOrderResponse>(
-        `${this.baseURL}/oms/modifyOrder`,
-        orderData,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          timeout: 30000,
-        },
+      const response = await apiClient.post<PlaceOrderResponse>(
+        "/oms/modifyOrder",
+        orderData
       );
 
-      if (response.data?.responseCode === "0" || response.status === 200) {
-        console.log("✅ Order modified successfully:", response.data);
-        return response.data;
+      if (response.responseCode === "0" || response.status === 200) {
+        console.log("✅ Order modified successfully:", response);
+        return response;
       } else {
         throw new Error(
-          response.data?.responseMessage || "Failed to modify order",
+          response.responseMessage || "Failed to modify order",
         );
       }
     } catch (error: any) {

@@ -118,8 +118,15 @@ const MarginSquareOffModal: React.FC<MarginSquareOffModalProps> = ({
                 <div className="relative">
                   <input
                     type="number"
+                    min="0"
                     value={percentage}
-                    onChange={(e) => setPercentage(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Allow empty string or values >= 0
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setPercentage(value);
+                      }
+                    }}
                     className="w-full bg-slate-50 dark:bg-slate-900 px-4 py-4 rounded-xl text-2xl font-black text-slate-900 dark:text-white text-right focus:outline-none border border-transparent focus:border-rose-500 transition-all"
                     placeholder="0.00"
                     autoFocus

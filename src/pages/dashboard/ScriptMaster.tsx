@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Eye, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import userManagementService from '../../services/userManagementService';
+import { authFetchPost } from '../../utils/authFetch';
 import DownloadReport from '../../components/DownloadReport';
 import { useDownloadReport } from '../../hooks/useDownloadReport';
 import { useSorting } from '../../hooks/useSorting';
@@ -199,11 +200,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
           }
         };
 
-        const response = await fetch(API_ENDPOINTS.SETTINGS.UPDATE_SCRIP_MASTER_SETTINGS, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const response = await authFetchPost(API_ENDPOINTS.SETTINGS.UPDATE_SCRIP_MASTER_SETTINGS, payload);
 
         if (!response.ok) {
           toast.error('Update failed');
@@ -356,13 +353,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
           }
         };
 
-        const response = await fetch(API_ENDPOINTS.SETTINGS.FETCH_SCRIP_MASTER_SETTINGS, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
+        const response = await authFetchPost(API_ENDPOINTS.SETTINGS.FETCH_SCRIP_MASTER_SETTINGS, payload);
 
         const res = await response.json();
         
@@ -438,7 +429,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(scripts.map(s => s.instrumentId)));
+      setSelectedIds(new Set(filteredScripts.map(s => s.instrumentId)));
     } else {
       setSelectedIds(new Set());
     }
@@ -473,13 +464,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
         }
       };
 
-      const response = await fetch(API_ENDPOINTS.SETTINGS.VIEW_SCRIP_MASTER_UPDATED_USER, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      const response = await authFetchPost(API_ENDPOINTS.SETTINGS.VIEW_SCRIP_MASTER_UPDATED_USER, payload);
 
       const res = await response.json();
       if (res?.responseCode === '0' && Array.isArray(res.data)) {
@@ -636,7 +621,7 @@ const ScriptMaster: React.FC<ScriptMasterProps> = ({ username, userId: propsUser
                   <th className="px-4 py-3 w-8">
                     <input 
                       type="checkbox"
-                      checked={selectedIds.size === scripts.length && scripts.length > 0}
+                      checked={filteredScripts.length > 0 && selectedIds.size === filteredScripts.length}
                       onChange={handleSelectAll}
                       className="rounded"
                     />

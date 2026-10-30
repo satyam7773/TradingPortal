@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { authFetchPost } from '../utils/authFetch';
 import toast from 'react-hot-toast';
 
 interface DownloadPayload {
@@ -73,11 +74,7 @@ export const useDownloadReport = (options: UseDownloadReportOptions) => {
         url += (url.includes('?') ? '&' : '?') + params.toString();
       }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await authFetchPost(url, payload);
 
       const result = await response.json();
 

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Pencil, Trash2, Plus, X, Bell, Clock, CheckCircle, AlertCircle, Lock } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import { API_ENDPOINTS } from '../../config/apiConfig';
+import { authFetchPost } from '../../utils/authFetch';
 
 interface AdminMessage {
   id: number;
@@ -102,14 +103,7 @@ const AdminMessages: React.FC = () => {
         }
       };
 
-      const response = await fetch(API_ENDPOINTS.SETTINGS.SAVE_ADMIN_MESSAGE, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
+      const response = await authFetchPost(API_ENDPOINTS.SETTINGS.SAVE_ADMIN_MESSAGE, payload);
       const res = await response.json();
 
       if (res?.responseCode === '0') {
@@ -155,14 +149,7 @@ const AdminMessages: React.FC = () => {
         }
       };
 
-      const response = await fetch(API_ENDPOINTS.SETTINGS.SAVE_ADMIN_MESSAGE, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
+      const response = await authFetchPost(API_ENDPOINTS.SETTINGS.SAVE_ADMIN_MESSAGE, payload);
       const res = await response.json();
 
       if (res?.responseCode === '0') {

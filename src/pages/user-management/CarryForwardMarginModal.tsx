@@ -58,6 +58,33 @@ const CarryForwardMarginModal: React.FC<CarryForwardMarginModalProps> = ({
         }
     };
 
+    const handleExchangeToggle = (exchangeName: string) => {
+        if (exchangeName === 'All Exchanges') {
+            // Toggle all exchanges based on "All Exchanges" state
+            const newState = !marginExchanges['All Exchanges'];
+            const updatedMargins: Record<string, boolean> = {};
+            
+            exchangeData.forEach((exchange) => {
+                updatedMargins[exchange.name] = newState;
+            });
+            
+            setMarginExchanges(updatedMargins);
+        } else {
+            // Toggle individual exchange
+            setMarginExchanges(prev => ({ ...prev, [exchangeName]: !prev[exchangeName] }));
+            
+            // Check if all non-"All Exchanges" are now selected
+            const allExchanges = exchangeData.filter(e => e.name !== 'All Exchanges');
+            const allSelected = allExchanges.every(ex => marginExchanges[ex.name] || (ex.name === exchangeName && !marginExchanges[exchangeName]));
+            
+            // Update "All Exchanges" state accordingly
+            setMarginExchanges(prev => ({
+                ...prev,
+                'All Exchanges': allSelected
+            }));
+        }
+    };
+
     const handleSave = async () => {
         try {
             setIsSaving(true);
@@ -145,7 +172,7 @@ const CarryForwardMarginModal: React.FC<CarryForwardMarginModalProps> = ({
                                         {exchange.name}
                                     </span>
                                     <button
-                                        onClick={() => setMarginExchanges(prev => ({ ...prev, [exchange.name]: !prev[exchange.name] }))}
+                                        onClick={() => handleExchangeToggle(exchange.name)}
                                         disabled={isSaving}
                                         className={`w-12 h-6 rounded-full transition-all duration-300 relative shadow-inner ${marginExchanges[exchange.name] ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
                                             }`}

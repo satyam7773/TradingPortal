@@ -3,7 +3,8 @@ import { Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } fr
 import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
-import userManagementService from '../../services/userManagementService';
+import userManagementService from '../../services/userManagementService'
+import { authFetchPost } from '../../utils/authFetch';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useSorting } from '../../hooks/useSorting';
 import { API_ENDPOINTS } from '../../config/apiConfig';
@@ -133,11 +134,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         }
       };
 
-      const response = await fetch(API_ENDPOINTS.REPORTS.DELETED_TRADES, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await authFetchPost(API_ENDPOINTS.REPORTS.DELETED_TRADES, payload);
 
       const result = await response.json();
       if (result?.responseCode === '0') {
@@ -221,11 +218,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         }
       };
 
-        const response = await fetch(API_ENDPOINTS.OMS.UNDO_TRADE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        const response = await authFetchPost(API_ENDPOINTS.OMS.UNDO_TRADE, payload);
 
       const result = await response.json();
       if (result?.responseCode === '0') {
@@ -265,11 +258,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         }
       };
 
-      const response = await fetch(API_ENDPOINTS.OMS.UNDO_TRADE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await authFetchPost(API_ENDPOINTS.OMS.UNDO_TRADE, payload);
 
       const result = await response.json();
       if (result?.responseCode === '0') {

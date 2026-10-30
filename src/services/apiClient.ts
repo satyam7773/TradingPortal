@@ -132,6 +132,14 @@ class ApiClient {
           }
         }
 
+        // Handle 403 Forbidden with responseMessage (e.g., Investor permission denied)
+        if (error.response?.status === 403 && error.response?.data?.responseMessage) {
+          const customError = new Error(error.response.data.responseMessage)
+          customError.name = 'ForbiddenError'
+          ;(customError as any).response = error.response
+          return Promise.reject(customError)
+        }
+
         return Promise.reject(error)
       }
     )

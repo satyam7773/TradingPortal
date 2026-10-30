@@ -1,4 +1,5 @@
 import { API_ENDPOINTS } from '../config/apiConfig'
+import { apiClient } from './apiClient'
 
 /**
  * Watchlist Tabs Service
@@ -21,36 +22,30 @@ export interface WatchlistTabsResponse {
 }
 
 class WatchlistTabsService {
-  private readonly baseUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/user/watchlist`
+  private readonly baseUrl = '/user/watchlist'
 
   /**
    * Fetch user's watchlist tabs
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async getWatchlistTabs(userId: number): Promise<WatchlistTab[]> {
     try {
       console.log('📑 Fetching Watchlist Tabs:', { userId })
 
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: userId
-        })
-      })
+      const response = await apiClient.post<WatchlistTabsResponse>(
+        this.baseUrl,
+        {
+          userId: userId,
+          requestTimestamp: Date.now().toString(),
+          data: ''
+        }
+      )
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch watchlist tabs: ${response.statusText}`)
+      if (response.responseCode !== '0') {
+        throw new Error(response.responseMessage || 'Failed to fetch watchlist tabs')
       }
 
-      const data: WatchlistTabsResponse = await response.json()
-
-      if (data.responseCode !== '0') {
-        throw new Error(data.responseMessage || 'Failed to fetch watchlist tabs')
-      }
-
-      return data.data || []
+      return response.data || []
     } catch (error: any) {
       console.error('❌ Error fetching watchlist tabs:', error)
       throw error
@@ -59,33 +54,28 @@ class WatchlistTabsService {
 
   /**
    * Add a new watchlist tab
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async addTab(userId: number, tabName: string): Promise<WatchlistTab> {
     try {
       console.log('➕ Adding Watchlist Tab:', { userId, tabName })
 
-      const response = await fetch(`${this.baseUrl}/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await apiClient.post<any>(
+        `${this.baseUrl}/add`,
+        {
           userId: userId,
-          tabName: tabName
-        })
-      })
+          requestTimestamp: Date.now().toString(),
+          data: {
+            tabName: tabName
+          }
+        }
+      )
 
-      if (!response.ok) {
-        throw new Error(`Failed to add tab: ${response.statusText}`)
+      if (response.responseCode !== '0') {
+        throw new Error(response.responseMessage || 'Failed to add tab')
       }
 
-      const data = await response.json()
-
-      if (data.responseCode !== '0') {
-        throw new Error(data.responseMessage || 'Failed to add tab')
-      }
-
-      return data.data
+      return response.data
     } catch (error: any) {
       console.error('❌ Error adding tab:', error)
       throw error
@@ -94,26 +84,18 @@ class WatchlistTabsService {
 
   /**
    * Delete a watchlist tab
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async deleteTab(tabId: number): Promise<boolean> {
     try {
       console.log('🗑️ Deleting Watchlist Tab:', { tabId })
 
-      const response = await fetch(`${this.baseUrl}/${tabId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
+      const response = await apiClient.delete<any>(
+        `${this.baseUrl}/${tabId}`
+      )
 
-      if (!response.ok) {
-        throw new Error(`Failed to delete tab: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-
-      if (data.responseCode !== '0') {
-        throw new Error(data.responseMessage || 'Failed to delete tab')
+      if (response.responseCode !== '0') {
+        throw new Error(response.responseMessage || 'Failed to delete tab')
       }
 
       return true
@@ -125,34 +107,27 @@ class WatchlistTabsService {
 
   /**
    * Update tab name
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async updateTabName(tabId: number, tabName: string): Promise<WatchlistTab> {
     try {
       console.log('✏️ Updating Watchlist Tab:', { tabId, tabName })
 
-      const response = await fetch(API_ENDPOINTS.WATCHLIST.TAB(tabId), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await apiClient.put<any>(
+        `${this.baseUrl}/${tabId}`,
+        {
+          requestTimestamp: Date.now().toString(),
           data: {
             tabName: tabName
           }
-        })
-      })
+        }
+      )
 
-      if (!response.ok) {
-        throw new Error(`Failed to update tab: ${response.statusText}`)
+      if (response.responseCode !== '0') {
+        throw new Error(response.responseMessage || 'Failed to update tab')
       }
 
-      const data = await response.json()
-
-      if (data.responseCode !== '0') {
-        throw new Error(data.responseMessage || 'Failed to update tab')
-      }
-
-      return data.data
+      return response.data
     } catch (error: any) {
       console.error('❌ Error updating tab:', error)
       throw error
@@ -161,34 +136,26 @@ class WatchlistTabsService {
 
   /**
    * Add instrument to watchlist tab
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async addToWatchlist(userId: number, token: number, watchListTabId: number): Promise<boolean> {
     try {
       console.log('➕ Adding to Watchlist Tab:', { userId, token, watchListTabId })
 
-      const response = await fetch(`${this.baseUrl}/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await apiClient.post<any>(
+        `${this.baseUrl}/add`,
+        {
           userId: userId,
-          requestTimestamp: Date.now(),
+          requestTimestamp: Date.now().toString(),
           data: {
             token: String(token),
             watchListTabId: watchListTabId
           }
-        })
-      })
+        }
+      )
 
-      if (!response.ok) {
-        throw new Error(`Failed to add to watchlist: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-
-      if (data.responseCode !== '0') {
-        throw new Error(data.responseMessage || 'Failed to add to watchlist')
+      if (response.responseCode !== '0') {
+        throw new Error(response.responseMessage || 'Failed to add to watchlist')
       }
 
       return true
@@ -200,34 +167,26 @@ class WatchlistTabsService {
 
   /**
    * Remove instrument from watchlist tab
+   * ✅ Uses apiClient for automatic Bearer token handling
    */
   async removeFromWatchlist(userId: number, token: number, watchListTabId: number): Promise<boolean> {
     try {
       console.log('➖ Removing from Watchlist Tab:', { userId, token, watchListTabId })
 
-      const response = await fetch(`${this.baseUrl}/delete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await apiClient.post<any>(
+        `${this.baseUrl}/delete`,
+        {
           userId: userId,
-          requestTimestamp: Date.now(),
+          requestTimestamp: Date.now().toString(),
           data: {
             token: String(token),
             watchListTabId: watchListTabId
           }
-        })
-      })
+        }
+      )
 
-      if (!response.ok) {
-        throw new Error(`Failed to remove from watchlist: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-
-      if (data.responseCode !== '0') {
-        throw new Error(data.responseMessage || 'Failed to remove from watchlist')
+      if (response.responseCode !== '0') {
+        throw new Error(response.responseMessage || 'Failed to remove from watchlist')
       }
 
       return true

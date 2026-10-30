@@ -343,92 +343,96 @@ const handleApply = () => {
         </div>
       }
     >
-      <div className="p-4 space-y-3">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSettingType("TURNOVER WISE SETTING")}
-            className={`px-6 py-2 rounded font-semibold text-sm ${settingType === "TURNOVER WISE SETTING" ? "bg-green-600 text-white" : "bg-gray-200 dark:bg-slate-700"}`}
-          >
-            TURNOVER WISE SETTING
-          </button>
-          <button
-            onClick={() => setSettingType("SYMBOL WISE SETTING")}
-            className={`px-6 py-2 rounded font-semibold text-sm ${settingType === "SYMBOL WISE SETTING" ? "bg-green-600 text-white" : "bg-gray-200 dark:bg-slate-700"}`}
-          >
-            SYMBOL WISE SETTING
-          </button>
-        </div>
-        <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800">
-              <tr className="text-left text-xs text-slate-700 dark:text-slate-200">
-                <th className="px-3 py-3">
-                  <input
-                    type="checkbox"
-                    checked={brokerageData.length > 0 && selectedItems.size === brokerageData.length}
-                    onChange={(e) =>
-                      setSelectedItems(
-                        e.target.checked
-                          ? new Set(brokerageData.map((_, i) => i))
-                          : new Set(),
-                      )
-                    }
-                  />
-                </th>
-                <th className="px-3 py-3">Exchange</th>
-                <th className="px-3 py-3">Script</th>
+      <div className="flex flex-col h-full overflow-hidden p-4">
+        <div className="flex flex-col overflow-y-auto overflow-x-hidden flex-1 space-y-3">
+          <div className="flex gap-3 mb-4 flex-shrink-0">
+            <button
+              onClick={() => setSettingType("TURNOVER WISE SETTING")}
+              className={`px-6 py-2 rounded font-semibold text-sm ${settingType === "TURNOVER WISE SETTING" ? "bg-green-600 text-white" : "bg-gray-200 dark:bg-slate-700"}`}
+            >
+              TURNOVER WISE SETTING
+            </button>
+            <button
+              onClick={() => setSettingType("SYMBOL WISE SETTING")}
+              className={`px-6 py-2 rounded font-semibold text-sm ${settingType === "SYMBOL WISE SETTING" ? "bg-green-600 text-white" : "bg-gray-200 dark:bg-slate-700"}`}
+            >
+              SYMBOL WISE SETTING
+            </button>
+          </div>
+          <div className="bg-white/80 dark:bg-slate-800/80 rounded-xl border border-gray-200/50 dark:border-slate-700/50 shadow-lg overflow-hidden flex-1 flex flex-col">
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800 sticky top-0">
+                  <tr className="text-left text-xs text-slate-700 dark:text-slate-200">
+                    <th className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={brokerageData.length > 0 && selectedItems.size === brokerageData.length}
+                        onChange={(e) =>
+                          setSelectedItems(
+                            e.target.checked
+                              ? new Set(brokerageData.map((_, i) => i))
+                              : new Set(),
+                          )
+                        }
+                      />
+                    </th>
+                    <th className="px-3 py-3">Exchange</th>
+                    <th className="px-3 py-3">Script</th>
 
-                {/* Column 1: Main Brokerage */}
-                <th className="px-3 py-3">
-                  {selectedExchange === "CALLPUT"
-                    ? (settingType === "TURNOVER WISE SETTING" ? "Callput Turnover Brk" : "Callput Brk (Rs.)")
-                    : (settingType === "TURNOVER WISE SETTING" ? "Turnover Brk" : "Brk (Rs.)")
-                  }
-                </th>
+                    {/* Column 1: Main Brokerage */}
+                    <th className="px-3 py-3">
+                      {selectedExchange === "CALLPUT"
+                        ? (settingType === "TURNOVER WISE SETTING" ? "Callput Turnover Brk" : "Callput Brk (Rs.)")
+                        : (settingType === "TURNOVER WISE SETTING" ? "Turnover Brk" : "Brk (Rs.)")
+                      }
+                    </th>
 
-                {/* Column 2: Parent Brokerage (Always visible) */}
-                <th className="px-3 py-3">Parent Brk</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
-              {brokerageData.map((item, idx) => (
-                <tr
-                  key={idx}
-                  className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30"
-                >
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.has(idx)}
-                      onChange={() => {
-                        const s = new Set(selectedItems);
-                        s.has(idx) ? s.delete(idx) : s.add(idx);
-                        setSelectedItems(s);
-                      }}
-                    />
-                  </td>
-                  <td className="px-3 py-2">{item.exchange}</td>
-                  <td className="px-3 py-2">{item.script}</td>
+                    {/* Column 2: Parent Brokerage (Always visible) */}
+                    <th className="px-3 py-3">Parent Brk</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
+                  {brokerageData.map((item, idx) => (
+                    <tr
+                      key={idx}
+                      className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30"
+                    >
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.has(idx)}
+                          onChange={() => {
+                            const s = new Set(selectedItems);
+                            s.has(idx) ? s.delete(idx) : s.add(idx);
+                            setSelectedItems(s);
+                          }}
+                        />
+                      </td>
+                      <td className="px-3 py-2">{item.exchange}</td>
+                      <td className="px-3 py-2">{item.script}</td>
 
-                  {/* Cell 1: Main Brokerage Data */}
-                  <td className="px-3 py-2">
-                    {selectedExchange === "CALLPUT"
-                      ? (settingType === "TURNOVER WISE SETTING" ? item.callputBrokerageTurnover : item.callputBrokeragePerLot)?.toFixed(2)
-                      : (settingType === "TURNOVER WISE SETTING" ? item.turnoverWiseBrokerage : item.brokerageRs)?.toFixed(2)
-                    }
-                  </td>
+                      {/* Cell 1: Main Brokerage Data */}
+                      <td className="px-3 py-2">
+                        {selectedExchange === "CALLPUT"
+                          ? (settingType === "TURNOVER WISE SETTING" ? item.callputBrokerageTurnover : item.callputBrokeragePerLot)?.toFixed(2)
+                          : (settingType === "TURNOVER WISE SETTING" ? item.turnoverWiseBrokerage : item.brokerageRs)?.toFixed(2)
+                        }
+                      </td>
 
-                  {/* Cell 2: Parent Brokerage Data (Always visible) */}
-                  <td className="px-3 py-2">
-                    {settingType === "TURNOVER WISE SETTING"
-                      ? item.parentTurnoverWiseBrokerage?.toFixed(2)
-                      : item.parentBrokerageRs?.toFixed(2)
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      {/* Cell 2: Parent Brokerage Data (Always visible) */}
+                      <td className="px-3 py-2">
+                        {settingType === "TURNOVER WISE SETTING"
+                          ? item.parentTurnoverWiseBrokerage?.toFixed(2)
+                          : item.parentBrokerageRs?.toFixed(2)
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </FilterLayout>

@@ -8,6 +8,7 @@ import FilterLayout from '../../components/FilterLayout'
 import { API_ENDPOINTS } from '../../config/apiConfig'
 import OrderModal from '../../components/modals/OrderModal'
 import ConfirmAlert from '../../components/modals/ConfirmAlert'
+import { authFetchPost } from '../../utils/authFetch'
 import UserDetailsModal from '../../pages/user-management/UserDetailsModal'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { withTabCache, CacheContextProps } from '../../hoc/withTabCache'
@@ -331,7 +332,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
           const res = await userManagementService.cancelMultipleOrders(loggedInUserId, Array.from(selectedOrders));
           
           if (res?.responseCode === '0' || res?.status === 'success') {
-            toast.success(`✅ ${selectedOrders.size} order${selectedOrders.size > 1 ? 's' : ''} cancelled successfully`);
+            toast.success(`${selectedOrders.size} order${selectedOrders.size > 1 ? 's' : ''} cancelled successfully`);
             setSelectedOrders(new Set());
             handleFetchOrders(currentPage);
           } else {
@@ -370,11 +371,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
             data: Array.from(selectedOrders)
           };
 
-          const response = await fetch(API_ENDPOINTS.OMS.PROCEED_TO_SUCCESS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+          const response = await authFetchPost(API_ENDPOINTS.OMS.PROCEED_TO_SUCCESS, payload);
 
           const result = await response.json();
 
@@ -700,13 +697,13 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
             </div>
 
             {/* Selection Bulk Actions Menu */}
-            {selectedOrders.size > 0 && (deleteTradeRight || pendingToSuccessRight) && (
+            {selectedOrders.size > 0 && (loggedInUser?.roleId === 4 || deleteTradeRight || pendingToSuccessRight) && (
               <div className="flex-shrink-0 px-6 py-3 bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-900/50 flex items-center justify-between transition-all duration-200 animate-in fade-in slide-in-from-top-1">
                 <div className="text-sm font-semibold text-orange-800 dark:text-orange-300">
                   {selectedOrders.size} row{selectedOrders.size > 1 ? 's' : ''} selected
                 </div>
                 <div className="flex gap-3">
-                  {deleteTradeRight && (
+                  {(loggedInUser?.roleId === 4 || deleteTradeRight) && (
                     <button 
                       onClick={handleDeleteSelected} 
                       disabled={loading}
@@ -715,7 +712,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                       <Trash2 className="w-4 h-4" /> Cancel Selected
                     </button>
                   )}
-                  {loggedInUser?.roleId === 4 && hasMarketTradeRights && (
+                  {(loggedInUser?.roleId === 4 || hasMarketTradeRights) && (
                     <button 
                       onClick={() => {
                         const firstOrderId = Array.from(selectedOrders)[0];
@@ -760,7 +757,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                   <table className="w-full border-collapse min-w-[2150px]">
                     <thead>
                       <tr className="bg-gradient-to-r from-blue-50 via-slate-50 to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-700 sticky top-0 z-10 border-b-2 border-blue-200 dark:border-blue-500/30">
-                        {(deleteTradeRight || pendingToSuccessRight) && (
+                        {(loggedInUser?.roleId === 4 || deleteTradeRight || pendingToSuccessRight) && (
                           <th className="px-3 py-3.5 w-12">
                             <input 
                               type="checkbox" 
@@ -824,7 +821,7 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                                 : 'hover:bg-blue-50/80 dark:hover:bg-slate-700/50'
                               }`}
                           >
-                            {(deleteTradeRight || pendingToSuccessRight) && (
+                            {(loggedInUser?.roleId === 4 || deleteTradeRight || pendingToSuccessRight) && (
                               <td className="px-3 py-3.5 text-center">
                                 <input
                                   type="checkbox"

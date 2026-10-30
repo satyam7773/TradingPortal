@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Calendar, Edit2, X, Save, AlertCircle, Clock
 import toast from 'react-hot-toast'
 import { createPortal } from 'react-dom'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetch, authFetchPost } from '../../utils/authFetch'
 
 interface ScheduleData {
   date: string
@@ -76,9 +77,7 @@ const ExchangeSchedulePage: React.FC = () => {
   const fetchSchedule = async (month: number, exchange: number) => {
     setLoading(true)
     try {
-        const response = await fetch(`${API_ENDPOINTS.SETTINGS.EXCHANGE_HOLIDAYS}?month=${month}&exchange=${exchange}`, {
-          method: 'GET'
-        })
+        const response = await authFetch(`${API_ENDPOINTS.SETTINGS.EXCHANGE_HOLIDAYS}?month=${month}&exchange=${exchange}`)
       const result = await response.json()
       
       if (result?.responseCode === '0' && Array.isArray(result.data)) {
@@ -100,9 +99,7 @@ const ExchangeSchedulePage: React.FC = () => {
   const fetchDefaultTimings = async (exchangeId: number) => {
     setLoadingDefaultTimings(true)
     try {
-      const response = await fetch(`${API_ENDPOINTS.SETTINGS.GET_DEFAULT_TIMING}?exchangeId=${exchangeId}`, {
-        method: 'GET'
-      })
+      const response = await authFetch(`${API_ENDPOINTS.SETTINGS.GET_DEFAULT_TIMING}?exchangeId=${exchangeId}`)
       const result = await response.json()
       
       if (result?.responseCode === '0' && Array.isArray(result.data)) {
@@ -155,12 +152,7 @@ const ExchangeSchedulePage: React.FC = () => {
         }
       }
 
-      const response = await fetch(API_ENDPOINTS.SETTINGS.EDIT_DEFAULT_TIMING, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      })
-
+      const response = await authFetchPost(API_ENDPOINTS.SETTINGS.EDIT_DEFAULT_TIMING, requestBody)
       const result = await response.json()
       if (result?.responseCode === '0') {
         setDefaultTimings(editingDefaultTimings.map(t => ({ ...t })))
@@ -214,7 +206,7 @@ const ExchangeSchedulePage: React.FC = () => {
   // Fetch schedule on mount and when month/exchange changes
   useEffect(() => {
     fetchSchedule(currentMonth, selectedExchange)
-    fetchDefaultTimings(selectedExchange)
+    // fetchDefaultTimings API removed - using exchangeHolidays data instead
   }, [currentMonth, selectedExchange])
 
   const handlePreviousMonth = () => {
@@ -337,6 +329,7 @@ const ExchangeSchedulePage: React.FC = () => {
       const requestTimestamp = Date.now().toString()
       let successCount = 0
       let errorCount = 0
+      const errorMessages: string[] = []
 
       // Send each change to the API
       for (const change of changedData) {
@@ -359,21 +352,20 @@ const ExchangeSchedulePage: React.FC = () => {
             requestBody.data.particulars = change.particulars || ''
           }
 
-          const response = await fetch(API_ENDPOINTS.SETTINGS.EDIT_HOLIDAYS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-          })
+          const response = await authFetchPost(API_ENDPOINTS.SETTINGS.EDIT_HOLIDAYS, requestBody)
 
           const result = await response.json()
           if (result?.responseCode === '0') {
             successCount++
           } else {
             errorCount++
-            console.error(`Failed to save ${change.date}:`, result?.responseMessage)
+            const errorMsg = result?.responseMessage || 'Unknown error'
+            errorMessages.push(`${change.date}: ${errorMsg}`)
+            console.error(`Failed to save ${change.date}:`, errorMsg)
           }
         } catch (error) {
           errorCount++
+          errorMessages.push(`${change.date}: ${error instanceof Error ? error.message : 'Error saving'}`)
           console.error(`Error saving ${change.date}:`, error)
         }
       }
@@ -389,7 +381,11 @@ const ExchangeSchedulePage: React.FC = () => {
       if (errorCount === 0) {
         toast.success(`${successCount} schedule(s) updated successfully`)
       } else {
-        toast.error(`Saved ${successCount}, Failed ${errorCount}`)
+        // Show error messages to user
+        const errorMsg = errorMessages.length > 0 
+          ? `${errorMessages.join('\n')}` 
+          : `Saved ${successCount}, Failed ${errorCount}`
+        toast.error(errorMsg)
       }
     } catch (error) {
       console.error('Error saving changes:', error)
@@ -530,7 +526,7 @@ const ExchangeSchedulePage: React.FC = () => {
               </div>
 
               {/* Calendar Days Grid */}
-              <div className="grid grid-cols-7 gap-1.5 flex-1 overflow-hidden">
+              <div className="grid grid-cols-7 gap-1.5 flex-1 overflow-y-auto">
                 {calendarDays.map((day, idx) => {
                   const dayNum = day?.date.split('-')[2]
                   const isTodayCell = isToday(day?.date)

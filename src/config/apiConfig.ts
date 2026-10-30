@@ -51,6 +51,8 @@ export const API_ENDPOINTS = {
     PROCEED_TO_SUCCESS: `${BASE_URL}/oms/proceedToSuccess`,
     PNL: `${BASE_URL}/oms/pnl`,
     PNL_DOWNLOAD: `${BASE_URL}/oms/pnl/download`,
+    CF_MARGIN_USERS: `${BASE_URL}/oms/cfMargin/users`,
+    CF_MARGIN_POSITIONS: `${BASE_URL}/oms/cfMargin/positions`,
     USER_M2M: (userId: string | number, userFilterType?: string) => 
       `${BASE_URL}/oms/api/v1/m2m/user/${userId}${userFilterType ? `?userFilterType=${userFilterType}` : ''}`,
     USER_DOWNLOAD: (userId: string | number, userFilterType?: string) =>
@@ -75,6 +77,7 @@ export const API_ENDPOINTS = {
     UPDATE_CF_MARGIN: `${BASE_URL}/user/settings/updateCfMargin`,
     FETCH_AUTO_SQUARE_OFF: `${BASE_URL}/user/portal/fetchAutoSquareOff`,
     UPDATE_AUTO_SQUARE_OFF: `${BASE_URL}/user/portal/updateAutoSquareOff`,
+    PORTAL_BALANCE: `${BASE_URL}/user/portal/getBalance`,
   },
 
   // Market Watch

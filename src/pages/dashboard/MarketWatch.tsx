@@ -10,11 +10,13 @@ import watchlistTabsService, { type WatchlistTab } from '../../services/watchlis
 import userManagementService from '../../services/userManagementService'
 import orderService from '../../services/orderService'
 import orderUpdateService from '../../services/orderUpdateService'
+import { TokenManager } from '../../services/apiClient'
 import ConfigManager from '../../utils/configManager'
 import toast from 'react-hot-toast'
 import { useAppSelector } from '../../hooks/reduxHooks'
 import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetchPost } from '../../utils/authFetch'
 
 interface FeedInstrument {
   insToken: number
@@ -544,23 +546,17 @@ const MarketWatch: React.FC = () => {
 
         if (reorderedIds.length === 0) return
 
-        const response = await fetch(API_ENDPOINTS.WATCHLIST.REORDER, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: userId,
-            watchListTabId: selectedTabId,
-            requestTimestamp: Date.now().toString(),
-            data: {
-              watchListIds: reorderedIds,
-              watchListTabId: selectedTabId
-            }
-          }),
-        })
+        const response = await authFetchPost(API_ENDPOINTS.WATCHLIST.REORDER, {
+          userId: userId,
+          watchListTabId: selectedTabId,
+          requestTimestamp: Date.now().toString(),
+          data: {
+            watchListIds: reorderedIds,
+            watchListTabId: selectedTabId
+          }
+        });
 
-        const result = await response.json()
+        const result = await response.json();
         if (result.responseCode === '0') {
           toast.success('Watchlist order updated')
           await fetchWatchlistTabs()

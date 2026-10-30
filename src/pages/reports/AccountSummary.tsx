@@ -5,6 +5,7 @@ import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService';
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetchPost } from '../../utils/authFetch'
 import UserDetailsModal from '../user-management/UserDetailsModal';
 import DownloadReport from '../../components/DownloadReport';
 import SearchableSelect from '../../components/ui/SearchableSelect';
@@ -130,11 +131,7 @@ const AccountSummary: React.FC<AccountSummaryProps> = ({
                 }
             };
 
-            const response = await fetch(API_ENDPOINTS.REPORTS.ACCOUNT_SUMMARY, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            const response = await authFetchPost(API_ENDPOINTS.REPORTS.ACCOUNT_SUMMARY, payload);
 
             const result = await response.json();
             if (result?.responseCode === '0') {
