@@ -79,7 +79,7 @@ class MarketWatchService {
 
         this.socket.onmessage = (event: MessageEvent) => {
           try {
-            console.log('📨 WebSocket message received:', event.data.substring(0, 50))
+            // console.log('📨 WebSocket message received:', event.data.substring(0, 50))
             // Accumulate message data (STOMP frames may come in chunks)
             this.messageBuffer += event.data
             
@@ -636,7 +636,7 @@ class MarketWatchService {
     try {
       const lines = frameStr.split('\n')
       const command = lines[0].trim()
-      console.log(`📍 Processing STOMP frame: ${command}`)
+      // console.log(`📍 Processing STOMP frame: ${command}`)
       
       const headers: Record<string, string> = {}
       let bodyStartIndex = 0
@@ -681,9 +681,9 @@ class MarketWatchService {
           break
 
         case 'MESSAGE':
-          console.log('📨 MESSAGE frame received from server')
-          console.log('📍 Destination:', headers['destination'])
-          console.log('📦 Body preview:', body.substring(0, 200))
+          // console.log('📨 MESSAGE frame received from server')
+          // console.log('📍 Destination:', headers['destination'])
+          // console.log('📦 Body preview:', body.substring(0, 200))
           
           // Update last received time for health check (Flutter pattern)
           const destination = headers['destination'] || 'unknown'
@@ -691,14 +691,14 @@ class MarketWatchService {
           
           // Check if this is an MTM message
           if (destination.startsWith('/queue/mtm/')) {
-            console.log('📊 Detected MTM message, routing to MTM processor')
+            // console.log('📊 Detected MTM message, routing to MTM processor')
             this.processMTMMessage(destination, body)
             break
           }
           
           // Check if this is an order update message
           if (destination.startsWith('/queue/positions/')) {
-            console.log('🎯 Detected order update message, routing to orderUpdateService')
+            // console.log('🎯 Detected order update message, routing to orderUpdateService')
             // Route to order update service
             try {
               orderUpdateService.handleOrderMessage(body)

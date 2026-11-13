@@ -62,7 +62,7 @@ const IntradayHistory: React.FC<IntradayHistoryProps> = ({
   // Fetch symbols for selected exchange
   const fetchSymbolsForExchange = async (exchangeName: string) => {
     try {
-      const symbolsResponse = await userManagementService.fetchSymbols(exchangeName)
+      const symbolsResponse = await userManagementService.fetchSymbolsAll(exchangeName)
       if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
         setSymbols(symbolsResponse.data)
         if (symbolsResponse.data.length > 0) {
@@ -120,7 +120,7 @@ const IntradayHistory: React.FC<IntradayHistoryProps> = ({
           setSelectedExchange(defaultExchange)
           
           // Fetch symbols for default exchange
-          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange)
+          const symbolsResponse = await userManagementService.fetchSymbolsAll(defaultExchange)
           if (symbolsResponse?.responseCode === '0' && Array.isArray(symbolsResponse.data)) {
             setSymbols(symbolsResponse.data)
             if (symbolsResponse.data.length > 0) {
@@ -144,6 +144,13 @@ const IntradayHistory: React.FC<IntradayHistoryProps> = ({
       fetchSymbolsForExchange(selectedExchange)
     }
   }, [selectedExchange])
+
+  // Auto-fetch candles when symbol changes
+  useEffect(() => {
+    if (selectedSymbol && !initialLoading) {
+      handleFetchCandles(selectedSymbol)
+    }
+  }, [selectedSymbol])
 
   const formatDateTime = (dateTimeStr: string) => {
     try {

@@ -37,8 +37,8 @@ interface UserPositionsPanelProps {
 }
 
 const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userId, roleId, user, depth = 0 }) => {
-  console.log('user', user?.userSettings?.userInfo)
-  console.log('user', user)
+  // console.log('user', user?.userSettings?.userInfo)
+  // console.log('user', user)
 
   // Guard: If user is null/undefined, show loading message
   if (!user) {
@@ -128,28 +128,28 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
 
 
 
-  // ✅ Get logged-in user's roleId for admin bypass logic
+  // ✅ Get logged-in user's roleId and manualOrder permission from login response
   const loggedInUserData = localStorage.getItem('userData');
   const loggedInUser = loggedInUserData ? JSON.parse(loggedInUserData) : null;
   const loggedInUserRoleId = loggedInUser?.roleId;
 
   // ✅ For roleId 1 & 2 (Admin): Always allow manual orders (bypass client setting)
-  // ✅ For roleId 3 & 4 (Master/Client): Check client's manualOrder setting
+  // ✅ For roleId 3 & 4 (Master/Client): Check manualOrder from login response
   const isManualOrderEnabled = (loggedInUserRoleId === 1 || loggedInUserRoleId === 2) 
     ? true 
-    : (user?.userInfo?.manualOrder ?? false);
+    : (loggedInUser?.manualOrder ?? false);
 
   // Get permissions from Redux
   const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
   const deleteTradeRight = useAppSelector(selectDeleteTrade);
 
-  const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff'>(
-    isManualOrderEnabled ? 'addOrder' : 'cfMarginSquareOff'
+  const [tab, setTab] = useState<'addOrder' | 'cfMarginSquareOff' | 'none'>(
+    isManualOrderEnabled ? 'addOrder' : 'none'
   );
 
   // ✅ Extract roleId from user.userProfile (already fetched by parent) with fallback to prop roleId
   const displayRoleId = user?.userProfile?.roleId || roleId;
-  console.log('displayRoleId', displayRoleId, username);
+  // console.log('displayRoleId', displayRoleId, username);
   const isClient = Number(displayRoleId) === 4 || displayRoleId === 'Client';
   const feedUnsubscribeRef = useRef<(() => void) | null>(null);
   const selectedFeedUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -178,7 +178,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     setTab(
       isManualOrderEnabled
         ? 'addOrder'
-        : 'cfMarginSquareOff'
+        : 'none'
     );
   }, [isManualOrderEnabled]);
 
@@ -483,7 +483,17 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const userOptions = useMemo(() => users.map(u => ({ id: u.id, name: u.name })), [users]);
 
   // Memoize script items to prevent SearchableSelect from re-rendering constantly
-  const scriptItems = useMemo(() => symbols.map(s => ({ id: s.token, name: s.tradeSymbol })), [symbols]);
+  // Also deduplicate by token to avoid React key warnings
+  const scriptItems = useMemo(() => {
+    const seen = new Set<string | number>();
+    return symbols
+      .filter(s => {
+        if (seen.has(s.token)) return false;
+        seen.add(s.token);
+        return true;
+      })
+      .map(s => ({ id: s.token, name: s.tradeSymbol }));
+  }, [symbols]);
 
   // --- Stats ---
   const stats = useMemo(() => {
@@ -768,19 +778,17 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
   const filters = (
     <div className="space-y-4 p-4">
       <div className="grid grid-cols-2 gap-2 mb-2">
-        {/* Left Column: Add Order Button (conditional) */}
-        {isManualOrderEnabled && (
-          <button
-            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'addOrder' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
-            onClick={() => setTab('addOrder')}
-          >
-            Add Order
-          </button>
-        )}
+        {/* Left Column: Add Order Button (always visible for toggling) */}
+        <button
+          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'addOrder' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
+          onClick={() => setTab('addOrder')}
+        >
+          Add Order
+        </button>
 
         {/* Right Column: CF Margin Square Off Button (always visible) */}
         <button
-          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'cfMarginSquareOff' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'} ${isManualOrderEnabled ? '' : 'col-span-2'}`}
+          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${tab === 'cfMarginSquareOff' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
           onClick={() => setTab('cfMarginSquareOff')}
         >
           CF Margin Square Off
@@ -1229,7 +1237,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
     >
       <div className="flex flex-col h-full bg-white/70 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-lg backdrop-blur-sm overflow-hidden">
 
-        {isManualOrderEnabled && tab === 'addOrder' && (
+        {(isManualOrderEnabled || filteredPositions.length > 0) && tab !== 'cfMarginSquareOff' && (
 
           <div className="flex-shrink-0 px-6 py-5 border-b border-slate-200/70 dark:border-slate-700/70 bg-gradient-to-r from-white/80 via-blue-50/80 to-white/80 dark:from-slate-800/80 backdrop-blur-sm">
             <div className="flex items-center justify-between">
@@ -1248,7 +1256,7 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
             </div>
           </div>
         )}
-        {((isManualOrderEnabled && tab === 'addOrder') || (!isManualOrderEnabled && tab === 'cfMarginSquareOff')) && selectedPositions.size > 0 && (
+        {selectedPositions.size > 0 && tab !== 'cfMarginSquareOff' && (
           <div className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/50 flex items-center justify-between">
             <span className="text-sm font-bold text-red-700 dark:text-red-300">{selectedPositions.size} positions selected</span>
             <button onClick={handleCloseSelectedPositions} disabled={loading} className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow-sm">
@@ -1257,8 +1265,8 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
           </div>
         )}
         <div className="flex-1 overflow-auto scrollbar-thin">
-          {/* ✅ Show table when: (1) manual order enabled AND on addOrder tab, OR (2) manual order disabled (master users) */}
-          {tab === 'addOrder' || !isManualOrderEnabled ? (
+          {/* ✅ Show table when addOrder tab is selected, or when cfMarginSquareOff is NOT selected (for master without manual order) */}
+          {tab !== 'cfMarginSquareOff' ? (
             loading ? (
               <div className="h-full flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
@@ -1325,9 +1333,19 @@ const UserPositionsPanel: React.FC<UserPositionsPanelProps> = ({ username, userI
                 </tbody>
               </table>
             )
-          ) : null}
-          {tab === 'cfMarginSquareOff' && (
-            <CFMarginOnUsers username={username} userId={userId} roleId={roleId} user={user} />
+          ) : (
+            <>
+              {tab === 'cfMarginSquareOff' && (
+                <CFMarginOnUsers username={username} userId={userId} roleId={roleId} user={user} />
+              )}
+              {tab === 'none' && (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center text-slate-500 dark:text-slate-400">
+                    <p className="text-lg font-semibold mb-2">Click "CF Margin Square Off" to view CF Margin Users</p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

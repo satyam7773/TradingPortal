@@ -646,6 +646,9 @@ const UserList: React.FC = () => {
           </div>
         ) : (
           <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+            <div className="sticky top-0 z-20 px-4 py-2 bg-white/40 dark:bg-slate-800/40 backdrop-blur border-b border-gray-200/50 dark:border-slate-700/50 flex items-center justify-end">
+              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded">Total: {displayUsers.length}</span>
+            </div>
             {/* Single Table with Sticky Header */}
             <table className="w-full table-fixed border-collapse bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 border-none">
               <colgroup>
@@ -1569,7 +1572,19 @@ const UserList: React.FC = () => {
                       className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📋</span> Account Limit
                     </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const user = users.find(u => u.id === actionMenuUserId);
+                        if (user) {
+                          setSelectedUserForCarryForwardMargin(user);
+                          setShowCarryForwardMarginModal(true);
+                        }
+                        setOpenActionMenu(null);
+                        setActionMenuPosition(null);
+                        setActionMenuUserId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">
                       <span>📈</span> Carry Forward Margin
                     </button>
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 border-t border-gray-200 dark:border-slate-700">

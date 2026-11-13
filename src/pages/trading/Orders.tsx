@@ -336,11 +336,12 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
             setSelectedOrders(new Set());
             handleFetchOrders(currentPage);
           } else {
-            toast.error(res?.message || "Failed to cancel orders");
+            toast.error(res?.responseMessage || res?.message || "Failed to cancel orders");
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("❌ Order cancellation failure:", err);
-          toast.error("An error occurred while deleting orders");
+          const errorMsg = err?.response?.data?.responseMessage || err?.message || "An error occurred while deleting orders";
+          toast.error(errorMsg);
         } finally {
           setLoading(false);
           setAlertOpen(false);

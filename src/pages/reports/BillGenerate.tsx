@@ -4,7 +4,14 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import userManagementService from '../../services/userManagementService';
 import toast from 'react-hot-toast';
 
-const BillGenerate: React.FC = () => {
+interface BillGenerateProps {
+  username?: string;
+  userId?: string | number;
+  roleId?: any;
+  user?: any;
+}
+
+const BillGenerate: React.FC<BillGenerateProps> = ({ username, userId, roleId, user }) => {
     const getMondayOfCurrentWeek = () => {
         const d = new Date();
         // Get current day (0=Sun, 1=Mon, ..., 6=Sat)
@@ -27,7 +34,7 @@ const BillGenerate: React.FC = () => {
     const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
 
 
-    const [userId, setUserId] = useState<number>(0);
+    const [selectedUserId, setSelectedUserId] = useState<number>(0);
     const [select, setSelect] = useState<'PDF' | 'EXCEL'>('PDF');
     const [pdfType, setPdfType] = useState<'REGULAR' | 'ADVANCE' | null>('REGULAR');
     const [users, setUsers] = useState<any[]>([]);
@@ -35,18 +42,26 @@ const BillGenerate: React.FC = () => {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-
-                const userData = localStorage.getItem('userData')
-                const user = userData ? JSON.parse(userData) : null
-                const loggedInUserId = user?.userId
-                const resp = await userManagementService.fetchOwnUsersforBillGenerate(loggedInUserId);
+                // Use the passed userId prop if available, otherwise use logged-in user
+                const userIdToUse = userId || (() => {
+                    const userData = localStorage.getItem('userData');
+                    const loggedInUser = userData ? JSON.parse(userData) : null;
+                    return loggedInUser?.userId;
+                })();
+                
+                if (!userIdToUse) {
+                    toast.error('User ID not available');
+                    return;
+                }
+                
+                const resp = await userManagementService.fetchOwnUsersforBillGenerate(userIdToUse);
                 if (resp?.data) setUsers(resp.data);
             } catch (error) {
                 toast.error('Failed to load users');
             }
         };
         fetchUsers();
-    }, []);
+    }, [userId]);
 
     // Memoize users for SearchableSelect to ensure consistency
     const userOptions = useMemo(() =>
@@ -55,8 +70,8 @@ const BillGenerate: React.FC = () => {
     );
 
     const handleDownload = async (isPreview: boolean = false) => {
-        // 1. Validation - allow userId 0 (represents "All" users)
-        if (userId === null || userId === undefined) {
+        // 1. Validation - allow selectedUserId 0 (represents "All" users)
+        if (selectedUserId === null || selectedUserId === undefined) {
             toast.error('Please select a user before generating the report.');
             return;
         }
@@ -65,7 +80,7 @@ const BillGenerate: React.FC = () => {
             const payload = {
                 fromDate,
                 toDate,
-                userId: Number(userId),
+                userId: Number(selectedUserId),
                 select,
                 pdfType: select === 'PDF' ? pdfType : null
             };
@@ -126,8 +141,8 @@ const BillGenerate: React.FC = () => {
                             <SearchableSelect
                                 label="Username :"
                                 items={userOptions}
-                                selectedId={userId}
-                                onSelect={(id) => setUserId(Number(id))}
+                                selectedId={selectedUserId}
+                                onSelect={(id) => setSelectedUserId(Number(id))}
                                 placeholder="Search user..."
                             />
 

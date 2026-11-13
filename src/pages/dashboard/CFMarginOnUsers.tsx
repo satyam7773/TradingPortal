@@ -8,6 +8,7 @@ import { authFetchPost } from '../../utils/authFetch'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import UserDetailsModal from '../user-management/UserDetailsModal'
+import { useModalDepth } from '../../contexts/ModalContext'
 
 interface CFMarginUser {
   userId: number
@@ -36,6 +37,8 @@ interface CFMarginOnUsersProps {
 }
 
 const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, roleId, user }) => {
+  const { getNextZIndex, pushModal, popModal } = useModalDepth()
+  
   // Get logged-in user ID
   const getLoggedInUserId = (): number => {
     const userDataStr = localStorage.getItem('userData')
@@ -129,7 +132,10 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
         setLoading(true)
         const cfMarginPayload = {
           userId: selectedUserId,
-          requestTimestamp: ''
+          requestTimestamp: '',
+          data: {
+            exchange: selectedExchange
+          }
         }
         
         const cfMarginResponse = await authFetchPost(
@@ -157,7 +163,7 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
     }
     
     fetchCFMarginUsersData()
-  }, [selectedUserId]) // Re-fetch when selected user changes
+  }, [selectedUserId, selectedExchange]) // Re-fetch when selected user or exchange changes
 
   // Filter CF Margin users by exchange (include null exchanges)
   useEffect(() => {
@@ -173,16 +179,10 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
   const fetchCFMarginPositions = useCallback(async (userId: number) => {
     setModalLoading(true)
     try {
-      // Minimal payload - only userId and requestTimestamp (like the curl example)
-      const payload = {
-        userId: userId,
-        requestTimestamp: ''
-      }
-      
-      const response = await authFetchPost(
-        API_ENDPOINTS.OMS.CF_MARGIN_POSITIONS || '/oms/cfMargin/positions',
-        payload
-      )
+      const response = await authFetchPost(API_ENDPOINTS.OMS.CF_MARGIN_POSITIONS, {
+        userId,
+        requestTimestamp: new Date().getTime()
+      })
       const result = await response.json()
       
       if (result?.responseCode === '0' && Array.isArray(result.data)) {
@@ -204,6 +204,7 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
   const handleViewPositions = async (user: any) => {
     setSelectedUser(user)
     setShowModal(true)
+    pushModal() // Increment modal depth for CF Margin modal
     await fetchCFMarginPositions(user.userId || user.id)
   }
 
@@ -250,6 +251,7 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
     }
 
     setSelectedUserForDetails(placeholderUser)
+    pushModal() // Increment modal depth for UserDetailsModal
   }
 
   // Calculate stats
@@ -303,7 +305,10 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
                 setLoading(true)
                 const cfMarginPayload = {
                   userId: loggedInUserId,
-                  requestTimestamp: ''
+                  requestTimestamp: '',
+                  data: {
+                    exchange: selectedExchange
+                  }
                 }
                 
                 const cfMarginResponse = await authFetchPost(
@@ -410,19 +415,20 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
         </div>
 
       {/* CF Margin Positions Modal */}
-      {showModal && selectedUser && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      {showModal && selectedUser && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: getNextZIndex() }}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-900 dark:to-blue-800 px-8 py-4 flex items-center justify-between flex-shrink-0">
               <h2 className="text-xl font-bold text-white">
-                CF Margin Positions - {selectedUser.userName || selectedUser.username}
+                CF Margin Positions - {selectedUser.username}
               </h2>
               <button
                 onClick={() => {
                   setShowModal(false)
                   setSelectedUser(null)
                   setModalPositions([])
+                  popModal() // Decrement modal depth when closing CF Margin modal
                 }}
                 className="text-white hover:bg-blue-500/20 p-2 rounded-lg transition"
               >
@@ -430,8 +436,8 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="flex-1 overflow-auto">
+            {/* Modal Content - Scrollable */}
+            <div className="flex-1 overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-slate-100 dark:scrollbar-track-slate-700 min-h-0">
               {modalLoading ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
@@ -444,7 +450,7 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
                   </div>
                 </div>
               ) : (
-                <table className="w-full border-collapse">
+                <table className="w-full border-collapse" style={{ minWidth: '1200px' }}>
                   <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10 border-b-2 border-blue-100 dark:border-blue-900">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Exchange</th>
@@ -494,7 +500,7 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
                           ₹{pos.margin.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                         </td>
                         <td className="px-6 py-4 text-right font-mono text-sm text-slate-600 dark:text-slate-400">
-                          {pos.cfMargin.toLocaleString('en-IN', { maximumFractionDigits: 2 })}%
+                          {pos.cfMargin.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}
@@ -504,16 +510,23 @@ const CFMarginOnUsers: React.FC<CFMarginOnUsersProps> = ({ username, userId, rol
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* User Details Modal */}
       {selectedUserForDetails && createPortal(
-        <div className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-[9999]" onClick={() => setSelectedUserForDetails(null)}>
+        <div className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md" style={{ zIndex: getNextZIndex() }} onClick={() => {
+          setSelectedUserForDetails(null)
+          popModal() // Decrement modal depth
+        }}>
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col border border-gray-200/50 overflow-hidden" style={{ width: '98vw', height: '96vh', maxWidth: '1800px' }} onClick={(e) => e.stopPropagation()}>
             <UserDetailsModal
               user={selectedUserForDetails}
-              onClose={() => setSelectedUserForDetails(null)}
+              onClose={() => { 
+                setSelectedUserForDetails(null)
+                popModal() // Decrement modal depth
+              }}
               onToggle={() => { }}
+              depth={getNextZIndex()}
             />
           </div>
         </div>,

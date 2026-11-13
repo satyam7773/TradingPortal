@@ -121,7 +121,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
       const userIdForData = isModalMode ? targetUserId : (filtersToUse.selectedUserId || loggedInUserId);
 
       const payload: any = {
-        userId: loggedInUserId,
+        userId: userIdForData,
         requestTimestamp: '',
         data: {
           from: filtersToUse.fromDate,

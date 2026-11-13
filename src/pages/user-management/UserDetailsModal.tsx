@@ -25,6 +25,7 @@ import RejectionLog from '../dashboard/RejectionLog';
 import IntradayHistory from '../dashboard/IntradayHistory';
 import AccountSummary from '../reports/AccountSummary';
 import Settlement from '../reports/Settlement';
+import BillGenerate from '../reports/BillGenerate';
 import { useModalDepth } from '../../contexts/ModalContext';
 
 interface UserData {
@@ -837,6 +838,15 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
               Settlement
             </button>
             <button
+              onClick={() => setActiveTab('generateBill')}
+              className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'generateBill'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
+            >
+              Generate Bill
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`px-4 py-2 rounded-t-lg font-semibold text-sm transition-all duration-200 whitespace-nowrap ${activeTab === 'settings'
                 ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
@@ -847,7 +857,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
             </button>
             {/* Dynamic menu tabs (promote quick actions to top-level tabs) - Filter out hardcoded tabs to prevent duplicates */}
             {userDetails?.userSettings?.menus?.filter(menu => 
-              !['accountSummary', 'account-summary', 'settings', 'positions', 'details', 'userList', 'user-list', 'trades', 'deletedTrades', 'deleted-trades', 'rejectionLogs', 'rejectionLog', 'rejection-logs', 'intradayHistory', 'intraday-history', 'settlement', 'settlementReport'].includes(menu.name)
+              !['accountSummary', 'account-summary', 'settings', 'positions', 'details', 'userList', 'user-list', 'trades', 'deletedTrades', 'deleted-trades', 'rejectionLogs', 'rejectionLog', 'rejection-logs', 'intradayHistory', 'intraday-history', 'settlement', 'settlementReport', 'generateBill'].includes(menu.name)
             ).map((menu) => (
               <button
                 key={menu.name}
@@ -1263,6 +1273,11 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                 {/* Settlement Tab */}
                 {activeTab === 'settlement' && (
                   <Settlement username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
+                )}
+
+                {/* Generate Bill Tab */}
+                {activeTab === 'generateBill' && (
+                  <BillGenerate username={user.username} userId={user.id} roleId={user.type} user={userDetails} />
                 )}
               </>
             );

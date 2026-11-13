@@ -18,6 +18,7 @@ interface TradeMarginItem {
   expiry: number;
   callputMargin?: number;
   callputMarginPercentage?: boolean;
+  callputCfMargin?: number;
   updatedDate?: string;
 }
 
@@ -71,8 +72,15 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         selectedExchange
       );
       
-      if (response?.data) {
+      if (response?.data && response.data.length > 0) {
         setMarginData(response.data);
+        // Detect margin type from response and set filter accordingly
+        const firstItem = response.data[0];
+        if (firstItem.marginPercentage === true) {
+          setMarginTypeFilter('percentage');
+        } else {
+          setMarginTypeFilter('amount');
+        }
       } else {
         setMarginData([]);
       }
@@ -127,15 +135,32 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
     // Apply to selected items
     const updatedData = marginData.map((item) => {
       if (selectedItems.has(item.instrumentId)) {
-        return {
+        const updated: any = {
           ...item,
-          margin: marginInput ? parseFloat(marginInput) : item.margin,
-          cfMargin: cfMarginInput ? parseFloat(cfMarginInput) : item.cfMargin,
           minVolume: minVolumeInput ? parseFloat(minVolumeInput) : item.minVolume,
           volumeStep: volumeStepInput ? parseFloat(volumeStepInput) : item.volumeStep,
-          callputMargin: callputMarginInput ? parseFloat(callputMarginInput) : item.callputMargin,
-          callputMarginPercentage: callputMarginInput ? true : item.callputMarginPercentage,
         };
+
+        if (selectedExchange.toUpperCase() === 'CALLPUT') {
+          // For CALLPUT, apply CF Margin input to callputCfMargin
+          updated.callputCfMargin = cfMarginInput ? parseFloat(cfMarginInput) : item.callputCfMargin;
+          updated.callputMargin = callputMarginInput ? parseFloat(callputMarginInput) : item.callputMargin;
+          updated.callputMarginPercentage = callputMarginInput ? true : item.callputMarginPercentage;
+          // Preserve NSE/MCX fields
+          updated.margin = item.margin;
+          updated.marginPercentage = item.marginPercentage;
+          updated.cfMargin = item.cfMargin;
+        } else {
+          // For other exchanges, apply to regular fields
+          updated.margin = marginInput ? parseFloat(marginInput) : item.margin;
+          updated.cfMargin = cfMarginInput ? parseFloat(cfMarginInput) : item.cfMargin;
+          // Preserve CALLPUT fields
+          updated.callputMargin = item.callputMargin;
+          updated.callputMarginPercentage = item.callputMarginPercentage;
+          updated.callputCfMargin = item.callputCfMargin;
+        }
+
+        return updated;
       }
       return item;
     });
@@ -162,20 +187,20 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
         const item = marginData.find(m => m.instrumentId === instrumentId);
         if (!item) return null;
         
-        const payload: any = {
+        // Always send all fields to prevent backend from clearing them
+        let payload: any = {
           instrumentId: item.instrumentId,
+          minVolume: item.minVolume,
+          volumeStep: item.volumeStep,
+          // Always include NSE/MCX fields
           margin: item.margin,
           marginPercentage: item.marginPercentage,
           cfMargin: item.cfMargin,
-          minVolume: item.minVolume,
-          volumeStep: item.volumeStep,
+          // Always include CALLPUT fields
+          callputMargin: item.callputMargin,
+          callputMarginPercentage: item.callputMarginPercentage,
+          callputCfMargin: item.callputCfMargin,
         };
-        
-        // Add callput fields if exchange is CALLPUT
-        if (selectedExchange === 'CALLPUT' && item.callputMargin !== undefined) {
-          payload.callputMargin = item.callputMargin;
-          payload.callputMarginPercentage = item.callputMarginPercentage || true;
-        }
         
         return payload;
       }).filter(p => p !== null);
@@ -345,16 +370,18 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
             </select>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs text-slate-600 dark:text-slate-300 block">Margin (Rs/%) :</label>
-            <input
-              type="text"
-              value={marginInput}
-              onChange={(e) => setMarginInput(e.target.value)}
-              placeholder="Enter value"
-              className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-            />
-          </div>
+          {selectedExchange.toUpperCase() !== 'CALLPUT' && (
+            <div className="space-y-1">
+              <label className="text-xs text-slate-600 dark:text-slate-300 block">Margin (Rs/%) :</label>
+              <input
+                type="text"
+                value={marginInput}
+                onChange={(e) => setMarginInput(e.target.value)}
+                placeholder="Enter value"
+                className="w-full px-3 py-2 rounded border border-gray-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+              />
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-xs text-slate-600 dark:text-slate-300 block">CF Margin :</label>
@@ -474,11 +501,13 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                     <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('lotSize')}>
                       <div className="flex items-center gap-2">Lot Size {getSortIcon('lotSize')}</div>
                     </th>
-                    <th className="px-3 py-3 min-w-[130px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('margin')}>
-                      <div className="flex items-center gap-2">Margin {getSortIcon('margin')}</div>
-                    </th>
-                    <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('cfMargin')}>
-                      <div className="flex items-center gap-2">CF Margin {getSortIcon('cfMargin')}</div>
+                    {selectedExchange.toUpperCase() !== 'CALLPUT' && (
+                      <th className="px-3 py-3 min-w-[130px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('margin')}>
+                        <div className="flex items-center gap-2">Margin {getSortIcon('margin')}</div>
+                      </th>
+                    )}
+                    <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort(selectedExchange === 'CALLPUT' ? 'callputCfMargin' : 'cfMargin')}>
+                      <div className="flex items-center gap-2">CF Margin {getSortIcon(selectedExchange === 'CALLPUT' ? 'callputCfMargin' : 'cfMargin')}</div>
                     </th>
                     <th className="px-3 py-3 min-w-[130px] cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('minVolume')}>
                       <div className="flex items-center gap-2">Min Volume {getSortIcon('minVolume')}</div>
@@ -502,7 +531,7 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
                   {sortedMarginData.length === 0 ? (
                     <tr>
-                      <td colSpan={selectedExchange === 'CALLPUT' ? 10 : 9} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      <td colSpan={selectedExchange.toUpperCase() === 'CALLPUT' ? 8 : 9} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                         No margin settings found for {selectedExchange}
                       </td>
                     </tr>
@@ -522,8 +551,15 @@ const TradeMarginSettings: React.FC<any> = ({ user, userDetails, onRefresh }) =>
                         </td>
                         <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{item.scripName || '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.lotSize != null ? Number(item.lotSize) : '-'}</td>
-                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.marginPercentage ? '' : 'Rs '}{item.margin != null ? Number(item.margin).toFixed(2) : '-'}{item.marginPercentage ? '%' : ''}</td>
-                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.cfMargin != null ? Number(item.cfMargin).toFixed(2) : '-'}</td>
+                        {selectedExchange.toUpperCase() !== 'CALLPUT' && (
+                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.marginPercentage ? '' : 'Rs '}{item.margin != null ? Number(item.margin).toFixed(2) : '-'}{item.marginPercentage ? '%' : ''}</td>
+                        )}
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                          {selectedExchange === 'CALLPUT' 
+                            ? (item.callputCfMargin != null ? Number(item.callputCfMargin).toFixed(2) : '-')
+                            : (item.cfMargin != null ? Number(item.cfMargin).toFixed(2) : '-')
+                          }
+                        </td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.minVolume != null ? Number(item.minVolume) : '-'}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.volumeStep != null ? Number(item.volumeStep) : '-'}</td>
                         {selectedExchange === 'CALLPUT' && (

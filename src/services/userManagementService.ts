@@ -753,6 +753,38 @@ class UserManagementService {
   /**
    * Fetch symbols for trading
    */
+  async fetchSymbolsAll(exchange?: string): Promise<any> {
+    const userDataStr = localStorage.getItem("userData");
+    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null;
+    const userId = storedUserData?.userId || 2;
+
+    const request: any = {
+      requestTimestamp: Date.now().toString(),
+      userId,
+    };
+
+    // Add exchange to data if provided
+    if (exchange) {
+      request.data = {
+        exchange,
+      };
+    }
+
+    try {
+      const response = await apiClient.post<any>(
+        API_ENDPOINTS.OMS.FETCH_ALL_SYMBOLS,
+        request,
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Failed to fetch symbols:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch symbols for trading
+   */
   async fetchAllSymbols(exchange?: string, userId?: number): Promise<any> {
     // const userDataStr = localStorage.getItem('userData')
     // const storedUserData = userDataStr ? JSON.parse(userDataStr) : null

@@ -367,9 +367,9 @@ export const createExistingMenuItems = (navigate: (path: string) => void, logout
         { label: 'Intraday History', path: '/dashboard/intraday-history', action: () => navigate('/dashboard/intraday-history') },
         { label: 'Rejection Log', path: '/dashboard/rejection-log', action: () => navigate('/dashboard/rejection-log') },
         { label: 'Login History', path: '/dashboard/login-history', action: () => navigate('/dashboard/login-history') },
+        { label: 'Cf Margin On Users', path: '/dashboard/cf-margin-users', action: () => navigate('/dashboard/cf-margin-users') },
         
         ...(isAdminOrMaster ? [
-          { label: 'Cf Margin On Users', path: '/dashboard/cf-margin-users', action: () => navigate('/dashboard/cf-margin-users') },
           { label: 'M2M Profit & Loss', path: '/dashboard/m2m-profit-loss', action: () => navigate('/dashboard/m2mReport') },
           // GROUPS: Restricted to Admin Only
           ...(isAdminOnly ? [{ label: 'Groups', path: '/dashboard/groups', action: () => navigate('/dashboard/groups') }] : [])
