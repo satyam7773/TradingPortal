@@ -430,10 +430,12 @@ const TradeAccountPage: React.FC<TradeAccountPageProps> = ({ cacheData, apiData,
 // --- Sub-Components ---
 
 const SummaryItem = ({ label, value, color, size = "lg" }: any) => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const isPositive = (value || 0) >= 0;
   const colorMap: any = {
-    emerald: isPositive ? 'text-emerald-400' : 'text-red-400',
-    blue: isPositive ? 'text-blue-400' : 'text-red-400'
+    emerald: isPositive ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600'),
+    blue: isPositive ? (isDark ? 'text-blue-400' : 'text-blue-700') : (isDark ? 'text-red-400' : 'text-red-600')
   };
   
   const sizeClasses = size === 'sm' ? 'text-xs' : size === 'xl' ? 'text-3xl' : 'text-lg';
@@ -545,36 +547,36 @@ const TradeAccountTable = ({
                 </span>
               )}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.pl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.pl || 0) >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.pl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.brokerage || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.brokerage || 0) >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.brokerage || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.balance || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.balance || 0) >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.m2mPnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.m2mPnl || 0) >= 0 ? (isDark ? 'text-green-400' : 'text-green-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.m2mPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.netPnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.netPnl || 0) >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.netPnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
             <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${isDark ? 'text-white' : 'text-black'}`}>
               {(account.credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
             <td className="px-4 py-2.5 text-center">
-              <span className={`px-3 py-1 rounded-lg font-mono font-bold text-sm ${(account.equity || 0) >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+              <span className={`px-3 py-1 rounded-lg font-mono font-bold text-sm ${(account.equity || 0) >= 0 ? (isDark ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-100 text-emerald-700 border border-emerald-300') : (isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-100 text-red-700 border border-red-300')}`}>
                 {(account.equity || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </td>
             <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${isDark ? 'text-white' : 'text-black'}`}>
               {(account.marginUsed || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.freeMargin || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.freeMargin || 0) >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.freeMargin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
-            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.marginLevel || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <td className={`px-4 py-2.5 text-center font-mono font-bold text-sm ${(account.marginLevel || 0) >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : (isDark ? 'text-red-400' : 'text-red-600')}`}>
               {(account.marginLevel || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
             </td>
           </tr>

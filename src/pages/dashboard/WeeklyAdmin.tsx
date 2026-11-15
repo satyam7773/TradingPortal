@@ -45,6 +45,8 @@ const WeeklyAdmin: React.FC = () => {
   const loggedInUserId = userData?.userId || 31
 
   const tableContainerRef = React.useRef<HTMLDivElement>(null)
+  const metadataLoadedRef = React.useRef(false)
+  const autoLoadTriggeredRef = React.useRef(false)
 
   const [selectedUserId, setSelectedUserId] = useState<number>(0)
   const [reportData, setReportData] = useState<WeeklyAdminData[]>([])
@@ -304,6 +306,7 @@ const WeeklyAdmin: React.FC = () => {
         toast.error('Failed to load users')
       } finally {
         setInitialLoading(false)
+        metadataLoadedRef.current = true
       }
     }
 
@@ -316,6 +319,19 @@ const WeeklyAdmin: React.FC = () => {
       handleFetchReport()
     }
   }, [selectedUserId])
+
+  // Auto-load on page load after metadata is ready
+  useEffect(() => {
+    if (autoLoadTriggeredRef.current) return
+    if (!metadataLoadedRef.current) return
+
+    autoLoadTriggeredRef.current = true
+    const timer = setTimeout(() => {
+      handleFetchReport()
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [metadataLoadedRef.current])
 
   // Scroll table to left when data loads
   useEffect(() => {

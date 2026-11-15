@@ -777,6 +777,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider max-w-[110px] cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('tradeSymbol')}>
                           <div className="flex items-center gap-2">Symbol {getSortIcon('tradeSymbol')}</div>
                         </th>
+                        <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('exchange')}>
+                          <div className="flex items-center gap-2">Exchange {getSortIcon('exchange')}</div>
+                        </th>
                         <th className="px-4 py-3.5 text-left text-xs font-bold text-slate-700 dark:text-blue-300 uppercase tracking-wider cursor-pointer hover:bg-blue-100 dark:hover:bg-slate-700 transition" onClick={() => handleSort('side')}>
                           <div className="flex items-center gap-2">Type {getSortIcon('side')}</div>
                         </th>
@@ -853,7 +856,13 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ cacheData, apiData, onCacheSave
                             </td> */}
 
                             <td className={`px-4 py-3.5 text-left text-sm font-bold uppercase ${sideColorClass} max-w-[110px] truncate`}>
-                              {order.exchange} {order.tradeSymbol}
+                              {order.tradeSymbol}
+                            </td>
+
+                            <td className="px-4 py-3.5 text-left">
+                              <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${sideColorClass} ${isBuy ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-red-50 dark:bg-red-950/40'}`}>
+                                {order.exchange}
+                              </span>
                             </td>
 
                             <td className={`px-4 py-3.5 text-left text-sm font-bold ${sideColorClass}`}>

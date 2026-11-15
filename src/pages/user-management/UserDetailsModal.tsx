@@ -130,7 +130,7 @@ interface ChildUser {
   createdAt: number | null;
   ipAddress: string | null;
   deviceId: string | null;
-  lastLoginDate: number | null;
+  lastLoginDate: number | string | null;
   city: string | null;
   userSettingsToggles: ToggleSetting[];
   parentName: string;
@@ -640,9 +640,11 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
     };
 
     // Format dates
-    const formatDate = (timestamp: number | null): string => {
+    const formatDate = (timestamp: number | string | null): string => {
       if (!timestamp) return 'N/A';
-      return new Date(timestamp).toLocaleString();
+      const numericTimestamp = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+      if (isNaN(numericTimestamp)) return 'N/A';
+      return new Date(numericTimestamp).toLocaleString();
     };
 
     return {
@@ -1003,48 +1005,48 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                             {userDetails?.userList.length === 0 ? (
                               <div className="p-10 text-center text-gray-500">No sub-users found for this account.</div>
                             ) : (
-                              <div className="table-container">
+                              <div className="table-container overflow-x-auto">
                                 {/* Your table code */}
 
-                                <table className="min-w-[1500px] w-full table-fixed">
+                                <table className="w-auto table-auto">
                                   <colgroup>
-                                    <col style={{ width: '60px' }} />
-                                    <col style={{ width: '140px' }} />
-                                    <col style={{ width: '140px' }} />
+                                    <col style={{ width: '50px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '70px' }} />
                                     <col style={{ width: '90px' }} />
-                                    <col style={{ width: '100px' }} />
+                                    <col style={{ width: '70px' }} />
                                     <col style={{ width: '90px' }} />
-                                    <col style={{ width: '100px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '60px' }} />
                                     <col style={{ width: '70px' }} />
-                                    <col style={{ width: '70px' }} />
-                                    <col style={{ width: '70px' }} />
-                                    <col style={{ width: '70px' }} />
-                                    <col style={{ width: '70px' }} />
-                                    <col style={{ width: '150px' }} />
-                                    <col style={{ width: '140px' }} />
+                                    <col style={{ width: '45px' }} />
+                                    <col style={{ width: '45px' }} />
+                                    <col style={{ width: '45px' }} />
+                                    <col style={{ width: '45px' }} />
+                                    <col style={{ width: '45px' }} />
                                     <col style={{ width: '160px' }} />
+                                    <col style={{ width: '155px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '155px' }} />
                                   </colgroup>
                                   <thead>
                                     <tr className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 border-b border-gray-200/50 dark:border-slate-600/50">
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">⋯</th>
-                                      <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Username</th>
-                                      <th className="text-left px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Name</th>
+                                      <th className="text-center px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Username</th>
+                                      <th className="text-center px-4 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Name</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Type</th>
-                                      <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Parent</th>
-                                      <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Credit</th>
-                                      <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Balance</th>
-                                      <th className="text-right px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Share%</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Parent</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Credit</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Balance</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Share%</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Bet</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Close</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Margin</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Status</th>
                                       <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">C.Margin</th>
-                                      <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Created</th>
-                                      <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">IP Address</th>
-                                      <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Device ID</th>
-                                      <th className="text-left px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Last Login</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Created</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">IP Address</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Device ID</th>
+                                      <th className="text-center px-2 py-3 font-bold text-slate-700 dark:text-slate-300 text-xs whitespace-nowrap">Last Login</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
@@ -1185,33 +1187,31 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({ user, onClose, onTo
                                           </td>
 
                                           {/* Created Date */}
-                                          <td className="px-2 py-2">
-                                            <span className="text-slate-600 dark:text-slate-300 text-xs whitespace-nowrap">
+                                          <td className="px-1 py-2 text-center break-words">
+                                            <span className="text-slate-600 dark:text-slate-300 text-xs block">
                                               {transformedUser.createdDate || 'N/A'}
                                             </span>
                                           </td>
 
                                           {/* IP Address */}
-                                          <td className="px-2 py-2">
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded text-center">
-                                              <span className="text-blue-700 dark:text-blue-300 text-xs font-mono block truncate">{transformedUser.ipAddress || 'N/A'}</span>
-                                            </div>
+                                          <td className="px-1 py-2 text-center break-words">
+                                            <span className="text-blue-700 dark:text-blue-300 text-xs font-mono block">
+                                              {transformedUser.ipAddress || 'N/A'}
+                                            </span>
                                           </td>
 
                                           {/* Device ID */}
-                                          <td className="px-2 py-2">
-                                            <div className="bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded text-center">
-                                              <span className="text-purple-700 dark:text-purple-300 text-xs font-mono block truncate" title={transformedUser.deviceId || 'N/A'}>
-                                                {transformedUser.deviceId && transformedUser.deviceId !== 'N/A' && transformedUser.deviceId.length > 15
-                                                  ? `${transformedUser.deviceId.substring(0, 15)}...`
-                                                  : transformedUser.deviceId || 'N/A'}
-                                              </span>
-                                            </div>
+                                          <td className="px-1 py-2 text-center break-words">
+                                            <span className="text-purple-700 dark:text-purple-300 text-xs font-mono" title={transformedUser.deviceId || 'N/A'}>
+                                              {transformedUser.deviceId && transformedUser.deviceId !== 'N/A' && transformedUser.deviceId.length > 10
+                                                ? `${transformedUser.deviceId.substring(0, 10)}...`
+                                                : transformedUser.deviceId || 'N/A'}
+                                            </span>
                                           </td>
 
                                           {/* Last Login */}
-                                          <td className="px-2 py-2">
-                                            <span className="text-emerald-700 dark:text-emerald-300 text-xs whitespace-nowrap">
+                                          <td className="px-1 py-2 text-center break-words">
+                                            <span className="text-emerald-700 dark:text-emerald-300 text-xs block">
                                               {transformedUser.lastLogin || 'N/A'}
                                             </span>
                                           </td>

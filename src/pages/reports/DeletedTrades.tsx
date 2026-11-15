@@ -10,6 +10,7 @@ import { useSorting } from '../../hooks/useSorting';
 import { API_ENDPOINTS } from '../../config/apiConfig';
 import { selectMarketTradeRight, selectDeleteTrade } from '../../store/selectors/authSelectors';
 import { useAppSelector } from '../../hooks/reduxHooks';
+import UserDetailsModal from '../user-management/UserDetailsModal';
 
 interface DeletedTradeData {
   tradeId: number;
@@ -28,6 +29,7 @@ interface DeletedTradeData {
   deletedBy: string;
   deletedOn: string;
   tradeBy: string;
+  userId?: number; // Add userId for UserDetailsModal
   undo: boolean;
 }
 
@@ -77,6 +79,11 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   const [exchanges, setExchanges] = useState<any[]>([]);
   const [symbols, setSymbols] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<any>({});
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+
+  // For debouncing rapid username clicks
+  let lastClickTime = 0;
+  let lastProcessedId: number | null = null;
 
   // Get logged in user ID and device info
   const userDataStr = localStorage.getItem('userData');
@@ -186,6 +193,61 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
       const allUndoableIndices = new Set(undoableTrades);
       setSelectedTradeIds(allUndoableIndices);
     }
+  };
+
+  const handleUserNameClick = (e: React.MouseEvent, username: string, userId?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!userId) return;
+
+    const currentTime = Date.now();
+    const userIdNum = parseInt(userId);
+
+    if (userIdNum === 0 || (lastProcessedId === userIdNum && currentTime - lastClickTime < 800)) {
+      return;
+    }
+
+    const userDataStr = localStorage.getItem('userData');
+    const loggedInUser = userDataStr ? JSON.parse(userDataStr) : null;
+    if (loggedInUser?.roleId === 4) return;
+
+    lastClickTime = currentTime;
+    lastProcessedId = userIdNum;
+
+    const placeholderUser: any = {
+      id: userId,
+      username: username,
+      name: username,
+      type: 'Client',
+      parent: '',
+      credit: 0,
+      balance: 0,
+      sharing: null,
+      bet: false,
+      closeOut: false,
+      margin: false,
+      status: false,
+      creditLimit: false,
+      creditBasedMargin: false,
+      betEnabled: false,
+      closeOutEnabled: false,
+      marginEnabled: false,
+      statusEnabled: false,
+      creditLimitEnabled: false,
+      creditBasedMarginEnabled: false,
+      createdDate: '',
+      ipAddress: '',
+      manualOrder: false,
+      manualOrderEnabled: false,
+      deviceId: '',
+      lastLogin: '',
+      isActive: true,
+      deleteTrade: false,
+      deleteTradeEnabled: false
+    };
+
+    setSelectedUser(placeholderUser);
   };
 
   const handleRestoreTrades = async () => {
@@ -304,7 +366,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
           setFilters(prev => ({ ...prev, exchange: defaultExchange }));
           
           // Fetch symbols for the default exchange
-          const symbolsResponse = await userManagementService.fetchSymbols(defaultExchange);
+          const symbolsResponse = await userManagementService.fetchSymbolsAll(defaultExchange);
           if (symbolsResponse) {
             let symbolsData = symbolsResponse;
             if (symbolsResponse?.responseCode === '0' && symbolsResponse.data) {
@@ -338,7 +400,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
     if (filters.exchange) {
       const fetchSymbols = async () => {
         try {
-          const response = await userManagementService.fetchSymbols(filters.exchange);
+          const response = await userManagementService.fetchSymbolsAll(filters.exchange);
           let symbolsData = response;
           if (response?.responseCode === '0' && response.data) {
             symbolsData = response.data;
@@ -590,7 +652,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                         )}
 
                         {/* Username */}
-                        <td className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={(e) => handleUserNameClick(e, trade.tradeBy ? trade.tradeBy.split('-')[0].slice(1) : '', String(trade.userId || ''))}>
                           {trade.tradeBy ? trade.tradeBy.split('-')[0].slice(1) : '-'}
                         </td>
 
@@ -629,7 +691,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
                         {/* Status */}
                         <td className="px-4 py-3 text-sm text-center">
                           <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 whitespace-normal">
-                            {trade.orderStatus}
+                            Deleted By {trade.deletedBy || '-'}
                           </span>
                         </td>
 
@@ -696,6 +758,20 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
           </div>
         </div>
       </FilterLayout>
+
+      {/* User Details Modal */}
+      {selectedUser && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-[9999]" onClick={() => setSelectedUser(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col border border-gray-200/50 overflow-hidden" style={{ width: '98vw', height: '96vh', maxWidth: '1800px' }} onClick={(e) => e.stopPropagation()}>
+            <UserDetailsModal
+              user={selectedUser}
+              onClose={() => setSelectedUser(null)}
+              onToggle={() => {}}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 };

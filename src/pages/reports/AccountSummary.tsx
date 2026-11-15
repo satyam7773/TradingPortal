@@ -87,6 +87,10 @@ const AccountSummary: React.FC<AccountSummaryProps> = ({
     const [isDownloading, setIsDownloading] = useState(false);
     const pageSize = 100;
 
+    // Refs for auto-load tracking
+    const metadataLoadedRef = React.useRef(false)
+    const autoLoadTriggeredRef = React.useRef(false)
+
     // Sorting hook
     const { sortColumn, sortDirection, handleSort, sortedData: sortedSummaryData, getSortIcon } = useSorting({ data: summaryData });
 
@@ -174,6 +178,7 @@ const AccountSummary: React.FC<AccountSummaryProps> = ({
                 toast.error('Failed to load metadata');
             } finally {
                 setInitialLoading(false);
+                metadataLoadedRef.current = true;
             }
         };
 
@@ -194,6 +199,22 @@ const AccountSummary: React.FC<AccountSummaryProps> = ({
             handleFetchSummary(modalFilters);
         }
     }, [isModalMode, initialLoading, propsUserId]);
+
+    // Auto-load for dashboard mode
+    useEffect(() => {
+        if (autoLoadTriggeredRef.current) return
+        if (!metadataLoadedRef.current) return
+        if (isModalMode) return // Skip in modal mode (handled by previous effect)
+
+        autoLoadTriggeredRef.current = true
+        
+        // Delay slightly to ensure state is settled
+        const timer = setTimeout(() => {
+            handleFetchSummary()
+        }, 300)
+        
+        return () => clearTimeout(timer)
+    }, [metadataLoadedRef.current])
 
     const handleFilterChange = (field: string, value: any) => {
         setFilters(prev => ({ ...prev, [field]: value }));

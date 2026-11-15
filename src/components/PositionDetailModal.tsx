@@ -191,7 +191,7 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
                       />
                     </div>
 
-                    <div>
+                    {/* <div>
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Symbol :</label>
                       <select
                         value={filterSymbol}
@@ -203,7 +203,7 @@ const PositionDetailModal: React.FC<PositionDetailModalProps> = ({
                           <option key={sym as string} value={sym as string}>{sym as string}</option>
                         ))}
                       </select>
-                    </div>
+                    </div> */}
 
                     <div className="flex gap-2 pt-2">
                       <button className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold py-1.5 rounded transition">

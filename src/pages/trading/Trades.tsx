@@ -295,6 +295,23 @@ const TradesPage: React.FC<TradesPageProps> = ({
     metadataLoadedRef.current = true
   }, [isModalMode]) // Only run once per mount
 
+  // Auto-load trades data after metadata is loaded (no cache data or initial load)
+  const autoLoadTriggeredRef = useRef(false)
+  useEffect(() => {
+    if (autoLoadTriggeredRef.current) return
+    if (!metadataLoadedRef.current) return
+    if (cacheData && apiData?.tradesData) return // Don't auto-load if cache has data
+    
+    autoLoadTriggeredRef.current = true
+    
+    // Delay slightly to ensure state is settled
+    const timer = setTimeout(() => {
+      handleView(0)
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [metadataLoadedRef.current])
+
   // Save filters to cache whenever they change (debounced)
   useEffect(() => {
     if (!onCacheSave || isModalMode) return // Skip caching in modal mode
@@ -741,7 +758,7 @@ const TradesPage: React.FC<TradesPageProps> = ({
                     <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('side')}>
                       <div className="flex items-center justify-center gap-2">Type {getSortIcon('side')}</div>
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('method')}>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('tradeOrderMethodDisplay')}>
                       <div className="flex items-center justify-center gap-2">Method {getSortIcon('tradeOrderMethodDisplay')}</div>
                     </th>
                     <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition" onClick={() => handleSort('quantity')}>
