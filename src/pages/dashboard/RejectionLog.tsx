@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import userManagementService from '../../services/userManagementService'
+import UserDetailsModal from '../user-management/UserDetailsModal'
 import FilterLayout from '../../components/FilterLayout'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { useSorting } from '../../hooks/useSorting'
@@ -74,7 +76,16 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
   const [exchanges, setExchanges] = useState<any[]>([])
   const [symbols, setSymbols] = useState<any[]>([])
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedUser, setSelectedUser] = useState<any>(null)
   const pageSize = 100  // ✅ Fetch 100 records per API call
+
+  // For debouncing rapid username clicks
+  let lastClickTime = 0
+  let lastProcessedId: number | null = null
+
+  // Refs for auto-load tracking
+  const metadataLoadedRef = React.useRef(false)
+  const autoLoadTriggeredRef = React.useRef(false)
 
   // Sorting
   const { sortColumn, sortDirection, handleSort, sortedData, getSortIcon } = useSorting({ data: rejectionLogs })
@@ -94,6 +105,58 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
   const symbolOptions = useMemo(() => [
     ...symbols.map(s => ({ id: s.token, name: s.tradeSymbol || s }))
   ], [symbols])
+
+  const handleUserNameClick = (e: React.MouseEvent, username: string, userId: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const currentTime = Date.now()
+
+    if (userId === 0 || (lastProcessedId === userId && currentTime - lastClickTime < 800)) {
+      return
+    }
+
+    const userDataStr = localStorage.getItem('userData')
+    const loggedInUser = userDataStr ? JSON.parse(userDataStr) : null
+    if (loggedInUser?.roleId === 4) return
+
+    lastClickTime = currentTime
+    lastProcessedId = userId
+
+    const placeholderUser: any = {
+      id: userId.toString(),
+      username: username,
+      name: username,
+      type: 'Client',
+      parent: '',
+      credit: 0,
+      balance: 0,
+      sharing: null,
+      bet: false,
+      closeOut: false,
+      margin: false,
+      status: false,
+      creditLimit: false,
+      creditBasedMargin: false,
+      betEnabled: false,
+      closeOutEnabled: false,
+      marginEnabled: false,
+      statusEnabled: false,
+      creditLimitEnabled: false,
+      creditBasedMarginEnabled: false,
+      createdDate: '',
+      ipAddress: '',
+      manualOrder: false,
+      manualOrderEnabled: false,
+      deviceId: '',
+      lastLogin: '',
+      isActive: true,
+      deleteTrade: false,
+      deleteTradeEnabled: false
+    }
+
+    setSelectedUser(placeholderUser)
+  }
 
   // Load initial data
   useEffect(() => {
@@ -127,6 +190,7 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
         toast.error('Failed to load initial data')
       } finally {
         setInitialLoading(false)
+        metadataLoadedRef.current = true
       }
     }
 
@@ -154,12 +218,16 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
     loadSymbols()
   }, [filters.selectedExchange])
 
-  // Auto-load for modal mode
+  // Auto-load effect using refs
   useEffect(() => {
-    if (isModalMode && !initialLoading && filters.selectedExchange) {
+    if (isModalMode || autoLoadTriggeredRef.current || initialLoading) return
+    if (!metadataLoadedRef.current) return
+
+    autoLoadTriggeredRef.current = true
+    setTimeout(() => {
       handleFetchLogs(1)
-    }
-  }, [isModalMode, initialLoading, filters.selectedExchange])
+    }, 300)
+  }, [initialLoading, isModalMode])
 
   // Fetch rejection logs
   const handleFetchLogs = async (page: number = 1) => {
@@ -219,7 +287,8 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
   }
 
   return (
-    <FilterLayout
+    <>
+      <FilterLayout
       filterWidthClass="lg:w-[16%]"
       header={
         <div className="flex items-center justify-between">
@@ -408,7 +477,7 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
                         <td className="px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-500 max-w-xs truncate" title={log.rejectedReason}>
                           {log.rejectedReason}
                         </td>
-                        <td className="px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300">
+                        <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={(e) => handleUserNameClick(e, log.tradeBy, log.userId)}>
                           {log.tradeBy}
                         </td>
                         <td className={`px-4 py-3 text-sm font-bold ${sideColorClass}`}>
@@ -482,6 +551,21 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
         </div>
       </div>
     </FilterLayout>
+
+    {/* User Details Modal */}
+    {selectedUser && createPortal(
+      <div className="fixed inset-0 flex items-center justify-center p-3 bg-black/70 backdrop-blur-md z-[9999]" onClick={() => setSelectedUser(null)}>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl flex flex-col border border-gray-200/50 overflow-hidden" style={{ width: '98vw', height: '96vh', maxWidth: '1800px' }} onClick={(e) => e.stopPropagation()}>
+          <UserDetailsModal
+            user={selectedUser}
+            onClose={() => setSelectedUser(null)}
+            onToggle={() => {}}
+          />
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   )
 }
 

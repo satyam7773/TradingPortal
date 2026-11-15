@@ -42,9 +42,24 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [items, selectedId]);
 
-  const filteredItems = items.filter(item =>
-    String(item.name).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredItems = items
+    .filter(item =>
+      String(item.name).toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      const searchLower = searchTerm.toLowerCase();
+      const aName = String(a.name).toLowerCase();
+      const bName = String(b.name).toLowerCase();
+      
+      // Prioritize items that start with search term
+      const aStartsWith = aName.startsWith(searchLower);
+      const bStartsWith = bName.startsWith(searchLower);
+      
+      if (aStartsWith && !bStartsWith) return -1;
+      if (!aStartsWith && bStartsWith) return 1;
+      
+      return 0; // Maintain original order for equal priority
+    });
 
   return (
     <div className="space-y-2 relative" ref={dropdownRef}>
