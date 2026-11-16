@@ -1,6 +1,7 @@
 import { takeLatest, put, call, SagaReturnType } from 'redux-saga/effects'
 import { loginRequest, loginSuccess, loginFailure } from '../slices/authSlice'
 import { authService, TokenManager } from '../../services'
+import { authFetchGet } from '../../utils/authFetch'
 
 function* handleLogin(action: any): any {
   try {
@@ -60,7 +61,7 @@ function* handleLogin(action: any): any {
     // Fetch and store configuration after successful login
     try {
       const configResponse: any = yield call(
-        () => fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/configuration/configs`).then(res => res.json())
+        () => authFetchGet(`${import.meta.env.VITE_API_BASE_URL || 'https://api-staging.rivoplus.live'}/configuration/configs`).then(res => res.json())
       )
       
       if (configResponse) {

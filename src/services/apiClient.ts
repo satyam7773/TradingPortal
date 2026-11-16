@@ -71,6 +71,17 @@ class ApiClient {
           config.headers.Authorization = `Bearer ${token}`
         }
 
+        // Add loggedInUserId to headers for all requests (except login)
+        const isLoginEndpoint = config.url?.includes('/login') || config.url?.includes('/auth/login')
+        if (!isLoginEndpoint) {
+          const userDataStr = localStorage.getItem('userData')
+          const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+          const loggedInUserId = storedUserData?.userId
+          if (config.headers && loggedInUserId) {
+            config.headers.loggedInUserId = String(loggedInUserId)
+          }
+        }
+
         // Add requestTimestamp to all requests if not present
         if (config.data && typeof config.data === 'object' && !config.data.requestTimestamp) {
           config.data.requestTimestamp = Date.now().toString()

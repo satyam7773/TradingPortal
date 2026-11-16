@@ -1,5 +1,5 @@
 import { apiClient, TokenManager } from './apiClient'
-import { authFetch, authFetchPost } from '../utils/authFetch'
+import { authFetch, authFetchPost, authFetchGet } from '../utils/authFetch'
 import { API_ENDPOINTS } from '../config/apiConfig'
 
 export type FileReaderType = 'OPTION' | 'FUTURE'
@@ -154,16 +154,7 @@ class FileUploadService {
         'Content-Type': 'application/json'
       }
       
-      // Add authorization token if available
-      const token = TokenManager.getToken()
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers
-      })
+      const response = await authFetchGet(url)
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

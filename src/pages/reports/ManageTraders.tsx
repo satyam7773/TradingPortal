@@ -789,6 +789,9 @@ const ManageTraders: React.FC = () => {
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('symbol')}>
                       <div className="flex items-center gap-2">Symbol {getSortIcon('symbol')}</div>
                     </th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('exchange')}>
+                      <div className="flex items-center gap-2">Exchange {getSortIcon('exchange')}</div>
+                    </th>
                     <th className="text-center px-8 py-3 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition" onClick={() => handleSort('type')}>
                       <div className="flex items-center justify-center gap-2">Type {getSortIcon('type')}</div>
                     </th>
@@ -834,7 +837,7 @@ const ManageTraders: React.FC = () => {
                 <tbody className="divide-y divide-gray-200/50 dark:divide-slate-700/50">
                   {sortedTrades.length === 0 ? (
                     <tr>
-                      <td colSpan={17} className="px-4 py-12 text-center">
+                      <td colSpan={18} className="px-4 py-12 text-center">
                         <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No trades found</h3>
                         <p className="text-slate-500 dark:text-slate-400">Adjust your filters and click "View" to load trades</p>
@@ -884,6 +887,11 @@ const ManageTraders: React.FC = () => {
                         {/* Symbol */}
                         <td className="px-4 py-3 text-sm font-bold text-slate-800 dark:text-white">
                           {trade.symbol}
+                        </td>
+
+                        {/* Exchange */}
+                        <td className="px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded">
+                          {trade.exchange || '-'}
                         </td>
 
                         {/* Type (BUY/SELL) */}

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Pencil, Trash2, Plus, X, Bell, Clock, CheckCircle, AlertCircle, Lock } from 'lucide-react';
 import FilterLayout from '../../components/FilterLayout';
 import { API_ENDPOINTS } from '../../config/apiConfig';
-import { authFetchPost } from '../../utils/authFetch';
+import { authFetchPost, authFetchGet } from '../../utils/authFetch';
 
 interface AdminMessage {
   id: number;
@@ -45,7 +45,7 @@ const AdminMessages: React.FC = () => {
     setLoading(true);
     try {
       const endpoint = `${API_ENDPOINTS.SETTINGS.ADMIN_MESSAGES}?all=${showAll ? 'yes' : 'no'}`;
-      const response = await fetch(endpoint);
+      const response = await authFetchGet(endpoint);
       const res: AdminMessagesResponse = await response.json();
 
       if (res?.responseCode === '0' && Array.isArray(res.data)) {

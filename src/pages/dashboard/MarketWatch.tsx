@@ -16,7 +16,7 @@ import toast from 'react-hot-toast'
 import { useAppSelector } from '../../hooks/reduxHooks'
 import { selectMarketTradeRight } from '../../store/selectors/authSelectors'
 import { API_ENDPOINTS } from '../../config/apiConfig'
-import { authFetchPost } from '../../utils/authFetch'
+import { authFetchPost, authFetchGet } from '../../utils/authFetch'
 
 interface FeedInstrument {
   insToken: number
@@ -3004,7 +3004,7 @@ const ChartComponent: React.FC<ChartComponentProps> = ({ token, config, containe
       const url = `${API_ENDPOINTS.QUOTES.KITE_HISTORY}?instrumentToken=${token}&interval=minute&from=${today}&to=${today}`
       
       console.log('📊 Fetching chart data from:', url)
-      const response = await fetch(url)
+      const response = await authFetchGet(url)
       const data = await response.json()
       
       console.log('📊 API Response:', data)

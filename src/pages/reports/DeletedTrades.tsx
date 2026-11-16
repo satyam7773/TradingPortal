@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import FilterLayout from '../../components/FilterLayout';
 import toast from 'react-hot-toast';
 import userManagementService from '../../services/userManagementService'
-import { authFetchPost } from '../../utils/authFetch';
+import { authFetchPost, authFetchGet } from '../../utils/authFetch';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import { useSorting } from '../../hooks/useSorting';
 import { API_ENDPOINTS } from '../../config/apiConfig';
@@ -97,6 +97,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   // Get hasMarketTradeRights from Redux
   const hasMarketTradeRights = useAppSelector(selectMarketTradeRight);
   const deleteTradeRight = useAppSelector(selectDeleteTrade);
+  console.log('deleteTradeRight:', deleteTradeRight);
 
   // In modal mode, use propsUserId; in dashboard mode, use selectedUserId
   const targetUserId = isModalMode && propsUserId ? parseInt(propsUserId) : loggedInUserId;
@@ -251,7 +252,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
   };
 
   const handleRestoreTrades = async () => {
-    if (!isAdminUser || !hasMarketTradeRights) {
+    if (!deleteTradeRight) {
       toast.error('You do not have permission to restore trades');
       return;
     }
@@ -344,7 +345,7 @@ const DeletedTrades: React.FC<DeletedTradesProps> = ({
         setInitialLoading(true);
 
         // Fetch order statuses
-        const statusResponse = await fetch(`${API_ENDPOINTS.REPORTS.DELETED_ORDER_STATUS}?userId=${loggedInUserId}`);
+        const statusResponse = await authFetchGet(`${API_ENDPOINTS.REPORTS.DELETED_ORDER_STATUS}?userId=${loggedInUserId}`);
         const statusData = await statusResponse.json();
         if (statusData?.responseCode === '0' && statusData.data) {
           setStatuses(statusData.data);

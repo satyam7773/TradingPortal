@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, RefreshCw, Bell, AlertCircle } from 'lucide-react'
 import balanceService, { BalanceData } from '../../services/balanceService'
 import { API_ENDPOINTS } from '../../config/apiConfig'
+import { authFetchGet } from '../../utils/authFetch'
 
 interface UserBalanceProps {
   className?: string
@@ -30,7 +31,7 @@ export const UserBalance: React.FC<UserBalanceProps> = ({ className = '' }) => {
     try {
       setError(null)
       const endpoint = `${API_ENDPOINTS.SETTINGS.ADMIN_MESSAGES}?all=no`
-      const response = await fetch(endpoint)
+      const response = await authFetchGet(endpoint)
       const data = await response.json()
       
       if (data?.responseCode === '0' && data?.data) {

@@ -40,6 +40,15 @@ export async function authFetch(
     headers.set('Authorization', `Bearer ${token}`)
   }
 
+  // Add loggedInUserId to headers for all requests (except login)
+  const isLoginEndpoint = url.includes('/login') || url.includes('/auth')
+  if (!isLoginEndpoint) {
+    const userDataStr = localStorage.getItem('userData')
+    const storedUserData = userDataStr ? JSON.parse(userDataStr) : null
+    const loggedInUserId = storedUserData?.userId || 2
+    headers.set('loggedInUserId', String(loggedInUserId))
+  }
+
   // Ensure Content-Type is set for POST/PUT/PATCH requests
   // BUT: Don't set it for FormData - let browser handle it automatically with multipart/form-data
   if (
@@ -75,6 +84,19 @@ export async function authFetch(
   }
 
   return response
+}
+
+/**
+ * Convenience method for GET requests with automatic token
+ */
+export async function authFetchGet(
+  url: string,
+  options: Omit<RequestInit, 'method' | 'body'> = {}
+): Promise<Response> {
+  return authFetch(url, {
+    ...options,
+    method: 'GET',
+  })
 }
 
 /**

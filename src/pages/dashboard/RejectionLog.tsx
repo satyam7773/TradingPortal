@@ -474,7 +474,7 @@ const RejectionLog: React.FC<RejectionLogProps> = ({
                         <td className="px-4 py-3 text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
                           {new Date(log.createdAt).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-500 max-w-xs truncate" title={log.rejectedReason}>
+                        <td className="px-4 py-3 text-sm font-semibold text-red-600 dark:text-red-500 max-w-md break-words whitespace-normal" title={log.rejectedReason}>
                           {log.rejectedReason}
                         </td>
                         <td className="px-4 py-3 text-sm font-bold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={(e) => handleUserNameClick(e, log.tradeBy, log.userId)}>
